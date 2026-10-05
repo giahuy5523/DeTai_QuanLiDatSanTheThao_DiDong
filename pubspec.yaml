@@ -20,3 +20,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/data/mock_data.json
+    - assets/db/database.sql
