@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportfield_booking/screens/admin/admin_shell_layout.dart';
 import '../../data/mock_store.dart';
 import '../../models/venue.dart';
 
@@ -14,8 +15,8 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Duyệt sân mới')),
+    return AdminShellLayout(
+      title: 'Duyệt sân mới',
       body: _pending.isEmpty ? const Center(child: Text('Không còn sân chờ duyệt.')) : ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _pending.length,

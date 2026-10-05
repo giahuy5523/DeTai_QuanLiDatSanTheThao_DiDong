@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportfield_booking/screens/admin/admin_shell_layout.dart';
 import '../../data/mock_store.dart';
 import '../../models/promotion.dart';
 
@@ -12,8 +13,8 @@ class ManagePromotionScreen extends StatefulWidget {
 class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Quản lý khuyến mãi')),
+    return AdminShellLayout(
+      title: 'Quản lý khuyến mãi',
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _editPromotion(), icon: const Icon(Icons.add), label: const Text('Thêm mã')),
       body: ListView.separated(padding: const EdgeInsets.all(16), itemCount: MockStore.promotions.length, separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (context, i) {
         final p = MockStore.promotions[i];
