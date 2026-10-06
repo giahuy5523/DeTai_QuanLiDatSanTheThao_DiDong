@@ -3,9 +3,12 @@
 class Venue {
   final String id;
   final String ownerId;
+  final int? sportTypeId; // Khóa ngoại sport_type_id trong ERD
+  final String sportType; // Tên hiển thị loại thể thao
   final String name;
   final String address;
-  final String sportType;
+  final String? district; // Quận/Huyện trong ERD
+  final String? city;     // Thành phố trong ERD
   final double pricePerHour;
   final List<String> imageUrls;
   final double latitude;
@@ -16,9 +19,12 @@ class Venue {
   Venue({
     required this.id,
     required this.ownerId,
+    this.sportTypeId,
+    required this.sportType,
     required this.name,
     required this.address,
-    required this.sportType,
+    this.district,
+    this.city,
     required this.pricePerHour,
     required this.imageUrls,
     required this.latitude,
@@ -27,15 +33,18 @@ class Venue {
     this.rating = 0.0,
   });
 
-  /// Dữ liệu mẫu (mock data) dùng cho giao diện khi chưa nối Firebase/SQLite thật.
+  /// Dữ liệu mẫu (mock data)
   static List<Venue> mockList() {
     return [
       Venue(
         id: 'v1',
         ownerId: 'owner1',
+        sportTypeId: 1,
+        sportType: 'Bóng đá',
         name: 'Sân bóng đá Thành Công',
         address: '12 Lý Thường Kiệt, Tân Bình, TP.HCM',
-        sportType: 'Bóng đá',
+        district: 'Tân Bình',
+        city: 'TP.HCM',
         pricePerHour: 300000,
         imageUrls: const [],
         latitude: 10.7975,
@@ -46,9 +55,12 @@ class Venue {
       Venue(
         id: 'v2',
         ownerId: 'owner2',
+        sportTypeId: 2,
+        sportType: 'Cầu lông',
         name: 'Sân cầu lông Phú Nhuận',
         address: '45 Phan Xích Long, Phú Nhuận, TP.HCM',
-        sportType: 'Cầu lông',
+        district: 'Phú Nhuận',
+        city: 'TP.HCM',
         pricePerHour: 120000,
         imageUrls: const [],
         latitude: 10.7990,
@@ -59,9 +71,12 @@ class Venue {
       Venue(
         id: 'v3',
         ownerId: 'owner1',
+        sportTypeId: 3,
+        sportType: 'Tennis',
         name: 'Sân tennis Quận 7',
         address: '88 Nguyễn Thị Thập, Quận 7, TP.HCM',
-        sportType: 'Tennis',
+        district: 'Quận 7',
+        city: 'TP.HCM',
         pricePerHour: 250000,
         imageUrls: const [],
         latitude: 10.7320,
