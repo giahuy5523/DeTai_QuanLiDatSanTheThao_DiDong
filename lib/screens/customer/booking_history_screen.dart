@@ -12,7 +12,7 @@ class BookingHistoryScreen extends StatefulWidget {
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   @override
   Widget build(BuildContext context) {
-    final bookings = MockStore.customerBookings('customer1');
+    final bookings = MockStore.customerBookings(MockStore.currentUser?.id ?? '');
     return Scaffold(
       appBar: AppBar(title: const Text('Lịch sử đặt sân')),
       body: bookings.isEmpty

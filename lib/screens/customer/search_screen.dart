@@ -39,7 +39,7 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Row(children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _sport,
+                initialValue: _sport,
                 decoration: const InputDecoration(labelText: 'Môn thể thao'),
                 items: sports.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) => setState(() => _sport = v ?? 'Tất cả'),

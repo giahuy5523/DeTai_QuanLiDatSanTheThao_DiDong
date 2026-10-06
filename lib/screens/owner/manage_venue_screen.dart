@@ -7,9 +7,14 @@ class ManageVenueScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ownVenues = MockStore.venues.where((v) => v.ownerId == 'owner1').toList();
+    final ownVenues = MockStore.venues.where((v) => v.ownerId == MockStore.currentUser?.id).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Quản lý sân & lịch đặt')),
+      appBar: AppBar(title: const Text('Quản lý sân & lịch đặt'), actions: [
+        IconButton(tooltip: 'Đăng xuất', icon: const Icon(Icons.logout), onPressed: () {
+          MockStore.logout();
+          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+        }),
+      ]),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => Navigator.pushNamed(context, AppRoutes.uploadVenue), icon: const Icon(Icons.add), label: const Text('Đăng ký sân')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         ...ownVenues.map((venue) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

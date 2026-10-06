@@ -44,11 +44,14 @@ class StatisticsScreen extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Đăng xuất'),
-              onTap: () => Navigator.pushNamedAndRemoveUntil(
+              onTap: () {
+                MockStore.logout();
+                Navigator.pushNamedAndRemoveUntil(
                 context,
                 AppRoutes.login,
                 (route) => false,
-              ),
+                );
+              },
             ),
           ],
         ),

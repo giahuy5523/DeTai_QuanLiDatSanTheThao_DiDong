@@ -5,6 +5,7 @@ class AppUser {
   final String name;
   final String email;
   final String phone;
+  final String password;
   final String role;
 
   AppUser({
@@ -12,6 +13,7 @@ class AppUser {
     required this.name,
     required this.email,
     required this.phone,
+    required this.password,
     this.role = 'customer',
   });
 }

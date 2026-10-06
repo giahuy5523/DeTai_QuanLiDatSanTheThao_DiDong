@@ -37,15 +37,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ])),
           const SizedBox(height: 16),
           Text('Phương thức thanh toán', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-          RadioListTile(value: 'cash', groupValue: _method, onChanged: (v) => setState(() => _method = v.toString()), title: const Text('Tiền mặt')),
-          RadioListTile(value: 'momo', groupValue: _method, onChanged: (v) => setState(() => _method = v.toString()), title: const Text('Ví MoMo (mô phỏng)')),
-          RadioListTile(value: 'vnpay', groupValue: _method, onChanged: (v) => setState(() => _method = v.toString()), title: const Text('VNPay (mô phỏng)')),
+          RadioGroup<String>(
+            groupValue: _method,
+            onChanged: (value) {
+              if (value != null) setState(() => _method = value);
+            },
+            child: const Column(children: [
+              RadioListTile<String>(value: 'cash', title: Text('Tiền mặt')),
+              RadioListTile<String>(value: 'momo', title: Text('Ví MoMo (mô phỏng)')),
+              RadioListTile<String>(value: 'vnpay', title: Text('VNPay (mô phỏng)')),
+            ]),
+          ),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: _done ? null : () {
             final booking = Booking(
               id: 'b${DateTime.now().millisecondsSinceEpoch}',
               venueId: venue.id,
-              userId: 'customer1',
+              userId: MockStore.currentUser!.id,
               date: date,
               startTime: time,
               endTime: _nextHour(time),

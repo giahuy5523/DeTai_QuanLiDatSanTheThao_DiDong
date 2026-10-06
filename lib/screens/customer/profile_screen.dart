@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/app_routes.dart';
+import '../../data/mock_store.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -9,9 +10,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _name = TextEditingController(text: 'Nguyễn Văn Khách');
-  final _email = TextEditingController(text: 'customer@gmail.com');
-  final _phone = TextEditingController(text: '0901234567');
+  final _name = TextEditingController(text: MockStore.currentUser?.name ?? '');
+  final _email = TextEditingController(text: MockStore.currentUser?.email ?? '');
+  final _phone = TextEditingController(text: MockStore.currentUser?.phone ?? '');
 
   @override
   void dispose() {
@@ -41,7 +42,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 20),
         ElevatedButton(onPressed: _save, child: const Text('Lưu thay đổi')),
         const SizedBox(height: 8),
-        OutlinedButton.icon(onPressed: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false), icon: const Icon(Icons.logout), label: const Text('Đăng xuất')),
+        OutlinedButton.icon(onPressed: () {
+          MockStore.logout();
+          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+        }, icon: const Icon(Icons.logout), label: const Text('Đăng xuất')),
       ]),
     );
   }
