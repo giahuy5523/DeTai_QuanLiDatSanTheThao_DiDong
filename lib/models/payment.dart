@@ -1,20 +1,25 @@
 /// Model Thanh toán - tương ứng bảng Payments trong ERD.
-/// method: "cash" | "momo" | "vnpay" (mô phỏng, chưa tích hợp cổng thanh toán thật)
-/// status: "unpaid" | "paid" | "failed"
+/// method: "cash" | "momo" | "vnpay" | "bank_transfer"
+///   (mô phỏng, chưa tích hợp cổng thanh toán thật)
+/// status: "pending" | "success" | "failed" | "refunded"
 class Payment {
-  final String id;
-  final String bookingId;
-  final double amount;
+  final String paymentId; // payment_id (PK)
+  final String bookingId; // booking_id (FK -> Bookings)
   final String method;
+  final double amount;
   final String status;
-  final DateTime createdAt;
+  final String? transactionCode; // transaction_code (UK)
+  final DateTime? paidAt; // paid_at (null khi chưa thanh toán thành công)
+  final DateTime createdAt; // created_at
 
   Payment({
-    required this.id,
+    required this.paymentId,
     required this.bookingId,
-    required this.amount,
     required this.method,
-    this.status = 'unpaid',
+    required this.amount,
+    this.status = 'pending',
+    this.transactionCode,
+    this.paidAt,
     required this.createdAt,
   });
 }
