@@ -1,12 +1,14 @@
 /// Model Thanh toán - tương ứng bảng Payments trong ERD.
-/// method: "cash" | "momo" | "vnpay" (mô phỏng, chưa tích hợp cổng thanh toán thật)
-/// status: "unpaid" | "paid" | "failed"
+/// method: "cash" | "momo" | "vnpay" | "bank_transfer"
+/// status: "pending" | "success" | "failed" | "refunded"
 class Payment {
   final String id;
   final String bookingId;
   final double amount;
   final String method;
-  final String status;
+  String status;
+  final String? transactionCode;
+  DateTime? paidAt;
   final DateTime createdAt;
 
   Payment({
@@ -15,6 +17,8 @@ class Payment {
     required this.amount,
     required this.method,
     this.status = 'unpaid',
-    required this.createdAt,
-  });
+    this.transactionCode,
+    this.paidAt,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 }

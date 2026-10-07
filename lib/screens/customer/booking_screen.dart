@@ -19,7 +19,7 @@ class _BookingScreenState extends State<BookingScreen> {
   String? _startTime;
   String? _endTime;
 
-  final Set<String> _selectedServices = {};
+  final Map<String, int> _selectedServices = {}; // serviceId -> quantity
   final _promoController = TextEditingController();
 
   String? _promoMessage;
@@ -83,7 +83,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
     setState(() {
       _startTime = time;
-      _endTime = null;
+      _endTime = null; // Reset giờ kết thúc khi chọn lại giờ bắt đầu
     });
   }
 
@@ -131,7 +131,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
     setState(() {
       _date = DateTime(picked.year, picked.month, picked.day);
-      _startTime = null;
+      _startTime = null; // Reset khung giờ khi thay đổi ngày đặt
       _endTime = null;
     });
   }
@@ -220,9 +220,10 @@ class _BookingScreenState extends State<BookingScreen> {
 
     final services = MockStore.servicesFor(venue.id);
 
-    final serviceTotal = services
-        .where((service) => _selectedServices.contains(service.id))
-        .fold<double>(0, (sum, service) => sum + service.price);
+    final serviceTotal = services.fold<double>(0, (sum, service) {
+      final qty = _selectedServices[service.id] ?? 0;
+      return sum + (service.price * qty);
+    });
 
     final courtTotal = venue.pricePerHour * _durationHours;
     final subtotal = courtTotal + serviceTotal;
@@ -673,57 +674,82 @@ class _BookingScreenState extends State<BookingScreen> {
               )
             : Column(
                 children: services.map((service) {
-                  final isChecked = _selectedServices.contains(service.id);
+                  final qty = _selectedServices[service.id] ?? 0;
 
                   return Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isChecked
+                      color: qty > 0
                           ? AppTheme.primaryLight.withValues(alpha: 0.35)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isChecked
-                            ? AppTheme.primary
-                            : Colors.transparent,
+                        color: qty > 0 ? AppTheme.primary : Colors.transparent,
                         width: 1,
                       ),
                     ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: CheckboxListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                        ),
-                        activeColor: AppTheme.primary,
-                        title: Text(
-                          service.name,
-                          style: TextStyle(
-                            fontWeight: isChecked
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                            fontSize: 14,
-                            color: AppTheme.textPrimary,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                service.name,
+                                style: TextStyle(
+                                  fontWeight: qty > 0
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  fontSize: 14,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${service.price.toStringAsFixed(0)} đ / ${service.unit}',
+                                style: const TextStyle(
+                                  color: AppTheme.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        subtitle: Text(
-                          '${service.price.toStringAsFixed(0)} đ / ${service.unit}',
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              color: qty > 0 ? AppTheme.primary : AppTheme.textSecondary,
+                              onPressed: qty > 0
+                                  ? () => setState(() {
+                                        if (qty == 1) {
+                                          _selectedServices.remove(service.id);
+                                        } else {
+                                          _selectedServices[service.id] = qty - 1;
+                                        }
+                                      })
+                                  : null,
+                            ),
+                            Text(
+                              '$qty',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline),
+                              color: AppTheme.primary,
+                              onPressed: () => setState(() {
+                                _selectedServices[service.id] = qty + 1;
+                              }),
+                            ),
+                          ],
                         ),
-                        value: isChecked,
-                        onChanged: (value) => setState(() {
-                          if (value == true) {
-                            _selectedServices.add(service.id);
-                          } else {
-                            _selectedServices.remove(service.id);
-                          }
-                        }),
-                      ),
+                      ],
                     ),
                   );
                 }).toList(),
@@ -925,7 +951,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           'date': _date,
                           'startTime': _startTime,
                           'endTime': _endTime,
-                          'serviceIds': _selectedServices.toList(),
+                          'serviceIds': _selectedServices.keys.toList(),
                           'courtPrice': courtTotal,
                           'serviceTotal': serviceTotal,
                           'discount': _discount,
