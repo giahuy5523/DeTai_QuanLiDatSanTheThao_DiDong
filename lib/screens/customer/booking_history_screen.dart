@@ -20,7 +20,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: bookings.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final b = bookings[index];
                 final venue = MockStore.venueById(b.venueId);
@@ -33,7 +33,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   Row(children: [Expanded(child: Text('${b.totalPrice.toStringAsFixed(0)} đ', style: const TextStyle(fontWeight: FontWeight.w700))), _statusChip(b.status)]),
                   if (canCancel) ...[
                     const SizedBox(height: 10),
-                    Align(alignment: Alignment.centerRight, child: OutlinedButton.icon(onPressed: () => _cancel(b.id), icon: const Icon(Icons.cancel_outlined), label: const Text('Hủy đặt sân'))),
+                    Align(alignment: Alignment.centerRight, child: OutlinedButton.icon(key: ValueKey('cancel_${b.id}'), onPressed: () => _cancel(b.id), icon: const Icon(Icons.cancel_outlined), label: const Text('Hủy đặt sân'))),
                   ],
                 ])));
               },

@@ -19,7 +19,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
       body: _pending.isEmpty ? const Center(child: Text('Không còn sân chờ duyệt.')) : ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _pending.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, i) {
           final venue = _pending[i];
           return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -62,12 +62,12 @@ class VenueCard extends StatelessWidget {
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 8,
                       children: [
                         const Icon(Icons.star, size: 16, color: Colors.amber),
                         const SizedBox(width: 4),
                         Text(venue.rating.toStringAsFixed(1)),
-                        const Spacer(),
                         Text(
                           '${venue.pricePerHour.toStringAsFixed(0)} đ/giờ',
                           style: TextStyle(

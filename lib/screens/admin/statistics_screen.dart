@@ -28,18 +28,18 @@ class StatisticsScreen extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.approval),
               title: const Text('Duyệt sân'),
-              onTap: () => Navigator.pushReplacementNamed(
-                context,
-                AppRoutes.approveVenue,
-              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, AppRoutes.approveVenue);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.discount_outlined),
               title: const Text('Quản lý khuyến mãi'),
-              onTap: () => Navigator.pushReplacementNamed(
-                context,
-                AppRoutes.managePromotion,
-              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, AppRoutes.managePromotion);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.logout),

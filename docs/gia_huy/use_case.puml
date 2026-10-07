@@ -1,0 +1,52 @@
+﻿@startuml
+left to right direction
+skinparam packageStyle rectangle
+actor "Customer\nKhách hàng" as Customer
+actor "Field Owner\nChủ sân" as Owner
+actor "Admin\nQuản trị viên" as Admin
+rectangle "Ứng dụng quản lý và đặt sân thể thao" {
+  usecase "Đăng ký" as Register
+  usecase "Đăng nhập" as Login
+  usecase "Đăng xuất" as Logout
+  usecase "Xem Home và danh sách sân" as List
+  usecase "Tìm kiếm và xem chi tiết sân" as Search
+  usecase "Đặt sân" as Book
+  usecase "Chọn dịch vụ kèm theo" as Service
+  usecase "Áp dụng khuyến mãi" as Promo
+  usecase "Thanh toán mô phỏng" as Pay
+  usecase "Xem lịch sử và hủy đơn" as History
+  usecase "Thông tin cá nhân" as Profile
+  usecase "Đăng ký sân mới" as Upload
+  usecase "Chọn tối thiểu 3 ảnh\nvà xem trước" as Photos
+  usecase "Quản lý sân và lịch đặt" as Manage
+  usecase "Quản lý dịch vụ" as ManageService
+  usecase "Duyệt hoặc từ chối sân" as Approve
+  usecase "Quản lý khuyến mãi" as ManagePromo
+  usecase "Thống kê toàn hệ thống" as Stats
+}
+Customer -- Register
+Owner -- Register
+Customer -- Login
+Owner -- Login
+Admin -- Login
+Customer -- Logout
+Owner -- Logout
+Admin -- Logout
+Customer -- List
+Customer -- Search
+Customer -- Book
+Customer -- Pay
+Customer -- History
+Customer -- Profile
+Owner -- Upload
+Owner -- Manage
+Owner -- ManageService
+Admin -- Approve
+Admin -- ManagePromo
+Admin -- Stats
+Upload ..> Photos : <<include>>
+Service ..> Book : <<extend>>
+Promo ..> Book : <<extend>>
+Customer -- Service
+Customer -- Promo
+@enduml

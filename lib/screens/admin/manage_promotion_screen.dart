@@ -15,7 +15,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Quản lý khuyến mãi')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _editPromotion(), icon: const Icon(Icons.add), label: const Text('Thêm mã')),
-      body: ListView.separated(padding: const EdgeInsets.all(16), itemCount: MockStore.promotions.length, separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (context, i) {
+      body: ListView.separated(padding: const EdgeInsets.all(16), itemCount: MockStore.promotions.length, separatorBuilder: (_, _) => const SizedBox(height: 10), itemBuilder: (context, i) {
         final p = MockStore.promotions[i];
         return Card(child: ListTile(
           title: Text(p.code, style: const TextStyle(fontWeight: FontWeight.w800)),

@@ -10,7 +10,7 @@ class ManageServiceScreen extends StatefulWidget {
 }
 
 class _ManageServiceScreenState extends State<ManageServiceScreen> {
-  final _venueId = 'v1';
+  String get _venueId => ModalRoute.of(context)!.settings.arguments as String;
 
   List<VenueService> get _services => MockStore.servicesByVenue[_venueId] ?? [];
 
@@ -21,7 +21,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _editService(), icon: const Icon(Icons.add), label: const Text('Thêm dịch vụ')),
       body: _services.isEmpty
           ? const Center(child: Text('Chưa có dịch vụ.'))
-          : ListView.separated(padding: const EdgeInsets.all(16), itemCount: _services.length, separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (context, i) {
+          : ListView.separated(padding: const EdgeInsets.all(16), itemCount: _services.length, separatorBuilder: (_, _) => const SizedBox(height: 10), itemBuilder: (context, i) {
               final s = _services[i];
               return Card(child: ListTile(
                 title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.w700)),

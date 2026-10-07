@@ -52,6 +52,12 @@ Tài khoản demo (mật khẩu chung `123456`):
 Hiện tại sử dụng `MockStore` để mô phỏng dữ liệu và trạng thái trong phiên chạy ứng dụng. Firebase/SQLite chưa được tích hợp trong skeleton này vì giai đoạn đầu của môn học ưu tiên Flutter/Dart và giao diện.
 
 ## Chạy project
+Môi trường tối thiểu: Flutter 3.41, Dart 3.11 (do `image_picker`). Máy phát triển đã kiểm tra với Flutter 3.47.4 / Dart 3.13.3.
+
+Màn đăng ký sân chọn ảnh thật từ máy bằng `image_picker`, xem trước/xóa ảnh và yêu cầu tối thiểu 3 ảnh khác đường dẫn. Sân gửi duyệt được thêm vào dữ liệu giả của phiên chạy; chưa upload Storage. Danh sách khách hàng chỉ hiển thị sân đã duyệt.
+
+Tài liệu phần Gia Huy: [tiến độ và phân tích](docs/gia_huy/README.md), [test thủ công](docs/gia_huy/test_thu_cong.md), [học code và vấn đáp](docs/gia_huy/hoc_code_va_van_dap.md).
+
 ```bash
 flutter pub get
 flutter run

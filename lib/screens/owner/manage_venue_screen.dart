@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
 import '../../utils/app_routes.dart';
 
-class ManageVenueScreen extends StatelessWidget {
+class ManageVenueScreen extends StatefulWidget {
   const ManageVenueScreen({super.key});
+
+  @override
+  State<ManageVenueScreen> createState() => _ManageVenueScreenState();
+}
+
+class _ManageVenueScreenState extends State<ManageVenueScreen> {
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +21,14 @@ class ManageVenueScreen extends StatelessWidget {
           Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
         }),
       ]),
-      floatingActionButton: FloatingActionButton.extended(onPressed: () => Navigator.pushNamed(context, AppRoutes.uploadVenue), icon: const Icon(Icons.add), label: const Text('Đăng ký sân')),
+      floatingActionButton: FloatingActionButton.extended(onPressed: () async {
+        final created = await Navigator.pushNamed(context, AppRoutes.uploadVenue);
+        if (!mounted) return;
+        setState(() {});
+        if (created == true && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sân đã được gửi chờ quản trị viên duyệt.')));
+        }
+      }, icon: const Icon(Icons.add), label: const Text('Đăng ký sân')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         ...ownVenues.map((venue) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [Expanded(child: Text(venue.name, style: const TextStyle(fontWeight: FontWeight.w800))), Chip(label: Text(_statusLabel(venue.status)))]),
@@ -27,7 +40,7 @@ class ManageVenueScreen extends StatelessWidget {
             Expanded(child: OutlinedButton.icon(onPressed: () => _showBookings(context, venue.id), icon: const Icon(Icons.calendar_month), label: const Text('Lịch đặt'))),
           ],),
           const SizedBox(height: 8),
-          Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => Navigator.pushNamed(context, AppRoutes.manageService), icon: const Icon(Icons.room_service_outlined), label: const Text('Quản lý dịch vụ kèm theo'))),
+          Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => Navigator.pushNamed(context, AppRoutes.manageService, arguments: venue.id), icon: const Icon(Icons.room_service_outlined), label: const Text('Quản lý dịch vụ kèm theo'))),
         ])))),
       ]),
     );

@@ -60,7 +60,7 @@ class _SearchScreenState extends State<SearchScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: results.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, i) => VenueCard(
                     venue: results[i],
                     onTap: () => Navigator.pushNamed(context, AppRoutes.venueDetail, arguments: results[i]),
