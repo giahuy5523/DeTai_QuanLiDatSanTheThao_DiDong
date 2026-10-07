@@ -15,16 +15,31 @@ Future<void> start(WidgetTester tester) async {
 
 Future<void> press(WidgetTester tester, String text) async {
   final button = find.widgetWithText(ElevatedButton, text);
+  if (button.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      button,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+  }
   await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pumpAndSettle();
 }
 
-Future<void> registerForm(WidgetTester tester,
-    {String email = 'new@gmail.com',
-    String phone = '0912345678',
-    String password = 'abcdef',
-    String confirmation = 'abcdef'}) async {
+Future<void> registerForm(
+  WidgetTester tester, {
+  String email = 'new@gmail.com',
+  String phone = '0912345678',
+  String password = 'abcdef',
+  String confirmation = 'abcdef',
+}) async {
   await tester.tap(find.text('Chưa có tài khoản? Đăng ký'));
   await tester.pumpAndSettle();
   final fields = find.byType(TextFormField);
@@ -53,14 +68,16 @@ void main() {
   for (final role in ['customer', 'owner', 'admin']) {
     testWidgets('$role logs in to the correct screen', (tester) async {
       await start(tester);
-      await tester.enterText(find.byType(TextFormField).first,
-          ' ${role.toUpperCase()}@GMAIL.COM ');
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        ' ${role.toUpperCase()}@GMAIL.COM ',
+      );
       await press(tester, 'Đăng nhập');
       final screen = role == 'customer'
           ? HomeScreen
           : role == 'owner'
-              ? ManageVenueScreen
-              : StatisticsScreen;
+          ? ManageVenueScreen
+          : StatisticsScreen;
       expect(find.byType(screen), findsOneWidget);
       expect(MockStore.currentUser?.role, role);
       expect(tester.takeException(), isNull);
@@ -79,20 +96,24 @@ void main() {
     });
   }
 
-  testWidgets('Login validates email and short password and toggles visibility',
-      (tester) async {
-    await start(tester);
-    await tester.enterText(find.byType(TextFormField).first, 'a@');
-    await tester.enterText(find.byType(TextFormField).last, '123');
-    await press(tester, 'Đăng nhập');
-    expect(find.text('Nhập email hợp lệ'), findsOneWidget);
-    expect(find.text('Mật khẩu tối thiểu 6 ký tự'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.visibility));
-    await tester.pump();
-    expect(tester.widget<TextField>(find.byType(TextField).last).obscureText,
-        isFalse);
-    expect(MockStore.currentUser, isNull);
-  });
+  testWidgets(
+    'Login validates email and short password and toggles visibility',
+    (tester) async {
+      await start(tester);
+      await tester.enterText(find.byType(TextFormField).first, 'a@');
+      await tester.enterText(find.byType(TextFormField).last, '123');
+      await press(tester, 'Đăng nhập');
+      expect(find.text('Nhập email hợp lệ'), findsOneWidget);
+      expect(find.text('Mật khẩu tối thiểu 6 ký tự'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.visibility));
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).obscureText,
+        isFalse,
+      );
+      expect(MockStore.currentUser, isNull);
+    },
+  );
 
   for (final role in ['customer', 'owner']) {
     testWidgets('Register $role then log in and log out', (tester) async {
@@ -116,12 +137,10 @@ void main() {
       await press(tester, 'Đăng nhập');
       expect(MockStore.currentUser?.email, 'new@gmail.com');
       if (role == 'customer') {
-        await tester.tap(find.byIcon(Icons.receipt_long));
+        await tester.tap(find.text('Lịch sử'));
         await tester.pumpAndSettle();
         expect(find.text('Chưa có đơn đặt sân.'), findsOneWidget);
-        await tester.pageBack();
-        await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(Icons.person_outline));
+        await tester.tap(find.text('Tài khoản'));
         await tester.pumpAndSettle();
         expect(find.text('Gia Huy'), findsOneWidget);
         final logout = find.text('Đăng xuất');
@@ -138,8 +157,9 @@ void main() {
     });
   }
 
-  testWidgets('Registration rejects duplicate email without adding user',
-      (tester) async {
+  testWidgets('Registration rejects duplicate email without adding user', (
+    tester,
+  ) async {
     await start(tester);
     await registerForm(tester, email: ' CUSTOMER@GMAIL.COM ');
     await press(tester, 'Tạo tài khoản');
@@ -147,30 +167,39 @@ void main() {
     expect(MockStore.users.length, originalUsers.length);
   });
 
-  testWidgets('Registration rejects invalid phone and mismatched password',
-      (tester) async {
+  testWidgets('Registration rejects invalid phone and mismatched password', (
+    tester,
+  ) async {
     await start(tester);
     await registerForm(tester, phone: 'abc', confirmation: 'different');
     await press(tester, 'Tạo tài khoản');
-    expect(find.text('Số điện thoại gồm 10 chữ số, bắt đầu bằng 0'),
-        findsOneWidget);
+    expect(
+      find.text('Số điện thoại gồm 10 chữ số, bắt đầu bằng 0'),
+      findsOneWidget,
+    );
     expect(find.text('Mật khẩu xác nhận không khớp'), findsOneWidget);
     expect(MockStore.users.length, originalUsers.length);
   });
 
-  testWidgets('Registration rejects invalid email and weak password',
-      (tester) async {
+  testWidgets('Registration rejects invalid email and weak password', (
+    tester,
+  ) async {
     await start(tester);
-    await registerForm(tester,
-        email: 'invalid@', password: '   ', confirmation: '   ');
+    await registerForm(
+      tester,
+      email: 'invalid@',
+      password: '   ',
+      confirmation: '   ',
+    );
     await press(tester, 'Tạo tài khoản');
     expect(find.text('Nhập email hợp lệ'), findsOneWidget);
     expect(find.text('Mật khẩu tối thiểu 6 ký tự'), findsOneWidget);
     expect(MockStore.users.length, originalUsers.length);
   });
 
-  testWidgets('Admin logout clears the session and returns to login',
-      (tester) async {
+  testWidgets('Admin logout clears the session and returns to login', (
+    tester,
+  ) async {
     await start(tester);
     await tester.enterText(find.byType(TextFormField).first, 'admin@gmail.com');
     await press(tester, 'Đăng nhập');
@@ -183,8 +212,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Login and registration fit a small mobile screen',
-      (tester) async {
+  testWidgets('Login and registration fit a small mobile screen', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -197,17 +227,19 @@ void main() {
   });
 
   testWidgets(
-      'Empty registration is rejected and admin registration is unavailable',
-      (tester) async {
-    await start(tester);
-    await tester.tap(find.text('Chưa có tài khoản? Đăng ký'));
-    await tester.pumpAndSettle();
-    await press(tester, 'Tạo tài khoản');
-    expect(find.text('Không được để trống'), findsOneWidget);
-    expect(MockStore.users.length, originalUsers.length);
-    final dropdown = tester
-        .widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
-    expect(dropdown.items!.map((item) => item.value), ['customer', 'owner']);
-    expect(tester.takeException(), isNull);
-  });
+    'Empty registration is rejected and admin registration is unavailable',
+    (tester) async {
+      await start(tester);
+      await tester.tap(find.text('Chưa có tài khoản? Đăng ký'));
+      await tester.pumpAndSettle();
+      await press(tester, 'Tạo tài khoản');
+      expect(find.text('Không được để trống'), findsOneWidget);
+      expect(MockStore.users.length, originalUsers.length);
+      final dropdown = tester.widget<DropdownButton<String>>(
+        find.byType(DropdownButton<String>),
+      );
+      expect(dropdown.items!.map((item) => item.value), ['customer', 'owner']);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

@@ -32,14 +32,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _submit() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final email = _email.text.trim().toLowerCase();
-    MockStore.addUser(AppUser(
-      id: 'user${DateTime.now().microsecondsSinceEpoch}',
-      name: _name.text.trim(),
-      email: email,
-      phone: _phone.text.trim(),
-      password: _password.text,
-      role: _role,
-    ));
+    MockStore.addUser(
+      AppUser(
+        id: 'user${DateTime.now().microsecondsSinceEpoch}',
+        name: _name.text.trim(),
+        email: email,
+        phone: _phone.text.trim(),
+        password: _password.text,
+        role: _role,
+      ),
+    );
     Navigator.pop(context, email);
   }
 
@@ -53,40 +55,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             TextFormField(
-                controller: _name,
-                decoration: const InputDecoration(labelText: 'Họ tên'),
-                validator: _required),
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Họ tên'),
+              validator: _required,
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) =>
-                    AuthValidation.email(v) ??
-                    (MockStore.emailExists(v!)
-                        ? 'Email đã được sử dụng'
-                        : null)),
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+              validator: (v) =>
+                  AuthValidation.email(v) ??
+                  (MockStore.emailExists(v!) ? 'Email đã được sử dụng' : null),
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Số điện thoại'),
-                validator: AuthValidation.phone),
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Số điện thoại'),
+              validator: AuthValidation.phone,
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Mật khẩu'),
-                validator: AuthValidation.password),
+              controller: _password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Mật khẩu'),
+              validator: AuthValidation.password,
+            ),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _confirmation,
-                obscureText: true,
-                decoration:
-                    const InputDecoration(labelText: 'Xác nhận mật khẩu'),
-                validator: (v) => v == _password.text
-                    ? null
-                    : 'Mật khẩu xác nhận không khớp'),
+              controller: _confirmation,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Xác nhận mật khẩu'),
+              validator: (v) =>
+                  v == _password.text ? null : 'Mật khẩu xác nhận không khớp',
+            ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _role,
@@ -99,7 +102,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-                onPressed: _submit, child: const Text('Tạo tài khoản')),
+              onPressed: _submit,
+              child: const Text('Tạo tài khoản'),
+            ),
           ],
         ),
       ),

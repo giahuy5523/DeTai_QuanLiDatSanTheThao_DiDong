@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:sportfield_booking/screens/admin/admin_shell_layout.dart';
+import '../../utils/app_theme.dart';
+import '../../widgets/venue_image.dart';
 import '../../data/mock_store.dart';
+import '../../models/user.dart';
 import '../../models/venue.dart';
+import 'admin_drawer.dart';
 
 class ApproveVenueScreen extends StatefulWidget {
   const ApproveVenueScreen({super.key});
@@ -11,181 +14,61 @@ class ApproveVenueScreen extends StatefulWidget {
 }
 
 class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
+  static const double _imageHeight = 190;
+
   List<Venue> get _pending =>
-      MockStore.venues.where((v) => v.status == 'pending').toList();
+      MockStore.venues.where((venue) => venue.status == 'pending').toList();
 
   @override
   Widget build(BuildContext context) {
     final pending = _pending;
 
-    return AdminShellLayout(
-      title: 'Duyệt sân mới',
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Duyệt sân mới'),
+        actions: [if (Navigator.canPop(context)) const BackButton()],
+      ),
+      drawer: const AdminDrawer(selectedIndex: 1),
       body: pending.isEmpty
-          ? const _EmptyState()
+          ? _buildEmptyState()
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               itemCount: pending.length + 1,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
-              itemBuilder: (context, i) {
-                if (i == 0) return _SummaryHeader(count: pending.length);
-                final venue = pending[i - 1];
-                return _VenueCard(
-                  venue: venue,
-                  onReject: () => _confirmAndUpdate(venue, 'rejected'),
-                  onApprove: () => _confirmAndUpdate(venue, 'approved'),
-                );
+              separatorBuilder: (_, _) => const SizedBox(height: 14),
+              itemBuilder: (context, index) {
+                if (index == 0) return _buildSummaryHeader(pending.length);
+                return _buildVenueCard(pending[index - 1]);
               },
             ),
     );
   }
 
-  Future<void> _confirmAndUpdate(Venue venue, String status) async {
-    final approved = status == 'approved';
-    final scheme = Theme.of(context).colorScheme;
-    final color = approved ? scheme.primary : scheme.error;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        icon: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            approved ? Icons.check_circle_outline : Icons.cancel_outlined,
-            color: color,
-            size: 32,
-          ),
-        ),
-        title: Text(
-          approved ? 'Duyệt sân này?' : 'Từ chối sân này?',
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        content: Text(
-          approved
-              ? ' "${venue.name}" sẽ được hiển thị cho người dùng đặt sân.'
-              : ' "${venue.name}" sẽ bị từ chối và không được hiển thị.',
-          textAlign: TextAlign.center,
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text('Hủy'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(46),
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(approved ? 'Duyệt' : 'Từ chối'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      _updateStatus(venue, status);
-    }
-  }
-
-  void _updateStatus(Venue venue, String status) {
-    final index = MockStore.venues.indexWhere((v) => v.id == venue.id);
-    if (index < 0) return;
-    MockStore.venues[index] = Venue(
-      id: venue.id,
-      ownerId: venue.ownerId,
-      name: venue.name,
-      address: venue.address,
-      sportType: venue.sportType,
-      pricePerHour: venue.pricePerHour,
-      imageUrls: venue.imageUrls,
-      latitude: venue.latitude,
-      longitude: venue.longitude,
-      status: status,
-      rating: venue.rating,
-    );
-    setState(() {});
-
-    final approved = status == 'approved';
-    final scheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: approved ? scheme.primary : scheme.error,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          content: Row(
-            children: [
-              Icon(
-                approved ? Icons.check_circle : Icons.cancel,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(approved ? 'Đã duyệt sân.' : 'Đã từ chối sân.'),
-              ),
-            ],
-          ),
-        ),
-      );
-  }
-}
-
-// Số lượng sân chờ phê duyệt
-class _SummaryHeader extends StatelessWidget {
-  const _SummaryHeader({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
+  // Hiển thị số lượng sân và trạng thái không có sân
+  Widget _buildSummaryHeader(int count) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: [scheme.primary, scheme.primary.withValues(alpha: 0.78)],
+        gradient: const LinearGradient(
+          colors: [AppTheme.primary, AppTheme.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.pending_actions, color: Colors.white),
+            child: const Icon(
+              Icons.pending_actions_outlined,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -196,7 +79,7 @@ class _SummaryHeader extends StatelessWidget {
                   '$count sân đang chờ duyệt',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -215,116 +98,84 @@ class _SummaryHeader extends StatelessWidget {
       ),
     );
   }
-}
 
-// Card cho từng sân
-class _VenueCard extends StatelessWidget {
-  const _VenueCard({
-    required this.venue,
-    required this.onReject,
-    required this.onApprove,
-  });
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryLight,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.task_alt_rounded,
+                size: 52,
+                color: AppTheme.primary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Đã duyệt xong!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Không còn sân chờ duyệt.',
+              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-  final Venue venue;
-  final VoidCallback onReject;
-  final VoidCallback onApprove;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+  // Card từng sân
+  Widget _buildVenueCard(Venue venue) {
+    final owner = MockStore.users.cast<AppUser?>().firstWhere(
+      (user) => user?.id == venue.ownerId,
+      orElse: () => null,
+    );
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CoverImage(venue: venue),
+          _buildImageSection(venue),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   venue.name,
-                  style: textTheme.titleMedium?.copyWith(
+                  style: const TextStyle(
+                    fontSize: 19,
                     fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.location_on_outlined,
-                        size: 18, color: scheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        venue.address,
-                        style: textTheme.bodyMedium
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _InfoChip(
-                      icon: Icons.sports_soccer,
-                      label: venue.sportType,
-                      background: scheme.primaryContainer,
-                      foreground: scheme.onPrimaryContainer,
-                    ),
-                    _InfoChip(
-                      icon: Icons.payments_outlined,
-                      label: '${_formatPrice(venue.pricePerHour)} đ/giờ',
-                      background: const Color(0xFFEFF6F1),
-                      foreground: scheme.primary,
-                    ),
-                  ],
+                _infoRow(
+                  Icons.location_on_outlined,
+                  '${venue.address}, ${venue.district}, ${venue.city}',
                 ),
+                if (owner != null) ...[
+                  const SizedBox(height: 16),
+                  _buildOwnerSection(owner),
+                ],
                 const SizedBox(height: 16),
-                const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onReject,
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Từ chối'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          foregroundColor: scheme.error,
-                          side: BorderSide(
-                              color: scheme.error.withValues(alpha: 0.5)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: onApprove,
-                        icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Duyệt'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: scheme.primary,
-                          foregroundColor: scheme.onPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                _buildActions(venue),
               ],
             ),
           ),
@@ -333,208 +184,322 @@ class _VenueCard extends StatelessWidget {
     );
   }
 
-  static String _formatPrice(num value) {
-    final s = value.toStringAsFixed(0);
-    final buffer = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(s[i]);
-    }
-    return buffer.toString();
-  }
-}
-
-// Ảnh bìa kèm trạng thái và huy hiệu đánh giá
-class _CoverImage extends StatelessWidget {
-  const _CoverImage({required this.venue});
-
-  final Venue venue;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final hasImage = venue.imageUrls.isNotEmpty;
-
-    final placeholder = Container(
-      color: scheme.primaryContainer,
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.stadium_outlined,
-        size: 48,
-        color: scheme.primary.withValues(alpha: 0.6),
-      ),
-    );
-
-    return AspectRatio(
-      aspectRatio: 16 / 8,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (hasImage)
-            Image.network(
-              venue.imageUrls.first,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => placeholder,
-              loadingBuilder: (context, child, progress) =>
-                  progress == null ? child : placeholder,
-            )
-          else
-            placeholder,
-          Positioned(
-            top: 10,
-            left: 10,
-            child: _Badge(
-              icon: Icons.hourglass_top,
-              label: 'Chờ duyệt',
-              background: const Color(0xFFFEF3C7),
-              foreground: const Color(0xFF92400E),
-            ),
-          ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: _Badge(
-              icon: Icons.star_rounded,
-              label: venue.rating.toStringAsFixed(1),
-              background: Colors.white,
-              foreground: const Color(0xFF111827),
-              iconColor: const Color(0xFFF59E0B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.background,
-    required this.foreground,
-    this.iconColor,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color background;
-  final Color foreground;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: iconColor ?? foreground),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: foreground,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: foreground),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Trạng thái không có sân
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(22),
+  Widget _buildImageSection(Venue venue) {
+    return Stack(
+      children: [
+        _buildVenueImage(venue),
+        // Lớp gradient để chữ/badge nổi bật trên ảnh
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.25),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.45),
+                  ],
+                  stops: const [0, 0.5, 1],
+                ),
               ),
-              child: Icon(Icons.task_alt, size: 44, color: scheme.primary),
             ),
-            const SizedBox(height: 18),
-            Text(
-              'Không còn sân chờ duyệt.',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
+        Positioned(
+          top: 12,
+          left: 12,
+          child: _badge(
+            icon: Icons.hourglass_top_rounded,
+            label: 'Chờ duyệt',
+            background: AppTheme.warning,
+            foreground: Colors.white,
+          ),
+        ),
+        Positioned(
+          left: 12,
+          bottom: 12,
+          child: _badge(
+            icon: Icons.sports_outlined,
+            label: venue.sportType,
+            background: Colors.white,
+            foreground: AppTheme.primaryDark,
+          ),
+        ),
+        Positioned(
+          right: 12,
+          bottom: 12,
+          child: _badge(
+            icon: Icons.payments_outlined,
+            label: '${_formatPrice(venue.pricePerHour)} đ/giờ',
+            background: AppTheme.primary,
+            foreground: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _badge({
+    required IconData icon,
+    required String label,
+    required Color background,
+    required Color foreground,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: foreground),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: foreground,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Các sân mới sẽ xuất hiện ở đây khi chủ sân gửi yêu cầu.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOwnerSection(AppUser owner) {
+    final initial = owner.name.trim().isEmpty
+        ? '?'
+        : owner.name.trim().characters.first.toUpperCase();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryLight.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppTheme.primary,
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Chủ sân',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      owner.name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _infoRow(Icons.phone_outlined, owner.phone),
+          const SizedBox(height: 8),
+          _infoRow(Icons.email_outlined, owner.email),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions(Venue venue) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.error,
+              side: const BorderSide(color: AppTheme.error, width: 1.2),
             ),
-          ],
+            onPressed: () => _confirmReject(venue),
+            icon: const Icon(Icons.close_rounded),
+            label: const Text('Từ chối'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _updateStatus(venue, 'approved'),
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Duyệt'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Ảnh sân
+  Widget _buildVenueImage(Venue venue) {
+    final images = MockStore.imageUrlsOf(venue.id);
+    if (images.isEmpty) {
+      return _imagePlaceholder(Icons.image_not_supported_outlined);
+    }
+
+    return SizedBox(
+      height: _imageHeight,
+      width: double.infinity,
+      child: VenueImage(
+        source: images.first,
+        placeholder: _imagePlaceholder(Icons.broken_image_outlined),
+      ),
+    );
+  }
+
+  Widget _imagePlaceholder(IconData icon) {
+    return Container(
+      height: _imageHeight,
+      width: double.infinity,
+      color: AppTheme.primaryLight,
+      child: Center(
+        child: Icon(
+          icon,
+          size: 52,
+          color: AppTheme.primary.withValues(alpha: 0.6),
         ),
       ),
     );
+  }
+
+  // Thông tin sân
+  Widget _infoRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 19, color: AppTheme.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.35,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatPrice(num value) {
+    final digits = value.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final remaining = digits.length - i;
+      buffer.write(digits[i]);
+      if (remaining > 1 && remaining % 3 == 1) buffer.write('.');
+    }
+    return buffer.toString();
+  }
+
+  // Nút từ chối
+  Future<void> _confirmReject(Venue venue) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Từ chối sân?',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        content: Text('Bạn có chắc muốn từ chối sân "${venue.name}" không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Hủy',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Từ chối',
+              style: TextStyle(
+                color: AppTheme.error,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) _updateStatus(venue, 'rejected');
+  }
+
+  void _updateStatus(Venue venue, String status) {
+    final index = MockStore.venues.indexWhere((item) => item.id == venue.id);
+
+    if (index < 0) return;
+
+    MockStore.venues[index] = venue.copyWith(status: status);
+
+    setState(() {});
+
+    final approved = status == 'approved';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: approved ? AppTheme.success : AppTheme.error,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          content: Row(
+            children: [
+              Icon(
+                approved ? Icons.check_circle_outline : Icons.cancel_outlined,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  approved
+                      ? 'Đã duyệt sân "${venue.name}".'
+                      : 'Đã từ chối sân "${venue.name}".',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 }
