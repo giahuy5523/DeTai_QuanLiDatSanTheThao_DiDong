@@ -1,30 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:sportfield_booking/screens/admin/admin_shell_layout.dart';
 import '../../data/mock_store.dart';
+import 'admin_drawer.dart';
 
-class StatisticsScreen extends StatelessWidget {
+class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({super.key});
 
   @override
+  State<StatisticsScreen> createState() => _StatisticsScreenState();
+}
+
+class _StatisticsScreenState extends State<StatisticsScreen> {
+  @override
   Widget build(BuildContext context) {
     final bookings = MockStore.bookings;
-    final approvedVenues = MockStore.venues.where((v) => v.status == 'approved').length;
-    final pendingVenues = MockStore.venues.where((v) => v.status == 'pending').length;
+    final approvedVenues = MockStore.venues
+        .where((v) => v.status == 'approved')
+        .length;
+    final pendingVenues = MockStore.venues
+        .where((v) => v.status == 'pending')
+        .length;
     final totalRevenue = bookings
         .where((b) => b.status == 'confirmed' || b.status == 'completed')
-        .fold<double>(0, (sum, b) => sum + b.totalAmount);
+        .fold<double>(0, (sum, b) => sum + b.totalPrice);
 
-    return AdminShellLayout(
-      title: 'Thống kê toàn hệ thống',
+    return Scaffold(
+      appBar: AppBar(title: const Text('Thống kê toàn hệ thống')),
+      drawer: AdminDrawer(
+        selectedIndex: 0,
+        onReturn: () {
+          if (mounted) setState(() {});
+        },
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
             'Tổng quan',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
           GridView.count(
@@ -33,7 +47,7 @@ class StatisticsScreen extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
+            childAspectRatio: 1.1,
             children: [
               _metric(
                 context,
@@ -41,12 +55,7 @@ class StatisticsScreen extends StatelessWidget {
                 '${bookings.length}',
                 Icons.calendar_month,
               ),
-              _metric(
-                context,
-                'Sân đã duyệt',
-                '$approvedVenues',
-                Icons.sports,
-              ),
+              _metric(context, 'Sân đã duyệt', '$approvedVenues', Icons.sports),
               _metric(
                 context,
                 'Sân chờ duyệt',
@@ -73,12 +82,7 @@ class StatisticsScreen extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
-                  ...[
-                    'pending',
-                    'confirmed',
-                    'completed',
-                    'cancelled',
-                  ].map(
+                  ...['pending', 'confirmed', 'completed', 'cancelled'].map(
                     (status) => _statusBar(
                       status,
                       bookings.where((b) => b.status == status).length,
@@ -108,12 +112,14 @@ class StatisticsScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Icon(icon, color: Theme.of(context).colorScheme.primary),
-            Text(
-              value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
             ),
             Text(title, style: TextStyle(color: Colors.grey.shade700)),
           ],

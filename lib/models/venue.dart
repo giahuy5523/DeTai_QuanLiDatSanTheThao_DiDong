@@ -1,92 +1,88 @@
 /// Model Sân thể thao - tương ứng bảng Venues trong ERD.
 /// status: "pending" (chờ duyệt) | "approved" (đã duyệt) | "rejected" (từ chối)
 class Venue {
-  final String venueId; // venue_id (PK)
-  final String ownerId; // owner_id (FK -> Users)
-  final String sportTypeId; // sport_type_id (FK -> SportTypes)
+  final String id;
+  final String ownerId;
+  final int? sportTypeId; // Khóa ngoại sport_type_id trong ERD
+  final String sportType; // Tên hiển thị loại thể thao
   final String name;
   final String address;
-  final String district;
-  final String city;
-  final String? description;
-  final double pricePerHour; // price_per_hour
-  final String openTime; // open_time, định dạng "HH:mm"
-  final String closeTime; // close_time, định dạng "HH:mm"
+  final String? district; // Quận/Huyện trong ERD
+  final String? city;     // Thành phố trong ERD
+  final double pricePerHour;
+  final List<String> imageUrls;
+  final double latitude;
+  final double longitude;
   final String status;
-  final String? rejectReason; // reject_reason
-  final String? reviewedBy; // reviewed_by (FK -> Users, admin)
-  final DateTime? reviewedAt; // reviewed_at
-  final DateTime createdAt; // created_at
+  final double rating;
 
   Venue({
-    required this.venueId,
+    required this.id,
     required this.ownerId,
-    required this.sportTypeId,
+    this.sportTypeId,
+    required this.sportType,
     required this.name,
     required this.address,
-    required this.district,
-    required this.city,
-    this.description,
+    this.district,
+    this.city,
     required this.pricePerHour,
-    required this.openTime,
-    required this.closeTime,
+    required this.imageUrls,
+    required this.latitude,
+    required this.longitude,
     this.status = 'pending',
-    this.rejectReason,
-    this.reviewedBy,
-    this.reviewedAt,
-    required this.createdAt,
+    this.rating = 0.0,
   });
 
   /// Dữ liệu mẫu (mock data)
   static List<Venue> mockList() {
     return [
       Venue(
-        venueId: 'v1',
+        id: 'v1',
         ownerId: 'owner1',
-        sportTypeId: 'st1',
+        sportTypeId: 1,
+        sportType: 'Bóng đá',
         name: 'Sân bóng đá Thành Công',
-        address: '12 Lý Thường Kiệt',
+        address: '12 Lý Thường Kiệt, Tân Bình, TP.HCM',
         district: 'Tân Bình',
         city: 'TP.HCM',
-        description: 'Sân cỏ nhân tạo mini, có đèn chiếu sáng buổi tối.',
         pricePerHour: 300000,
-        openTime: '06:00',
-        closeTime: '22:00',
+        imageUrls: const [],
+        latitude: 10.7975,
+        longitude: 106.6520,
         status: 'approved',
-        reviewedBy: 'admin1',
-        reviewedAt: DateTime.now().subtract(const Duration(days: 10)),
-        createdAt: DateTime.now().subtract(const Duration(days: 12)),
+        rating: 4.5,
       ),
       Venue(
-        venueId: 'v2',
+        id: 'v2',
         ownerId: 'owner2',
-        sportTypeId: 'st2',
+        sportTypeId: 2,
+        sportType: 'Cầu lông',
         name: 'Sân cầu lông Phú Nhuận',
-        address: '45 Phan Xích Long',
+        address: '45 Phan Xích Long, Phú Nhuận, TP.HCM',
         district: 'Phú Nhuận',
         city: 'TP.HCM',
-        description: 'Sân trong nhà, mặt thảm tiêu chuẩn thi đấu.',
         pricePerHour: 120000,
-        openTime: '05:30',
-        closeTime: '23:00',
+        imageUrls: const [],
+        latitude: 10.7990,
+        longitude: 106.6800,
         status: 'approved',
-        reviewedBy: 'admin1',
-        reviewedAt: DateTime.now().subtract(const Duration(days: 8)),
-        createdAt: DateTime.now().subtract(const Duration(days: 9)),
+        rating: 4.2,
       ),
       Venue(
-        venueId: 'v3',
+        id: 'v3',
         ownerId: 'owner1',
-        sportTypeId: 'st3',
+        sportTypeId: 3,
+        sportType: 'Tennis',
         name: 'Sân tennis Quận 7',
-        address: '88 Nguyễn Thị Thập',
+        address: '88 Nguyễn Thị Thập, Quận 7, TP.HCM',
         district: 'Quận 7',
         city: 'TP.HCM',
         pricePerHour: 250000,
-        openTime: '06:00',
-        closeTime: '21:00',
+        imageUrls: const [],
+        latitude: 10.7320,
+        longitude: 106.7210,
         status: 'pending',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
+        rating: 0.0,
       ),
     ];
   }
