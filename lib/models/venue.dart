@@ -37,7 +37,7 @@ class Venue {
     required this.createdAt,
   });
 
-  /// Dữ liệu mẫu (mock data) dùng cho giao diện khi chưa nối Firebase/SQLite thật.
+  /// Dữ liệu mẫu (mock data)
   static List<Venue> mockList() {
     return [
       Venue(

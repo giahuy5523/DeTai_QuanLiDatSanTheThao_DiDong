@@ -40,6 +40,15 @@ Các nhóm chức năng:
 - Thống kê lượt đặt sân toàn hệ thống
 
 ## Dữ liệu
+Đăng ký và đăng nhập dùng tài khoản giả trong `MockStore`. Tài khoản mới chỉ tồn tại trong phiên chạy; khởi động lại ứng dụng sẽ mất tài khoản vừa tạo. Vai trò được lấy từ tài khoản đăng nhập, không tự chọn ở màn Login.
+
+Tài khoản demo (mật khẩu chung `123456`):
+- Khách hàng: `customer@gmail.com`
+- Chủ sân: `owner@gmail.com`
+- Admin: `admin@gmail.com`
+
+Đăng ký hỗ trợ Khách hàng và Chủ sân, kiểm tra email trùng, số điện thoại 10 chữ số bắt đầu bằng 0 và xác nhận mật khẩu. Chạy `flutter test` để kiểm tra các luồng tài khoản.
+
 Hiện tại sử dụng `MockStore` để mô phỏng dữ liệu và trạng thái trong phiên chạy ứng dụng. Firebase/SQLite chưa được tích hợp trong skeleton này vì giai đoạn đầu của môn học ưu tiên Flutter/Dart và giao diện.
 
 ## Chạy project

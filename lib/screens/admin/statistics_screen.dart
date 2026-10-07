@@ -12,7 +12,7 @@ class StatisticsScreen extends StatelessWidget {
     final pendingVenues = MockStore.venues.where((v) => v.status == 'pending').length;
     final totalRevenue = bookings
         .where((b) => b.status == 'confirmed' || b.status == 'completed')
-        .fold<double>(0, (sum, b) => sum + b.totalPrice);
+        .fold<double>(0, (sum, b) => sum + b.totalAmount);
 
     return AdminShellLayout(
       title: 'Thống kê toàn hệ thống',

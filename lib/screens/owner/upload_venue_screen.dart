@@ -40,7 +40,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
         const SizedBox(height: 12),
         TextField(controller: _address, decoration: const InputDecoration(labelText: 'Địa chỉ')),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(value: _sportType, decoration: const InputDecoration(labelText: 'Loại sân'), items: const [
+        DropdownButtonFormField<String>(initialValue: _sportType, decoration: const InputDecoration(labelText: 'Loại sân'), items: const [
           DropdownMenuItem(value: 'Bóng đá', child: Text('Bóng đá')),
           DropdownMenuItem(value: 'Cầu lông', child: Text('Cầu lông')),
           DropdownMenuItem(value: 'Tennis', child: Text('Tennis')),

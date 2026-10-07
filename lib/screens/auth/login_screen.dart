@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/app_routes.dart';
+import '../../data/mock_store.dart';
+import '../../utils/auth_validation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,7 +14,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController(text: 'customer@gmail.com');
   final _password = TextEditingController(text: '123456');
-  String _role = 'customer';
   bool _obscure = true;
 
   @override
@@ -25,7 +26,14 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    switch (_role) {
+    final user = MockStore.login(_email.text, _password.text);
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email hoặc mật khẩu không đúng.')),
+      );
+      return;
+    }
+    switch (user.role) {
       case 'owner':
         Navigator.pushReplacementNamed(context, AppRoutes.manageVenue);
         break;
@@ -51,30 +59,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(Icons.sports, size: 64, color: Theme.of(context).colorScheme.primary),
+                    Icon(Icons.sports,
+                        size: 64, color: Theme.of(context).colorScheme.primary),
                     const SizedBox(height: 12),
-                    Text('Đặt sân thể thao', textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                    Text('Đặt sân thể thao',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 6),
-                    Text('Nhóm 01 • Flutter/Dart', textAlign: TextAlign.center,
+                    Text('Nhóm 01 • Flutter/Dart',
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey.shade600)),
                     const SizedBox(height: 28),
-                    DropdownButtonFormField<String>(
-                      value: _role,
-                      decoration: const InputDecoration(labelText: 'Vai trò đăng nhập'),
-                      items: const [
-                        DropdownMenuItem(value: 'customer', child: Text('Khách hàng')),
-                        DropdownMenuItem(value: 'owner', child: Text('Chủ sân')),
-                        DropdownMenuItem(value: 'admin', child: Text('Quản trị viên')),
-                      ],
-                      onChanged: (v) => setState(() => _role = v ?? 'customer'),
-                    ),
-                    const SizedBox(height: 12),
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(labelText: 'Email'),
-                      validator: (v) => (v == null || !v.contains('@')) ? 'Nhập email hợp lệ' : null,
+                      validator: AuthValidation.email,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -84,15 +87,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: 'Mật khẩu',
                         suffixIcon: IconButton(
                           onPressed: () => setState(() => _obscure = !_obscure),
-                          icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                          icon: Icon(_obscure
+                              ? Icons.visibility
+                              : Icons.visibility_off),
                         ),
                       ),
-                      validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu tối thiểu 6 ký tự' : null,
+                      validator: AuthValidation.password,
                     ),
                     const SizedBox(height: 20),
-                    ElevatedButton(onPressed: _login, child: const Text('Đăng nhập')),
+                    ElevatedButton(
+                        onPressed: _login, child: const Text('Đăng nhập')),
                     TextButton(
-                      onPressed: () => Navigator.pushNamed(context, AppRoutes.register),
+                      onPressed: () async {
+                        final email = await Navigator.pushNamed(
+                            context, AppRoutes.register);
+                        if (!mounted || email is! String) return;
+                        _email.text = email;
+                        _password.clear();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'Tạo tài khoản thành công. Vui lòng đăng nhập.')),
+                        );
+                      },
                       child: const Text('Chưa có tài khoản? Đăng ký'),
                     ),
                   ],
