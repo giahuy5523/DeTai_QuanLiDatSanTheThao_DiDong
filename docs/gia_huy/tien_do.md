@@ -14,7 +14,7 @@ Cập nhật 07/10/2026. Phần code đã được triển khai sớm cho các n
 
 ## Kết quả kiểm tra
 
-30 widget tests đã qua, Dart analyzer sạch và `flutter build web --no-pub` thành công trên máy phát triển Flutter 3.47.4 / Dart 3.13.3. Xem test_thu_cong.md để chạy các ca thực tế. Chưa chạy picker native trên thiết bị; không ghi mặc định Pass cho thiết bị chưa chạy.
+47 test đã qua sau tích hợp nhánh Bảo Huy, analyzer sạch. Bộ test bao gồm đăng nhập/đăng ký, Upload, điều hướng, đặt sân/xác nhận/thanh toán, promo CRUD, dịch vụ CRUD, bộ lọc, thống kê và màn hình 360 px. Xem review_baohuy.md và test_thu_cong.md. Chưa chạy picker native trên thiết bị; không ghi mặc định Pass cho thiết bị chưa chạy.
 
 ## File để học và nộp
 
@@ -27,4 +27,4 @@ Cập nhật 07/10/2026. Phần code đã được triển khai sớm cho các n
 
 ## Phần nhóm cần đối chiếu trước báo cáo
 
-Thanh toán hiện chưa ghi Payment/phương thức riêng; hồ sơ chỉ thông báo lưu mô phỏng; JSON/SQL khác model Dart; booking chưa kiểm tra trùng lịch; card/detail chưa hiển thị ảnh upload. Không ghi các phần này đã hoàn chỉnh trong Word. Các thay đổi hiện nằm trong workspace, chưa được commit/push trong lượt này.
+Thanh toán đã ghi Booking cùng Payment mock và phương thức, kiểm tra lại lịch trước khi xác nhận; Booking kiểm tra giờ quá khứ/trùng lịch/giờ mở cửa; Chi tiết và Admin đọc ảnh picker/URL. Hồ sơ vẫn lưu mô phỏng; SQL chỉ có 7 bảng và app chưa load JSON/SQLite, chưa tích hợp Maps/thanh toán thật. Class Diagram và screenshot chưa có trong nhánh Bảo Huy đã gửi. Phần Word ngày 09/10 vẫn cần các tài liệu này và công cụ render để kiểm tra bố cục.

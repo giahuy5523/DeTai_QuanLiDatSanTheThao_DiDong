@@ -81,7 +81,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
       _message('Chỉ chủ sân được đăng ký sân mới.');
       return;
     }
-    MockStore.venues.add(
+    MockStore.addVenue(
       Venue(
         id: 'venue${DateTime.now().microsecondsSinceEpoch}',
         ownerId: user.id,

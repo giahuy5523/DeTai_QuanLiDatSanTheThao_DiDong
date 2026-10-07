@@ -263,7 +263,9 @@ class MockStore {
   /// Muốn dùng: `imageUrls: MockStore.imageUrlsOf('v1')` trong constructor Venue.
   static List<String> imageUrlsOf(String venueId) {
     final rows = venueImages.where((e) => e['venueId'] == venueId).toList()
-      ..sort((a, b) => (a['sortOrder'] as int).compareTo(b['sortOrder'] as int));
+      ..sort(
+        (a, b) => (a['sortOrder'] as int).compareTo(b['sortOrder'] as int),
+      );
     return rows.map((e) => e['imageUrl'] as String).toList();
   }
 
@@ -279,7 +281,8 @@ class MockStore {
     'v8': [6, 22],
   };
 
-  static List<int> hoursOf(String venueId) => openHours[venueId] ?? const [6, 22];
+  static List<int> hoursOf(String venueId) =>
+      openHours[venueId] ?? const [6, 22];
 
   // 4. Danh sách Khuyến mãi
   static final List<Promotion> promotions = Promotion.mockList();
@@ -287,28 +290,100 @@ class MockStore {
   // 5. Danh sách Dịch vụ đi kèm theo từng Sân
   static final Map<String, List<VenueService>> servicesByVenue = {
     'v1': [
-      VenueService(id: 's1', venueId: 'v1', name: 'Thuê áo bib (bộ 10 cái)', price: 30000, unit: 'bộ'),
-      VenueService(id: 's2', venueId: 'v1', name: 'Nước suối chai 500ml', price: 10000, unit: 'chai'),
-      VenueService(id: 's3', venueId: 'v1', name: 'Bóng thi đấu', price: 50000, unit: 'quả/giờ'),
+      VenueService(
+        id: 's1',
+        venueId: 'v1',
+        name: 'Thuê áo bib (bộ 10 cái)',
+        price: 30000,
+        unit: 'bộ',
+      ),
+      VenueService(
+        id: 's2',
+        venueId: 'v1',
+        name: 'Nước suối chai 500ml',
+        price: 10000,
+        unit: 'chai',
+      ),
+      VenueService(
+        id: 's3',
+        venueId: 'v1',
+        name: 'Bóng thi đấu',
+        price: 50000,
+        unit: 'quả/giờ',
+      ),
     ],
     'v2': [
-      VenueService(id: 's4', venueId: 'v2', name: 'Thuê vợt cầu lông', price: 30000, unit: 'cây/giờ'),
-      VenueService(id: 's5', venueId: 'v2', name: 'Mua quả cầu lông Vina', price: 25000, unit: 'quả'),
+      VenueService(
+        id: 's4',
+        venueId: 'v2',
+        name: 'Thuê vợt cầu lông',
+        price: 30000,
+        unit: 'cây/giờ',
+      ),
+      VenueService(
+        id: 's5',
+        venueId: 'v2',
+        name: 'Mua quả cầu lông Vina',
+        price: 25000,
+        unit: 'quả',
+      ),
     ],
     'v3': [
-      VenueService(id: 's6', venueId: 'v3', name: 'Thuê vợt Tennis', price: 50000, unit: 'cây/giờ'),
-      VenueService(id: 's7', venueId: 'v3', name: 'Nước điện giải Revive', price: 15000, unit: 'chai'),
+      VenueService(
+        id: 's6',
+        venueId: 'v3',
+        name: 'Thuê vợt Tennis',
+        price: 50000,
+        unit: 'cây/giờ',
+      ),
+      VenueService(
+        id: 's7',
+        venueId: 'v3',
+        name: 'Nước điện giải Revive',
+        price: 15000,
+        unit: 'chai',
+      ),
     ],
     'v4': [
-      VenueService(id: 's8', venueId: 'v4', name: 'Thuê trọng tài', price: 150000, unit: 'trận'),
-      VenueService(id: 's9', venueId: 'v4', name: 'Nước suối lạnh', price: 10000, unit: 'chai'),
+      VenueService(
+        id: 's8',
+        venueId: 'v4',
+        name: 'Thuê trọng tài',
+        price: 150000,
+        unit: 'trận',
+      ),
+      VenueService(
+        id: 's9',
+        venueId: 'v4',
+        name: 'Nước suối lạnh',
+        price: 10000,
+        unit: 'chai',
+      ),
     ],
     'v5': [
-      VenueService(id: 's10', venueId: 'v5', name: 'Thuê bóng rổ Molten', price: 30000, unit: 'quả/giờ'),
+      VenueService(
+        id: 's10',
+        venueId: 'v5',
+        name: 'Thuê bóng rổ Molten',
+        price: 30000,
+        unit: 'quả/giờ',
+      ),
     ],
     'v6': [
-      VenueService(id: 's11', venueId: 'v6', name: 'Thuê vợt Pickleball', price: 40000, unit: 'cây/giờ'),
-      VenueService(id: 's12', venueId: 'v6', name: 'Bóng Pickleball Franklin', price: 35000, unit: 'quả'),
+      VenueService(
+        id: 's11',
+        venueId: 'v6',
+        name: 'Thuê vợt Pickleball',
+        price: 40000,
+        unit: 'cây/giờ',
+      ),
+      VenueService(
+        id: 's12',
+        venueId: 'v6',
+        name: 'Bóng Pickleball Franklin',
+        price: 35000,
+        unit: 'quả',
+      ),
     ],
   };
 
@@ -359,7 +434,7 @@ class MockStore {
       status: 'completed',
       paymentId: 'pay4',
     ),
-     Booking(
+    Booking(
       id: 'b5',
       venueId: 'v1',
       userId: 'customer2',
@@ -551,7 +626,10 @@ class MockStore {
   /// Trả về các khung giờ 1 tiếng của [venueId] trong ngày [date]:
   /// {venueId, date, startTime, endTime, price, status}
   /// status: 'available' | 'booked' (đã có booking chưa huỷ) | 'blocked' (đã qua giờ).
-  static List<Map<String, dynamic>> timeSlotsFor(String venueId, DateTime date) {
+  static List<Map<String, dynamic>> timeSlotsFor(
+    String venueId,
+    DateTime date,
+  ) {
     final venue = venueById(venueId);
     if (venue == null) return const [];
     final hours = hoursOf(venueId);
@@ -559,10 +637,12 @@ class MockStore {
     final isToday = _sameDay(date, now);
     final nowMinutes = now.hour * 60 + now.minute;
     final dayBookings = bookings
-        .where((b) =>
-            b.venueId == venueId &&
-            b.status != 'cancelled' &&
-            _sameDay(b.date, date))
+        .where(
+          (b) =>
+              b.venueId == venueId &&
+              b.status != 'cancelled' &&
+              _sameDay(b.date, date),
+        )
         .toList();
 
     final slots = <Map<String, dynamic>>[];
@@ -613,6 +693,83 @@ class MockStore {
 
   static void addBooking(Booking booking) {
     bookings.add(booking);
+  }
+
+  static bool updateVenue(Venue venue) {
+    final index = venues.indexWhere((item) => item.id == venue.id);
+    if (index < 0) return false;
+    venues[index] = venue;
+    return true;
+  }
+
+  static void addVenue(Venue venue) {
+    venues.add(venue);
+    servicesByVenue[venue.id] = [];
+  }
+
+  static bool isRangeAvailable(
+    String venueId,
+    DateTime date,
+    String start,
+    String end,
+  ) {
+    final venue = venueById(venueId);
+    if (venue == null || venue.status != 'approved') return false;
+    final timePattern = RegExp(r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$');
+    if (!timePattern.hasMatch(start) || !timePattern.hasMatch(end)) {
+      return false;
+    }
+    final from = _toMinutes(start);
+    final to = _toMinutes(end);
+    final hours = hoursOf(venueId);
+    final startsAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      from ~/ 60,
+      from % 60,
+    );
+    if (to <= from ||
+        from < hours[0] * 60 ||
+        to > hours[1] * 60 ||
+        !startsAt.isAfter(DateTime.now())) {
+      return false;
+    }
+    return !bookings.any(
+      (booking) =>
+          booking.venueId == venueId &&
+          booking.status != 'cancelled' &&
+          _sameDay(booking.date, date) &&
+          from < _toMinutes(booking.endTime) &&
+          to > _toMinutes(booking.startTime),
+    );
+  }
+
+  static bool confirmBooking(Booking booking, String method) {
+    if (!booking.totalPrice.isFinite ||
+        booking.totalPrice < 0 ||
+        !['cash', 'momo', 'vnpay'].contains(method) ||
+        bookings.any((item) => item.id == booking.id)) {
+      return false;
+    }
+    if (!isRangeAvailable(
+      booking.venueId,
+      booking.date,
+      booking.startTime,
+      booking.endTime,
+    )) {
+      return false;
+    }
+    bookings.add(booking);
+    payments.add({
+      'id': booking.paymentId,
+      'bookingId': booking.id,
+      'method': method,
+      'amount': booking.totalPrice,
+      'status': 'success',
+      'transactionCode': null,
+    });
+    return true;
   }
 
   static AppUser? findUserByEmail(String email) {

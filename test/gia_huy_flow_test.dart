@@ -12,6 +12,7 @@ import 'package:sportfield_booking/screens/owner/manage_venue_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
 import 'widget_test.dart' show start, press;
+import 'test_helpers.dart';
 
 class FakePicker extends ImagePicker {
   List<XFile> files = [];
@@ -85,6 +86,7 @@ Future<void> pick(WidgetTester tester) async {
 void main() {
   final originalVenues = List.of(MockStore.venues);
   final originalBookings = List.of(MockStore.bookings);
+  final originalPayments = List.of(MockStore.payments);
   setUp(() {
     MockStore.logout();
   });
@@ -96,6 +98,9 @@ void main() {
     MockStore.bookings
       ..clear()
       ..addAll(originalBookings);
+    MockStore.payments
+      ..clear()
+      ..addAll(originalPayments);
   });
 
   testWidgets(
@@ -107,7 +112,7 @@ void main() {
       await tester.tap(listButton);
       await tester.pumpAndSettle();
       expect(find.byType(VenueListScreen), findsOneWidget);
-      expect(find.text('Sân tennis Quận 7'), findsNothing);
+      expect(find.text(MockStore.venueById('v8')!.name), findsNothing);
       await tester.tap(find.widgetWithText(ChoiceChip, 'Cầu lông'));
       await tester.pumpAndSettle();
       expect(find.text('Sân bóng đá Thành Công'), findsNothing);
@@ -115,7 +120,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(VenueDetailScreen), findsOneWidget);
       expect(find.text('Sân cầu lông Phú Nhuận'), findsOneWidget);
-      await tester.pageBack();
+      await tester.tap(find.byTooltip('Quay lại'));
       await tester.pumpAndSettle();
       expect(find.byType(VenueListScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -125,7 +130,7 @@ void main() {
   testWidgets('Home and list handle no approved venues', (tester) async {
     MockStore.venues.clear();
     await login(tester, 'customer');
-    expect(find.text('Chưa có sân được duyệt.'), findsOneWidget);
+    expect(find.text('Hiện chưa có sân nào được duyệt.'), findsOneWidget);
     await tester.tap(find.text('Xem tất cả sân'));
     await tester.pumpAndSettle();
     expect(find.text('Chưa có sân phù hợp.'), findsOneWidget);
@@ -320,28 +325,37 @@ void main() {
     (tester) async {
       await login(tester, 'customer');
       final card = find.text('Sân bóng đá Thành Công');
-      await tester.scrollUntilVisible(card, 200);
+      await tester.scrollUntilVisible(
+        card,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(HomeScreen),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(card);
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Đặt sân ngay'), 200);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Đặt sân ngay'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Đặt sân ngay'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, '18:00'));
-      await tester.tap(find.widgetWithText(ChoiceChip, '18:00'));
-      await tester.pumpAndSettle();
-      await press(tester, 'Tiếp tục đến thanh toán');
+      await chooseFutureDate(tester);
+      await tapVisible(tester, find.byKey(const ValueKey('start_18:00')));
+      await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
+      await press(tester, 'Tiếp tục');
+      await press(tester, 'Xác nhận & thanh toán');
       await tester.tap(find.text('Ví MoMo (mô phỏng)'));
       await tester.pumpAndSettle();
       await press(tester, 'Xác nhận thanh toán');
       expect(find.text('Đặt sân thành công'), findsOneWidget);
       expect(MockStore.bookings.length, originalBookings.length + 1);
+      expect(MockStore.payments.last['method'], 'momo');
       await tester.tap(find.text('Về trang chủ'));
       await tester.pumpAndSettle();
       expect(find.byType(HomeScreen), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.receipt_long));
+      await tester.tap(find.text('Lịch sử'));
       await tester.pumpAndSettle();
       final cancel = find.byKey(
         ValueKey('cancel_${MockStore.bookings.last.id}'),

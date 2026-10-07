@@ -18,9 +18,27 @@ class VenueService {
   /// Dữ liệu mẫu (mock data) để code UI khi chưa nối dữ liệu thật.
   static List<VenueService> mockListFor(String venueId) {
     return [
-      VenueService(id: 's1', venueId: venueId, name: 'Nước suối', price: 10000, unit: 'chai'),
-      VenueService(id: 's2', venueId: venueId, name: 'Thuê vợt cầu lông', price: 20000, unit: 'buổi'),
-      VenueService(id: 's3', venueId: venueId, name: 'Thuê giày thể thao', price: 15000, unit: 'buổi'),
+      VenueService(
+        id: 's1',
+        venueId: venueId,
+        name: 'Nước suối',
+        price: 10000,
+        unit: 'chai',
+      ),
+      VenueService(
+        id: 's2',
+        venueId: venueId,
+        name: 'Thuê vợt cầu lông',
+        price: 20000,
+        unit: 'buổi',
+      ),
+      VenueService(
+        id: 's3',
+        venueId: venueId,
+        name: 'Thuê giày thể thao',
+        price: 15000,
+        unit: 'buổi',
+      ),
     ];
   }
 }

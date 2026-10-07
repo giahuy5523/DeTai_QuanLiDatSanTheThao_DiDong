@@ -9,6 +9,9 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/customer/booking_history_screen.dart';
 import '../screens/customer/booking_screen.dart';
+import '../screens/customer/booking_confirmation_screen.dart';
+import '../screens/customer/customer_shell.dart';
+import '../screens/customer/customer_promotion_screen.dart';
 import '../screens/customer/home_screen.dart';
 import '../screens/customer/venue_list_screen.dart';
 import '../screens/customer/payment_screen.dart';
@@ -25,6 +28,9 @@ class AppRoutes {
   static const login = '/login';
   static const register = '/register';
   static const home = '/home';
+  static const customerShell = '/customer';
+  static const customerPromotion = '/customer-promotions';
+  static const bookingConfirmation = '/booking-confirmation';
   static const venueList = '/venues';
   static const search = '/search';
   static const venueDetail = '/venue-detail';
@@ -44,6 +50,11 @@ class AppRoutes {
       login: (_) => const LoginScreen(),
       register: (_) => const RegisterScreen(),
       home: (_) => const HomeScreen(),
+      customerShell: (context) => CustomerShell(
+        initialIndex: (ModalRoute.of(context)?.settings.arguments as int?) ?? 0,
+      ),
+      customerPromotion: (_) => const CustomerPromotionScreen(),
+      bookingConfirmation: (_) => const BookingConfirmationScreen(),
       venueList: (_) => const VenueListScreen(),
       search: (_) => const SearchScreen(),
       venueDetail: (_) => const VenueDetailScreen(),
@@ -53,7 +64,9 @@ class AppRoutes {
       profile: (_) => const ProfileScreen(),
       uploadVenue: (_) => const UploadVenueScreen(),
       manageVenue: (_) => const ManageVenueScreen(),
-      manageService: (_) => const ManageServiceScreen(),
+      manageService: (context) => ManageServiceScreen(
+        venueId: ModalRoute.of(context)!.settings.arguments as String,
+      ),
       approveVenue: (_) => const ApproveVenueScreen(),
       managePromotion: (_) => const ManagePromotionScreen(),
       statistics: (_) => const StatisticsScreen(),
@@ -83,12 +96,42 @@ class AppRoutes {
                     MockStore.currentUser?.id)) {
           return const _RouteError('Thông tin sân không hợp lệ.');
         }
-        if (name == payment &&
+        if (name == customerShell &&
+            args != null &&
+            (args is! int || args < 0 || args > 4)) {
+          return const _RouteError('Tab không hợp lệ.');
+        }
+        if ((name == payment || name == bookingConfirmation) &&
             (args is! Map<String, dynamic> ||
                 args['venue'] is! Venue ||
                 args['date'] is! DateTime ||
-                args['time'] is! String ||
-                args['total'] is! num)) {
+                (args['startTime'] ?? args['time']) is! String ||
+                (args['endTime'] != null && args['endTime'] is! String) ||
+                args['total'] is! num ||
+                !(args['total'] as num).isFinite ||
+                (args['total'] as num) < 0 ||
+                (args['serviceIds'] != null &&
+                    (args['serviceIds'] is! List ||
+                        (args['serviceIds'] as List).any(
+                          (id) => id is! String,
+                        ))) ||
+                (args['promoCode'] != null && args['promoCode'] is! String))) {
+          return const _RouteError('Thông tin thanh toán không hợp lệ.');
+        }
+        if (name == bookingConfirmation &&
+            (args as Map<String, dynamic>).entries.any(
+              (entry) =>
+                  {
+                    'courtPrice',
+                    'serviceTotal',
+                    'discount',
+                    'discountAmount',
+                    'subtotal',
+                  }.contains(entry.key) &&
+                  (entry.value is! num ||
+                      !(entry.value as num).isFinite ||
+                      (entry.value as num) < 0),
+            )) {
           return const _RouteError('Thông tin thanh toán không hợp lệ.');
         }
         return builder(context);

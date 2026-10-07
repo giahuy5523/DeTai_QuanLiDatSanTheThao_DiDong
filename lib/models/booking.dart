@@ -11,7 +11,8 @@ class Booking {
   final String status;
   final String? paymentId;
   final String? promotionCode;
-  final List<String> selectedServiceIds; // «extend»: dịch vụ kèm theo, không bắt buộc
+  final List<String>
+  selectedServiceIds; // «extend»: dịch vụ kèm theo, không bắt buộc
 
   Booking({
     required this.id,

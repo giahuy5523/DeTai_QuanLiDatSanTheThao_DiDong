@@ -1,6 +1,6 @@
 ﻿# Test thủ công phần Gia Huy
 
-Ngày kiểm tra tự động: 07/10/2026. Bộ test hiện có 30 trường hợp đã qua; `dart analyze` không có lỗi/cảnh báo. Widget test giả lập kết quả picker, chưa kiểm chứng hộp chọn ảnh native hoặc quyền truy cập trên điện thoại thật. Các bước dưới đây cần bạn chạy và ghi kết quả thực tế.
+Ngày kiểm tra tự động: 07/10/2026. Sau khi tích hợp nhánh Bảo Huy và main mới, 47 test đã qua; analyzer không có lỗi/cảnh báo. Widget test giả lập kết quả picker, chưa kiểm chứng hộp chọn ảnh native hoặc quyền truy cập trên điện thoại thật. Các bước dưới đây cần bạn chạy và ghi kết quả thực tế.
 
 ## Chuẩn bị
 
@@ -24,12 +24,12 @@ Ngày kiểm tra tự động: 07/10/2026. Bộ test hiện có 30 trường h�
 | M06 | Đăng ký Owner mới rồi đăng nhập | Màn Quản lý sân rỗng của Owner mới; không thấy sân Owner demo |
 | M07 | Đăng ký email ` CUSTOMER@GMAIL.COM ` | Báo email trùng; không tạo user khác |
 | M08 | Đăng ký bỏ trống tên, phone `abc`, password ngắn hoặc confirm khác | Thông báo tại đúng field; không tạo tài khoản; không có lựa chọn đăng ký Admin |
-| M09 | Customer: Home, Xem tất cả sân | Có 2 sân approved mặc định; không có Sân tennis Quận 7 đang pending |
+| M09 | Customer: Home, thử các chip môn rồi Xem tất cả sân | Dữ liệu main có 9 sân: 7 approved, 1 pending, 1 rejected; Home/danh sách chỉ hiện approved; chip môn đổi kết quả |
 | M10 | Danh sách: chọn Cầu lông rồi chọn Tất cả | Chỉ sân cầu lông rồi trở lại đầy đủ sân approved |
 | M11 | Chọn từng thẻ sân | Chi tiết hiển thị đúng tên, giá và địa chỉ sân đã chọn; Back về màn trước |
 | M12 | Home → Tìm kiếm sân → nhập từ khóa không có kết quả rồi xóa | Hiện không tìm thấy sân, sau khi xóa có kết quả trở lại |
-| M13 | Chi tiết → Đặt sân; chưa chọn giờ | Không bấm tiếp tục thanh toán được; chọn giờ thì nút bật |
-| M14 | Chọn dịch vụ, nhập SAN10 → Áp dụng → Thanh toán | Tổng tiền giảm 10%; thanh toán nhận đúng sân/ngày/giờ/tổng tiền; chọn cách thanh toán đổi radio |
+| M13 | Chi tiết → Đặt sân; chọn ngày mai, giờ bắt đầu và kết thúc | Chỉ bật Tiếp tục khi khoảng giờ hợp lệ; giờ đã qua/trùng lịch/ngoài giờ mở cửa không chọn được; giờ kết thúc có thể bằng giờ đóng cửa |
+| M14 | Chọn dịch vụ, nhập SAN10 → Áp dụng → Tiếp tục → Xác nhận & thanh toán | Giảm 10% trên tiền sân theo số giờ cộng dịch vụ; màn xác nhận/thanh toán nhận đúng dữ liệu. Sửa text mã sẽ bỏ giảm giá đến khi áp dụng lại |
 | M15 | Xác nhận thanh toán → Về trang chủ → Lịch sử | Chỉ tạo 1 Booking mới; trạng thái Đã xác nhận; lịch sử thuộc user đang đăng nhập |
 | M16 | Hủy chính đơn vừa tạo | Trạng thái Đã hủy; nút hủy của đơn biến mất |
 | M17 | Hồ sơ → Đăng xuất; dùng nút Back | Về Login; không quay lại phiên cũ; đăng nhập user mới không thấy lịch sử user trước |
@@ -43,9 +43,15 @@ Ngày kiểm tra tự động: 07/10/2026. Bộ test hiện có 30 trường h�
 | M25 | Mở Quản lý dịch vụ trên sân vừa tạo | Danh sách dịch vụ ban đầu rỗng; không bị hiện dịch vụ của sân v1 |
 | M26 | Logout Owner, Login Customer không restart | Sân pending mới không xuất hiện Home/danh sách |
 | M27 | Logout Customer, Login Admin → menu Duyệt sân → Duyệt sân mới | Sân biến khỏi pending; Back về Thống kê; menu tiếp tục mở được |
-| M28 | Logout Admin, Login Customer không restart | Sân vừa được duyệt xuất hiện Home/danh sách. Ảnh card/detail vẫn là icon hiện tại, preview ảnh thật thuộc màn Upload |
+| M28 | Logout Admin, Login Customer không restart | Sân vừa được duyệt xuất hiện Home/danh sách; Chi tiết đọc ảnh đầu tiên từ picker hoặc URL. Card dùng biểu tượng môn; ảnh lỗi có placeholder |
 | M29 | Admin mở Quản lý khuyến mãi rồi Back | Trở lại Thống kê, không bị mất đường quay lại |
 | M30 | Tắt hoàn toàn app và mở lại | User/sân/Booking vừa tạo mất; dữ liệu demo mặc định trở lại (đúng phạm vi mock) |
+| M31 | Customer dùng thanh điều hướng Trang chủ/Tìm kiếm/Ưu đãi/Lịch sử/Tài khoản | Mỗi tab mở đúng màn; Lịch sử cập nhật sau khi đặt/hủy; Đăng xuất xóa phiên |
+| M32 | Admin: thêm mã mới, thử mã trùng và phần trăm 0/101/NaN, sửa/xóa, mở lịch của mã hết hạn | Chặn dữ liệu không hợp lệ; CRUD cập nhật danh sách; lịch mở không crash; mã dùng được hết ngày hạn |
+| M33 | Owner: sửa tên/loại sân/giá, mở dịch vụ, thêm/sửa/xóa dịch vụ | Lưu đúng sân được chọn; giữ district/city/ảnh khi sửa hoặc duyệt; chặn giá NaN/Infinity/không dương |
+| M34 | Admin: duyệt sân rồi Back về Thống kê | Số sân pending giảm, approved tăng ngay |
+| M35 | Thanh toán: chọn MoMo/VNPay, xác nhận và mở lịch sử | Booking tạo một lần, Payments mock ghi đúng method/amount/bookingId. Chỉ mô phỏng, không trừ tiền thật |
+| M36 | Màn hình 360 px: cuộn Chi tiết, Đặt sân, Xác nhận, Ưu đãi, Quản lý khuyến mãi, Thống kê | Không tràn chữ hoặc có sọc vàng đen; nút và nội dung đọc được |
 
 ## Các ca nền tảng cần chạy thêm
 
@@ -66,4 +72,4 @@ flutter test
 flutter analyze
 ```
 
-Nếu chỉnh model hoặc route, chạy lại cả hai lệnh. 30 test đã qua chỉ xác nhận các tình huống được mô tả trong mã test, không chứng minh mọi chức năng của cả nhóm đều hoàn chỉnh.
+Nếu chỉnh model hoặc route, chạy lại cả hai lệnh. 47 test xác nhận các tình huống trong mã test; ảnh mạng thật, hộp chọn native và thao tác trên thiết bị cần kiểm tra trực tiếp. Xem review_baohuy.md để biết các lỗi đã sửa khi merge.

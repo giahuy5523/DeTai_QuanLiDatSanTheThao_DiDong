@@ -90,12 +90,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
       // Từ khóa: tên sân, địa chỉ, quận/huyện, thành phố, tên dịch vụ
       if (query.isNotEmpty) {
-        final inVenue = v.name.toLowerCase().contains(query) ||
+        final inVenue =
+            v.name.toLowerCase().contains(query) ||
             v.address.toLowerCase().contains(query) ||
             (v.district ?? '').toLowerCase().contains(query) ||
             (v.city ?? '').toLowerCase().contains(query);
-        final inService =
-            services.any((s) => s.name.toLowerCase().contains(query));
+        final inService = services.any(
+          (s) => s.name.toLowerCase().contains(query),
+        );
         if (!inVenue && !inService) return false;
       }
 
@@ -110,9 +112,11 @@ class _SearchScreenState extends State<SearchScreen> {
       // Lịch trống: dựa trên TimeSlots (sinh từ bookings chưa huỷ)
       if (checkAvailability) {
         final slots = MockStore.timeSlotsFor(v.id, date);
-        final ok = slots.any((s) =>
-            s['status'] == 'available' &&
-            (_hour == null || s['startTime'] == MockStore.hourLabel(_hour!)));
+        final ok = slots.any(
+          (s) =>
+              s['status'] == 'available' &&
+              (_hour == null || s['startTime'] == MockStore.hourLabel(_hour!)),
+        );
         if (!ok) return false;
       }
       return true;
@@ -272,7 +276,9 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Text(
                         'Bộ lọc nâng cao',
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w700),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     TextButton(
@@ -286,8 +292,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text('Khoảng giá (mỗi giờ)',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text(
+                  'Khoảng giá (mỗi giờ)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   '${_formatPrice(range.start)} – ${_formatPrice(range.end)}',
@@ -308,8 +316,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   onChanged: (v) => setSheet(() => range = v),
                 ),
                 const SizedBox(height: 8),
-                const Text('Khu vực',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text(
+                  'Khu vực',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -381,7 +391,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                     itemCount: results.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 20),
+                    separatorBuilder: (_, _) => const SizedBox(height: 20),
                     itemBuilder: (context, i) => _buildResultItem(results[i]),
                   ),
           ),
@@ -471,18 +481,24 @@ class _SearchScreenState extends State<SearchScreen> {
               selected: _date != null,
               showCheckmark: false,
               onPressed: _pickDate,
-              onDeleted: _date == null ? null : () => setState(() => _date = null),
+              onDeleted: _date == null
+                  ? null
+                  : () => setState(() => _date = null),
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: InputChip(
               avatar: const Icon(Icons.access_time, size: 16),
-              label: Text(_hour == null ? 'Chọn giờ' : MockStore.hourLabel(_hour!)),
+              label: Text(
+                _hour == null ? 'Chọn giờ' : MockStore.hourLabel(_hour!),
+              ),
               selected: _hour != null,
               showCheckmark: false,
               onPressed: _pickHour,
-              onDeleted: _hour == null ? null : () => setState(() => _hour = null),
+              onDeleted: _hour == null
+                  ? null
+                  : () => setState(() => _hour = null),
             ),
           ),
           Padding(
@@ -579,8 +595,8 @@ class _SearchScreenState extends State<SearchScreen> {
     final dayLabel = (_date == null || _isSameDay(_date!, now))
         ? 'hôm nay'
         : _isSameDay(_date!, now.add(const Duration(days: 1)))
-            ? 'ngày mai'
-            : 'ngày ${_dateShort(_date!)}';
+        ? 'ngày mai'
+        : 'ngày ${_dateShort(_date!)}';
     final free = MockStore.timeSlotsFor(v.id, date)
         .where((s) => s['status'] == 'available')
         .map((s) => s['startTime'] as String)
@@ -592,11 +608,8 @@ class _SearchScreenState extends State<SearchScreen> {
       children: [
         VenueCard(
           venue: v,
-          onTap: () => Navigator.pushNamed(
-            context,
-            AppRoutes.venueDetail,
-            arguments: v,
-          ),
+          onTap: () =>
+              Navigator.pushNamed(context, AppRoutes.venueDetail, arguments: v),
         ),
         const SizedBox(height: 8),
         Wrap(

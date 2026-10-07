@@ -22,7 +22,7 @@ ERD gồm Users, SportTypes, Venues, VenueImages, TimeSlots, Services, Promotion
 | VenueImages nhiều ảnh, 1 ảnh primary | Venue Dart giữ List<String> imageUrls; Upload có preview và tối thiểu 3 ảnh, chưa có lựa chọn primary | Demo kiểm tra ảnh ở UI, chưa ghi bảng VenueImages hoặc is_primary |
 | Booking.slot_id và số tiền tách riêng | Booking Dart giữ venueId, date, startTime/endTime, totalPrice và selectedServiceIds | Model mock được giản lược; chưa đại diện đầy đủ bản ghi SQL |
 | Booking.service_amount | SQL chưa có service_amount, cũng chưa có BookingServices | Khi cập nhật SQL phải bổ sung tổng dịch vụ và giá tại thời điểm đặt |
-| Payments 1–N Bookings, pending/success/failed/refunded | Payment Dart dùng unpaid/paid/failed và 1 bookingId; MockStore chưa có list Payments; UI thanh toán tạo Booking | Chưa lưu lịch sử giao dịch riêng hoặc đồng bộ status giữa model và ERD |
+| Payments 1–N Bookings, pending/success/failed/refunded | MockStore.payments có các Map giao dịch; confirmBooking thêm Booking cùng Payment success, method và amount; model Payment riêng chưa được dùng cho list này | Có mô phỏng giao dịch trong bộ nhớ, chưa có persistence/refund/cổng thanh toán thật hoặc đồng bộ hết trạng thái model/ERD |
 | Users.password_hash, is_active | AppUser mock có password thô, chưa có isActive | Hash password và khóa tài khoản thuộc tầng dữ liệu dự kiến; không tuyên bố đã triển khai |
 | Promotions hạn đầu/cuối, số lượt, đơn tối thiểu, mức trần | Promotion Dart chỉ có code, discountPercent, expiryDate, isActive | Demo kiểm tra active/hạn hết và phần trăm; các ràng buộc mở rộng chưa có |
 | Venue pending/approved/rejected | Đã có đúng các status và lọc approved phía Customer | Phần quy tắc hiển thị/duyệt đã mô phỏng trong bộ nhớ |
@@ -30,7 +30,7 @@ ERD gồm Users, SportTypes, Venues, VenueImages, TimeSlots, Services, Promotion
 
 ERD nêu TimeSlots–Bookings là 1–N để lưu lịch sử đặt lại sau khi hủy. Ràng buộc chỉ một đơn còn hiệu lực cho mỗi slot cần được thực thi bằng transaction/quy tắc tầng dữ liệu; riêng UNIQUE trên TimeSlots không tự chặn nhiều Booking đang hiệu lực cùng slot.
 
-Các mock Venue approved hiện có thể không có ảnh, do dữ liệu mẫu cũ. Quy tắc 3 ảnh đang áp dụng khi chủ sân gửi sân mới; cần thêm ảnh hợp lệ cho seed khi chuyển sang CSDL đầy đủ.
+Main mới có seed 9 sân, venueImages và openHours; imageUrlsOf lấy path trong Venue hoặc ảnh phụ trong venueImages. Quy tắc 3 ảnh áp dụng khi chủ sân gửi sân mới; một số seed vẫn không đủ 3 ảnh. Cần đối chiếu dữ liệu seed khi chuyển sang CSDL đầy đủ.
 
 ## Đối chiếu Sequence Login
 
@@ -50,7 +50,7 @@ Các mock Venue approved hiện có thể không có ảnh, do dữ liệu mẫu
 
 Ảnh gốc: [Sequence Booking](nguon_nhom/sequence_booking.png).
 
-Sơ đồ mô tả một luồng thiết kế có transaction, kiểm tra slot, ghi BookingServices, dùng PromotionService và ghi Payments. Demo đang chuyển Venue giữa các màn, dùng list giờ cố định, cộng tiền dịch vụ và phần trăm giảm, rồi tạo Booking confirmed khi xác nhận thanh toán. Chưa khóa slot, chưa có transaction, chưa có danh sách giao dịch thanh toán.
+Sơ đồ mô tả transaction, kiểm tra slot, ghi BookingServices, dùng PromotionService và ghi Payments. Demo đã chuyển Venue qua Booking/Confirmation/Payment, sinh giờ theo openHours, kiểm tra giờ quá khứ/giao nhau, tính giảm trên tiền sân cộng dịch vụ, kiểm tra lại lịch khi thanh toán và ghi Booking confirmed cùng Map Payment success. Chưa có khóa/transaction SQLite hoặc server, chưa ghi BookingServices thành bảng riêng; dữ liệu chỉ nằm trong bộ nhớ.
 
 Một điểm cần sửa trong chính sơ đồ: các lời gọi `applyPromo(code, originalAmount)` và `validate(code, originalAmount, today)` đang truyền tiền sân, trong khi phần mô tả ở Word quy định cơ sở tính giảm là **originalAmount + serviceAmount**. Nên đổi tham số thành `orderAmount` hoặc `subtotal` và ghi rõ cách tính, để ảnh và văn bản không mâu thuẫn.
 

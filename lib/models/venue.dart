@@ -8,7 +8,7 @@ class Venue {
   final String name;
   final String address;
   final String? district; // Quận/Huyện trong ERD
-  final String? city;     // Thành phố trong ERD
+  final String? city; // Thành phố trong ERD
   final double pricePerHour;
   final List<String> imageUrls;
   final double latitude;
@@ -32,6 +32,37 @@ class Venue {
     this.status = 'pending',
     this.rating = 0.0,
   });
+  Venue copyWith({
+    int? sportTypeId,
+    String? district,
+    String? city,
+    String? name,
+    String? address,
+    String? sportType,
+    double? pricePerHour,
+    List<String>? imageUrls,
+    double? latitude,
+    double? longitude,
+    String? status,
+    double? rating,
+  }) {
+    return Venue(
+      id: id,
+      ownerId: ownerId,
+      sportTypeId: sportTypeId ?? this.sportTypeId,
+      district: district ?? this.district,
+      city: city ?? this.city,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      sportType: sportType ?? this.sportType,
+      pricePerHour: pricePerHour ?? this.pricePerHour,
+      imageUrls: imageUrls ?? this.imageUrls,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      status: status ?? this.status,
+      rating: rating ?? this.rating,
+    );
+  }
 
   /// Dữ liệu mẫu (mock data)
   static List<Venue> mockList() {

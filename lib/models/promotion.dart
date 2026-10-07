@@ -14,6 +14,21 @@ class Promotion {
     this.isActive = true,
   });
 
+  bool isExpiredAt(DateTime now) => !now.isBefore(
+    DateTime(
+      expiryDate.year,
+      expiryDate.month,
+      expiryDate.day,
+    ).add(const Duration(days: 1)),
+  );
+
+  bool isValidAt(DateTime now) =>
+      isActive &&
+      !isExpiredAt(now) &&
+      discountPercent.isFinite &&
+      discountPercent > 0 &&
+      discountPercent <= 100;
+
   static List<Promotion> mockList() {
     return [
       Promotion(

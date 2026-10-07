@@ -137,12 +137,10 @@ void main() {
       await press(tester, 'Đăng nhập');
       expect(MockStore.currentUser?.email, 'new@gmail.com');
       if (role == 'customer') {
-        await tester.tap(find.byIcon(Icons.receipt_long));
+        await tester.tap(find.text('Lịch sử'));
         await tester.pumpAndSettle();
         expect(find.text('Chưa có đơn đặt sân.'), findsOneWidget);
-        await tester.pageBack();
-        await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(Icons.person_outline));
+        await tester.tap(find.text('Tài khoản'));
         await tester.pumpAndSettle();
         expect(find.text('Gia Huy'), findsOneWidget);
         final logout = find.text('Đăng xuất');

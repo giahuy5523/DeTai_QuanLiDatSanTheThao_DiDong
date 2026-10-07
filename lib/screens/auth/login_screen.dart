@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacementNamed(context, AppRoutes.statistics);
         break;
       default:
-        Navigator.pushReplacementNamed(context, AppRoutes.home);
+        Navigator.pushReplacementNamed(context, AppRoutes.customerShell);
     }
   }
 
@@ -59,19 +59,24 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(Icons.sports,
-                        size: 64, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.sports,
+                      size: 64,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(height: 12),
-                    Text('Đặt sân thể thao',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800)),
+                    Text(
+                      'Đặt sân thể thao',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
                     const SizedBox(height: 6),
-                    Text('Nhóm 01 • Flutter/Dart',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600)),
+                    Text(
+                      'Nhóm 01 • Flutter/Dart',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
                     const SizedBox(height: 28),
                     TextFormField(
                       controller: _email,
@@ -87,28 +92,34 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: 'Mật khẩu',
                         suffixIcon: IconButton(
                           onPressed: () => setState(() => _obscure = !_obscure),
-                          icon: Icon(_obscure
-                              ? Icons.visibility
-                              : Icons.visibility_off),
+                          icon: Icon(
+                            _obscure ? Icons.visibility : Icons.visibility_off,
+                          ),
                         ),
                       ),
                       validator: AuthValidation.password,
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                        onPressed: _login, child: const Text('Đăng nhập')),
+                      onPressed: _login,
+                      child: const Text('Đăng nhập'),
+                    ),
                     TextButton(
                       onPressed: () async {
                         final email = await Navigator.pushNamed(
-                            context, AppRoutes.register);
+                          context,
+                          AppRoutes.register,
+                        );
                         if (!mounted || email is! String) return;
                         _email.text = email;
                         _password.clear();
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text(
-                                  'Tạo tài khoản thành công. Vui lòng đăng nhập.')),
+                            content: Text(
+                              'Tạo tài khoản thành công. Vui lòng đăng nhập.',
+                            ),
+                          ),
                         );
                       },
                       child: const Text('Chưa có tài khoản? Đăng ký'),

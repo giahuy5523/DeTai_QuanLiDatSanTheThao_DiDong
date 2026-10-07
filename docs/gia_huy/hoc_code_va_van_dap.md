@@ -11,7 +11,7 @@ Bạn chịu trách nhiệm phần phân tích yêu cầu/Use Case, khung projec
 5. `lib/screens/auth/register_screen.dart`: đọc controller, validate, tạo AppUser theo role đã chọn, thêm vào MockStore, Navigator.pop trả email cho Login. Controller cần dispose để giải phóng tài nguyên.
 6. `lib/screens/auth/login_screen.dart`: gọi login, lỗi thì SnackBar; đúng thì switch user.role. pushReplacementNamed thay Login bằng màn nghiệp vụ để Back không quay vào Login. Link Register dùng await nhận email, kiểm tra mounted rồi điền email/clear password.
 7. `lib/utils/app_theme.dart`: ThemeData dùng Material 3, màu nền, form field và nút chung. Thay màu ở đây ảnh hưởng các màn dùng theme, tránh sửa từng màn.
-8. `lib/screens/customer/home_screen.dart`: lọc approved rồi map thành VenueCard. Home dẫn sang Danh sách, Search, Profile và History. VenueCard tách thành widget vì nhiều màn dùng lại.
+8. `lib/screens/customer/home_screen.dart`: StatefulWidget lọc approved và môn đang chọn rồi dựng VenueCard. `customer_shell.dart` dùng IndexedStack giữ 5 tab Home/Search/Ưu đãi/Lịch sử/Tài khoản; chọn lại Lịch sử dựng lại màn để cập nhật đơn.
 9. `lib/screens/customer/venue_list_screen.dart`: StatefulWidget do bộ lọc _sport thay đổi. setState làm build chạy lại; where lọc dữ liệu, map tạo các chip; ListView.separated dựng danh sách và khoảng cách; có thông báo khi rỗng.
 10. `lib/screens/owner/upload_venue_screen.dart`: đọc ảnh và validate sân, giải thích dưới đây.
 11. `lib/screens/owner/manage_venue_screen.dart`: await route Upload; quay về thì setState cập nhật danh sách. Truyền đúng venue.id khi mở ManageService.
@@ -24,9 +24,9 @@ Bạn chịu trách nhiệm phần phân tích yêu cầu/Use Case, khung projec
 
 Đăng nhập: Email/password → MockStore.login → currentUser → switch role → Navigator thay màn.
 
-Danh sách: MockStore.venues → chỉ approved → lọc sport → VenueCard → pushNamed(arguments: Venue) → Detail → Booking → pushNamed(arguments: Map) → Payment → addBooking → dialog → popUntil(Home).
+Danh sách: MockStore.venues → approved → lọc sport → VenueCard → pushNamed(arguments: Venue) → Detail → Booking (giờ đầu/cuối, dịch vụ, promo) → Confirmation → Payment → confirmBooking kiểm tra lại lịch và ghi Booking/Payment mock → dialog → popUntil(CustomerShell/Home).
 
-Upload: pickMultiImage → List<XFile> → readAsBytes → kiểm tra decode → Uint8List preview bằng Image.memory → đủ 3 ảnh → tạo Venue pending, ownerId=currentUser.id → venues.add → pop(true) → màn Owner setState.
+Upload: pickMultiImage → List<XFile> → readAsBytes → kiểm tra decode → Uint8List preview bằng Image.memory → đủ 3 ảnh → tạo Venue pending, ownerId=currentUser.id → MockStore.addVenue khởi tạo cả danh sách dịch vụ → pop(true) → Owner setState.
 
 ## Upload ảnh cần hiểu kỹ
 
@@ -36,7 +36,7 @@ Upload: pickMultiImage → List<XFile> → readAsBytes → kiểm tra decode →
 - instantiateImageCodec kiểm tra ảnh có decode được trước khi tính vào số lượng. Codec được dispose sau kiểm tra.
 - _picking khóa nút chọn/gửi khi đang đọc ảnh, tránh thao tác đồng thời. try/catch/finally đảm bảo lỗi được báo và trạng thái chọn ảnh được mở lại.
 - mounted cho biết State còn nằm trong widget tree; sau await phải kiểm tra vì người dùng có thể đã rời màn. Nếu không kiểm tra có thể gọi setState sau dispose.
-- Preview nằm trong bộ nhớ; Venue.imageUrls ở bản mock hiện giữ path cục bộ, không phải link Firebase. Các màn card/detail đang dùng icon, chưa render ảnh upload.
+- Preview nằm trong bộ nhớ; Venue.imageUrls giữ path picker, không phải link Firebase. VenueImage ở Chi tiết/Admin đọc URL bằng Image.network, đường dẫn picker bằng XFile.readAsBytes rồi Image.memory; có placeholder khi đọc lỗi. Card dùng biểu tượng môn.
 - default status của Venue là pending; sau gửi, Customer không thấy sân cho đến khi được Admin duyệt.
 
 ## Navigator cần trả lời được
@@ -58,7 +58,7 @@ Admin trước đây dùng replacement để mở Duyệt/Khuyến mãi làm m�
 
 **Tại sao email không phân biệt hoa thường?** Khi so sánh dùng trim/toLowerCase để không tạo tài khoản khác chỉ vì chữ hoa hoặc khoảng trắng ở đầu/cuối. Password không chuyển lowercase hoặc trim khi đối chiếu.
 
-**StatelessWidget và StatefulWidget khác gì trong bài này?** Home lấy dữ liệu để hiển thị; Danh sách có lựa chọn môn, Upload có ảnh và trạng thái đang chọn, nên cần State để cập nhật giao diện.
+**StatelessWidget và StatefulWidget khác gì trong bài này?** Home/Danh sách có lựa chọn môn, Upload có ảnh và trạng thái chọn, nên dùng State và setState. Confirmation hiển thị arguments, không giữ lựa chọn thay đổi, nên là StatelessWidget. Thống kê có State để làm mới sau khi Back từ Duyệt sân.
 
 **final list có thêm phần tử được không?** Có. final không cho gán list mới vào biến, nhưng không làm nội dung List bất biến.
 
@@ -68,11 +68,15 @@ Admin trước đây dùng replacement để mở Duyệt/Khuyến mãi làm m�
 
 **Use Case include và extend là gì?** include là bước bắt buộc dùng lại: đăng ký sân cần chọn đủ ảnh và preview. extend là hành vi tùy chọn: chọn dịch vụ hoặc áp dụng mã mở rộng đặt sân. Đăng nhập là tiền điều kiện của luồng nghiệp vụ, không cần vẽ mọi use case include Login như thể luôn đăng nhập lại.
 
-**30 test có nghĩa là không còn lỗi nào không?** Không. Nó xác nhận những tình huống trong test. Hộp chọn ảnh native, quyền truy cập và build iOS/macOS vẫn cần chạy trên thiết bị phù hợp; widget test dùng FakePicker.
+**47 test có nghĩa là không còn lỗi nào không?** Không. Nó xác nhận những tình huống trong test. Hộp chọn ảnh native, quyền truy cập và build iOS/macOS vẫn cần chạy trên thiết bị phù hợp; widget test dùng FakePicker.
 
 **Có lưu dữ liệu thật không?** Không. MockStore là bộ nhớ trong process. Restart mất user, sân và đơn mới; assets JSON/SQL chưa được app load. Đây là phạm vi báo cáo lần 1.
 
-**Đã tích hợp thanh toán thật chưa?** Chưa, màn hiện tại mô phỏng tạo Booking confirmed. Bản mock chưa ghi Payment riêng/phương thức. Nếu thầy hỏi, cần phân biệt việc nối route của Gia Huy và nghiệp vụ thanh toán Đạt đang hoàn thiện.
+**Đã tích hợp thanh toán thật chưa?** Chưa. confirmBooking kiểm tra lại lịch và tạo Booking confirmed cùng bản ghi trong MockStore.payments có method/amount/status success. Radio MoMo/VNPay chỉ lựa chọn mô phỏng, không gọi cổng thanh toán hay trừ tiền. Đây là luồng tích hợp của nhóm, không có transaction SQLite/server.
+
+**Vì sao kiểm tra lịch hai lần?** Booking kiểm tra để người dùng chọn giờ hợp lệ. Payment kiểm tra lại vì dữ liệu có thể đổi trước khi xác nhận. Hai khoảng giao nhau khi start < booking.end và end > booking.start; khoảng liền kề không trùng. Demo xử lý đồng bộ trong một process; app nhiều thiết bị cần kiểm tra/transaction ở server.
+
+**Mã giảm giá tính trên tiền nào?** subtotal = giá sân/giờ × số giờ + tổng dịch vụ; total = subtotal × (1 − phần trăm/100). Chỉ truyền mã đã áp dụng hợp lệ; sửa text phải áp dụng lại. Ngày hết hạn có hiệu lực đến trước 00:00 ngày kế tiếp.
 
 **Có thể dùng phiên mock để bảo mật app thật không?** Không. Role check trên client không thay thế backend. App thật cần xác thực server, phân quyền ở dữ liệu và xử lý mật khẩu an toàn.
 
