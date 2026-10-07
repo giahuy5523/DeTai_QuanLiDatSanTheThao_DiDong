@@ -8,13 +8,13 @@ Cập nhật 07/10/2026. Phần code đã được triển khai sớm cho các n
 | 05/10 | Khung Flutter, theme và route | Đã có, bổ sung route Danh sách và kiểm tra role/arguments |
 | 06/10 | Login/Register | Hoàn thành xác thực mock, validate, đăng ký, phiên và đăng xuất; 14 test tài khoản |
 | 07/10 | Home + Danh sách sân | Hoàn thành danh sách approved, lọc môn, rỗng và mở Chi tiết |
-| 08/10 sáng | Upload bằng image_picker, preview tối thiểu 3 ảnh | Hoàn thành chọn/preview/xóa/chống trùng path/validate/gửi pending; chưa test picker native bằng tay |
+| 08/10 sáng | Upload bằng image_picker, preview tối thiểu 3 ảnh | Hoàn thành chọn/preview/xóa/chống trùng path/validate/gửi pending; đã test picker thật trên emulator Android 17, hủy rồi chọn 3 ảnh và gửi duyệt |
 | 08/10 chiều | Nối Navigator toàn bộ luồng | Đã nối và test luồng Customer/Owner/Admin; sửa Back Admin và ID sân cho dịch vụ |
 | 09/10 | Tổng hợp Word + tham khảo | Đã viết nội dung phần Gia Huy, tham khảo và đối chiếu ERD/Sequence/Deployment đã nhận; còn Class Diagram và ảnh giao diện. Công cụ render Word hiện chưa có LibreOffice, nên chưa xuất bản Word đã kiểm tra bố cục |
 
 ## Kết quả kiểm tra
 
-47 test đã qua sau tích hợp nhánh Bảo Huy, analyzer sạch. Bộ test bao gồm đăng nhập/đăng ký, Upload, điều hướng, đặt sân/xác nhận/thanh toán, promo CRUD, dịch vụ CRUD, bộ lọc, thống kê và màn hình 360 px. Xem review_baohuy.md và test_thu_cong.md. Chưa chạy picker native trên thiết bị; không ghi mặc định Pass cho thiết bị chưa chạy.
+47 widget/unit test đã qua sau tích hợp nhánh Bảo Huy, analyzer sạch. Đã build/cài/chạy Android debug và chạy thành công 30 ca trên emulator Android 17/API 37: 14 auth, 15 model/booking/admin và 1 picker thật. Bộ widget test vẫn kiểm tra viewport 360 px trên máy tính. Picker hệ thống từng ANR, chạy lại sau khi khởi động emulator đã qua. Xem kiem_thu_android_20261007.md, review_baohuy.md và test_thu_cong.md. Chưa thử điện thoại thật; không ghi mặc định Pass cho thiết bị chưa chạy.
 
 ## File để học và nộp
 

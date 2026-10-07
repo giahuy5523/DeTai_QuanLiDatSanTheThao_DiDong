@@ -1,6 +1,6 @@
 ﻿# Test thủ công phần Gia Huy
 
-Ngày kiểm tra tự động: 07/10/2026. Sau khi tích hợp nhánh Bảo Huy và main mới, 47 test đã qua; analyzer không có lỗi/cảnh báo. Widget test giả lập kết quả picker, chưa kiểm chứng hộp chọn ảnh native hoặc quyền truy cập trên điện thoại thật. Các bước dưới đây cần bạn chạy và ghi kết quả thực tế.
+Ngày kiểm tra: 07/10/2026. 47 widget/unit test đã qua; analyzer không có lỗi/cảnh báo. Đã bổ sung 30 ca chạy thành công trên emulator Android 17/API 37, gồm ca picker thật hủy, chọn ba ảnh, đọc preview và gửi sân pending. Picker hệ thống từng ANR, sau khi khởi động lại emulator test đã qua. Chưa kiểm tra điện thoại thật hoặc quyền ảnh trên Android cũ. Xem `kiem_thu_android_20261007.md` và `integration_test/README.md`; các bước dưới đây vẫn dùng để tự kiểm tra và ghi kết quả thực tế.
 
 ## Chuẩn bị
 

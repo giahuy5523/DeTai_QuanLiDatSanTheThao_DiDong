@@ -409,7 +409,7 @@ void main() {
     await press(tester, 'Xác nhận thanh toán');
     expect(find.text('Đặt sân thành công'), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
+  }, tags: ['viewport']);
 
   testWidgets('Home sport filter changes venues and All restores the list', (
     tester,
@@ -498,5 +498,5 @@ void main() {
       await openRoute(tester, route, role: role);
       expect(tester.takeException(), isNull, reason: route);
     }
-  });
+  }, tags: ['viewport']);
 }
