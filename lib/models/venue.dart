@@ -26,6 +26,31 @@ class Venue {
     this.status = 'pending',
     this.rating = 0.0,
   });
+  Venue copyWith({
+    String? name,
+    String? address,
+    String? sportType,
+    double? pricePerHour,
+    List<String>? imageUrls,
+    double? latitude,
+    double? longitude,
+    String? status,
+    double? rating,
+  }) {
+    return Venue(
+      id: id,
+      ownerId: ownerId,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      sportType: sportType ?? this.sportType,
+      pricePerHour: pricePerHour ?? this.pricePerHour,
+      imageUrls: imageUrls ?? this.imageUrls,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      status: status ?? this.status,
+      rating: rating ?? this.rating,
+    );
+  }
 
   /// Dữ liệu mẫu (mock data) dùng cho giao diện khi chưa nối Firebase/SQLite thật.
   static List<Venue> mockList() {

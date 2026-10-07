@@ -51,31 +51,22 @@ class MockStore {
     for (final venue in venues) venue.id: VenueService.mockListFor(venue.id),
   };
 
-  static final List<Booking> bookings = [
-    Booking(
-      id: 'b1',
-      venueId: 'v1',
-      userId: 'customer1',
-      date: DateTime.now().add(const Duration(days: 1)),
-      startTime: '18:00',
-      endTime: '19:00',
-      totalPrice: 310000,
-      status: 'confirmed',
-      paymentId: 'pay1',
-      selectedServiceIds: const ['s1'],
-    ),
-    Booking(
-      id: 'b2',
-      venueId: 'v2',
-      userId: 'customer1',
-      date: DateTime.now().subtract(const Duration(days: 3)),
-      startTime: '08:00',
-      endTime: '09:00',
-      totalPrice: 120000,
-      status: 'completed',
-      paymentId: 'pay2',
-    ),
-  ];
+  static final List<Booking> bookings = [];
+  static bool updateVenue(Venue updatedVenue) {
+    final index = venues.indexWhere(
+      (venue) => venue.id == updatedVenue.id,
+    );
+
+    if (index == -1) return false;
+
+    venues[index] = updatedVenue;
+    return true;
+  }
+
+  static void addVenue(Venue venue) {
+    venues.add(venue);
+    servicesByVenue[venue.id] = [];
+  }
 
   static Venue? venueById(String id) {
     for (final venue in venues) {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../utils/app_routes.dart';
 import '../../data/mock_store.dart';
 import '../../utils/auth_validation.dart';
@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacementNamed(context, AppRoutes.statistics);
         break;
       default:
-        Navigator.pushReplacementNamed(context, AppRoutes.home);
+        Navigator.pushReplacementNamed(context, AppRoutes.customerShell);
     }
   }
 
@@ -123,3 +123,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

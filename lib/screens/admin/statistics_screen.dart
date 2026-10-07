@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
-import '../../utils/app_routes.dart';
-
+import 'admin_drawer.dart';
 class StatisticsScreen extends StatelessWidget {
   const StatisticsScreen({super.key});
 
@@ -16,46 +15,7 @@ class StatisticsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Thống kê toàn hệ thống')),
-      drawer: Drawer(
-        child: ListView(
-          children: [
-            const DrawerHeader(
-              child: Text(
-                'Quản trị viên',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.approval),
-              title: const Text('Duyệt sân'),
-              onTap: () => Navigator.pushReplacementNamed(
-                context,
-                AppRoutes.approveVenue,
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.discount_outlined),
-              title: const Text('Quản lý khuyến mãi'),
-              onTap: () => Navigator.pushReplacementNamed(
-                context,
-                AppRoutes.managePromotion,
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Đăng xuất'),
-              onTap: () {
-                MockStore.logout();
-                Navigator.pushNamedAndRemoveUntil(
-                context,
-                AppRoutes.login,
-                (route) => false,
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const AdminDrawer(selectedIndex: 0),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
