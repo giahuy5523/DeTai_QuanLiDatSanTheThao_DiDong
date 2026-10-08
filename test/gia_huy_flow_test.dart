@@ -345,11 +345,16 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey('start_18:00')));
       await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
       await press(tester, 'Tiếp tục');
-      await press(tester, 'Xác nhận & thanh toán');
-      await tester.tap(find.text('Ví MoMo (mô phỏng)'));
-      await tester.pumpAndSettle();
-      await press(tester, 'Xác nhận thanh toán');
-      expect(find.text('Đặt sân thành công'), findsOneWidget);
+await press(tester, 'Chọn phương thức thanh toán');
+
+await tapVisible(tester, find.text('Ví MoMo'));
+await tester.pumpAndSettle();
+
+await tapVisible(tester, find.text('Tôi xác nhận thông tin đặt sân là chính xác'));
+await tester.pumpAndSettle();
+
+await press(tester, 'Xác nhận thanh toán');
+expect(find.text('Thanh toán thành công'), findsOneWidget);
       expect(MockStore.bookings.length, originalBookings.length + 1);
       expect(MockStore.payments.last['method'], 'momo');
       await tester.tap(find.text('Về trang chủ'));

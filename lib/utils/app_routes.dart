@@ -104,17 +104,18 @@ class AppRoutes {
 
         // Kiểm tra tham số truyền vào Màn hình Xác nhận & Thanh toán
         if (name == bookingConfirmation || name == payment) {
-          if (args is Booking) {
-            return builder(context);
-          }
-          if (args is! Map<String, dynamic> ||
-              args['venue'] is! Venue ||
-              args['date'] is! DateTime ||
-              (args['startTime'] ?? args['time']) is! String ||
-              args['total'] is! num) {
-            return const _RouteError('Thông tin đơn đặt sân không hợp lệ.');
-          }
-        }
+  if (args is Booking) {
+    return builder(context);
+  }
+
+  if (args is! Map<String, dynamic> ||
+      args['venue'] is! Venue ||
+      args['date'] is! DateTime ||
+      (args['startTime'] ?? args['time']) is! String ||
+      args['total'] is! num || !(args['total'] as num).isFinite) {
+    return const _RouteError('Thông tin thanh toán không hợp lệ.');
+  }
+}
 
         return builder(context);
       }),

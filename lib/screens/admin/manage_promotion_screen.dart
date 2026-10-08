@@ -206,15 +206,24 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                     InkWell(
                       borderRadius: BorderRadius.circular(12),
                       onTap: () async {
+                        final now = DateTime.now();
+                        final today = DateTime(now.year, now.month, now.day);
+                        final normalizedSelectedDate = DateTime(
+                          selectedDate.year,
+                          selectedDate.month,
+                          selectedDate.day,
+                        );
+                        final lastDate = today.add(const Duration(days: 730));
+
                         final picked = await showDatePicker(
                           context: modalContext,
-                          initialDate: selectedDate,
-                          firstDate: selectedDate.isBefore(DateTime.now())
-                              ? selectedDate
-                              : DateTime.now(),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 730),
-                          ),
+                          initialDate: normalizedSelectedDate.isAfter(lastDate)
+                              ? lastDate
+                              : normalizedSelectedDate,
+                          firstDate: normalizedSelectedDate.isBefore(today)
+                              ? normalizedSelectedDate
+                              : today,
+                          lastDate: lastDate,
                         );
                         if (picked != null) {
                           setModalState(() => selectedDate = picked);
