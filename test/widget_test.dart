@@ -27,6 +27,7 @@ Future<void> press(WidgetTester tester, String text) async {
   await tester.tap(button);
   await tester.pumpAndSettle();
 }
+
 Future<void> registerForm(
   WidgetTester tester, {
   String email = 'new@gmail.com',

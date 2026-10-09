@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
@@ -388,11 +388,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            ...methods.map(
-              (method) => _buildMethodCard(
-                id: method['id']!,
-                title: method['title']!,
-                subtitle: method['subtitle']!,
+            RadioGroup<String>(
+              groupValue: _method,
+              onChanged: (value) {
+                if (_isProcessing || value == null) return;
+                setState(() {
+                  _method = value;
+                  _showBankInfo = value == 'bank_transfer';
+                });
+              },
+              child: Column(
+                children: methods
+                    .map(
+                      (method) => _buildMethodCard(
+                        id: method['id']!,
+                        title: method['title']!,
+                        subtitle: method['subtitle']!,
+                      ),
+                    )
+                    .toList(),
               ),
             ),
           ],
@@ -467,19 +481,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ],
               ),
             ),
-            Radio<String>(
-              value: id,
-              groupValue: _method,
-              onChanged: _isProcessing
-                  ? null
-                  : (value) {
-                      if (value == null) return;
-                      setState(() {
-                        _method = value;
-                        _showBankInfo = value == 'bank_transfer';
-                      });
-                    },
-            ),
+            Radio<String>(value: id),
           ],
         ),
       ),

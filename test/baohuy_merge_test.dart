@@ -8,7 +8,6 @@ import 'package:sportfield_booking/utils/app_theme.dart';
 import 'package:sportfield_booking/screens/customer/home_screen.dart';
 import 'test_helpers.dart';
 import 'widget_test.dart' show press;
-import 'package:sportfield_booking/screens/customer/payment_screen.dart';
 
 Future<void> openRoute(
   WidgetTester tester,
@@ -209,14 +208,14 @@ void main() {
       await press(tester, 'Tiếp tục');
       await press(tester, 'Chọn phương thức thanh toán');
 
-await tester.scrollUntilVisible(
-  find.byType(CheckboxListTile),
-  200,
-  scrollable: find.byType(Scrollable).last,
-);
-await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byType(CheckboxListTile),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
 
-await tapVisible(tester, find.byType(CheckboxListTile));
+      await tapVisible(tester, find.byType(CheckboxListTile));
       await press(tester, 'Xác nhận thanh toán');
       expect(MockStore.bookings.last.promotionCode, isNull);
       expect(
@@ -439,43 +438,39 @@ await tapVisible(tester, find.byType(CheckboxListTile));
     },
   );
 
-  testWidgets(
-    'Detail booking confirmation and payment fit 360 pixel screen',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await openRoute(tester, AppRoutes.venueDetail, args: venue);
-      await tester.scrollUntilVisible(
-        find.text('Khách hàng thân thiết'),
-        180,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(tester.takeException(), isNull);
-      await tapVisible(tester, find.text('Đặt sân ngay'));
-      await chooseFutureDate(tester);
-      await tapVisible(tester, find.byKey(const ValueKey('start_18:00')));
-      await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
-      await press(tester, 'Tiếp tục');
-      await press(tester, 'Chọn phương thức thanh toán');
-      await tester.scrollUntilVisible(
-  find.text('Tôi xác nhận thông tin đặt sân là chính xác'),
-  200,
-  scrollable: find.byType(Scrollable).last,
-);
-await tester.pumpAndSettle();
+  testWidgets('Detail booking confirmation and payment fit 360 pixel screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await openRoute(tester, AppRoutes.venueDetail, args: venue);
+    await tester.scrollUntilVisible(
+      find.text('Khách hàng thân thiết'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.takeException(), isNull);
+    await tapVisible(tester, find.text('Đặt sân ngay'));
+    await chooseFutureDate(tester);
+    await tapVisible(tester, find.byKey(const ValueKey('start_18:00')));
+    await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
+    await press(tester, 'Tiếp tục');
+    await press(tester, 'Chọn phương thức thanh toán');
+    await tester.scrollUntilVisible(
+      find.text('Tôi xác nhận thông tin đặt sân là chính xác'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
 
-await tester.tap(
-  find.text('Tôi xác nhận thông tin đặt sân là chính xác'),
-);
-await tester.pumpAndSettle();
-      await press(tester, 'Xác nhận thanh toán');
-      expect(find.text('Thanh toán thành công'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-    tags: ['viewport'],
-  );
+    await tester.tap(find.text('Tôi xác nhận thông tin đặt sân là chính xác'));
+    await tester.pumpAndSettle();
+    await press(tester, 'Xác nhận thanh toán');
+    expect(find.text('Thanh toán thành công'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  }, tags: ['viewport']);
 
   testWidgets('Home sport filter changes venues and All restores the list', (
     tester,
@@ -547,24 +542,22 @@ await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'Owner admin and customer promotion screens fit 360 pixels',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      for (final (route, role) in [
-        (AppRoutes.manageVenue, 'owner'),
-        (AppRoutes.managePromotion, 'admin'),
-        (AppRoutes.statistics, 'admin'),
-        (AppRoutes.customerPromotion, 'customer'),
-      ]) {
-        await tester.pumpWidget(const SizedBox());
-        await openRoute(tester, route, role: role);
-        expect(tester.takeException(), isNull, reason: route);
-      }
-    },
-    tags: ['viewport'],
-  );
+  testWidgets('Owner admin and customer promotion screens fit 360 pixels', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final (route, role) in [
+      (AppRoutes.manageVenue, 'owner'),
+      (AppRoutes.managePromotion, 'admin'),
+      (AppRoutes.statistics, 'admin'),
+      (AppRoutes.customerPromotion, 'customer'),
+    ]) {
+      await tester.pumpWidget(const SizedBox());
+      await openRoute(tester, route, role: role);
+      expect(tester.takeException(), isNull, reason: route);
+    }
+  }, tags: ['viewport']);
 }
