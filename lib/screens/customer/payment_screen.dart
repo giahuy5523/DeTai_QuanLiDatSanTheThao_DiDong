@@ -525,7 +525,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               const Divider(height: 20),
               _bankRow('Ngân hàng', 'Vietcombank'),
               _bankRow('Số tài khoản', '0123 456 789'),
-              _bankRow('Chủ tài khoản', 'ALOBO SPORT'),
+              _bankRow('Chủ tài khoản', 'Nhom1_DatSanTheThao'),
               _bankRow('Số tiền', _formatMoney(total)),
               _bankRow('Nội dung', 'ALBO DAT SAN'),
               const SizedBox(height: 8),

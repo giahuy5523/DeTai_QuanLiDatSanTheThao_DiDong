@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppTheme.background,
       body: CustomScrollView(
         slivers: [
-          // ─── SliverAppBar với banner ALOBO ─────────────────────────
+          // ─── SliverAppBar với banner Nhom1_DatSanTheThao ─────────────────────────
           SliverAppBar(
             expandedHeight: 180,
             floating: true,
@@ -59,13 +59,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           size: 20,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          'ALOBO',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                            letterSpacing: 1,
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Nhom1_DatSanTheThao',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                letterSpacing: 1,
+                              ),
+                            ),
                           ),
                         ),
                       ],

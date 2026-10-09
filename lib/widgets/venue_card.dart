@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/venue.dart';
 import '../utils/app_theme.dart';
 
-/// Thẻ hiển thị thông tin sân thể thao theo phong cách ALOBO.
+/// Thẻ hiển thị thông tin sân thể thao theo phong cách Nhom1_DatSanTheThao.
 class VenueCard extends StatelessWidget {
   const VenueCard({super.key, required this.venue, required this.onTap});
 

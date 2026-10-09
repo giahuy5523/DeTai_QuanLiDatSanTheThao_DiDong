@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  // Màu sắc thương hiệu ALOBO
+  // Màu sắc thương hiệu Nhom1_DatSanTheThao
   static const primary = Color(0xFF059669); // Xanh ngọc lục bảo thể thao
   static const primaryDark = Color(0xFF064E3B);
   static const primaryLight = Color(0xFFE6F4EA);

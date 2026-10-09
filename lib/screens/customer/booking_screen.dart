@@ -6,7 +6,7 @@ import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
 
-/// Màn hình đặt sân - phong cách ALOBO.
+/// Màn hình đặt sân - phong cách Nhom1_DatSanTheThao.
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
 

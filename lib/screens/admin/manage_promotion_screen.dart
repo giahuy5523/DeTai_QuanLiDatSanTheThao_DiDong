@@ -550,7 +550,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
               children: [
-                // ─── Header tổng quan ALOBO ──────────────────────────
+                // ─── Header tổng quan Nhom1_DatSanTheThao ──────────────────────────
                 _buildOverviewHeader(
                   total: promotions.length,
                   active: activeCount,

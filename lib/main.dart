@@ -12,7 +12,7 @@ class SportFieldBookingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Đặt sân thể thao',
+      title: 'Nhom1_DatSanTheThao',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       initialRoute: AppRoutes.login,
