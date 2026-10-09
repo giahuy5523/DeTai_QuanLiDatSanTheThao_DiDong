@@ -231,7 +231,9 @@ class MockStore {
 
   static List<String> imageUrlsOf(String venueId) {
     final rows = venueImages.where((e) => e['venueId'] == venueId).toList()
-      ..sort((a, b) => (a['sortOrder'] as int).compareTo(b['sortOrder'] as int));
+      ..sort(
+        (a, b) => (a['sortOrder'] as int).compareTo(b['sortOrder'] as int),
+      );
     return rows.map((e) => e['imageUrl'] as String).toList();
   }
 
@@ -246,17 +248,36 @@ class MockStore {
     'v8': [6, 22],
   };
 
-  static List<int> hoursOf(String venueId) => openHours[venueId] ?? const [6, 22];
+  static List<int> hoursOf(String venueId) =>
+      openHours[venueId] ?? const [6, 22];
 
   static final List<Promotion> promotions = Promotion.mockList();
 
   static final Map<String, List<VenueService>> servicesByVenue = {
     'v1': [
-      VenueService(id: 's1', venueId: 'v1', name: 'Thuê áo bib (bộ 10 cái)', price: 30000, unit: 'bộ'),
-      VenueService(id: 's2', venueId: 'v1', name: 'Nước suối chai 500ml', price: 10000, unit: 'chai'),
+      VenueService(
+        id: 's1',
+        venueId: 'v1',
+        name: 'Thuê áo bib (bộ 10 cái)',
+        price: 30000,
+        unit: 'bộ',
+      ),
+      VenueService(
+        id: 's2',
+        venueId: 'v1',
+        name: 'Nước suối chai 500ml',
+        price: 10000,
+        unit: 'chai',
+      ),
     ],
     'v2': [
-      VenueService(id: 's4', venueId: 'v2', name: 'Thuê vợt cầu lông', price: 30000, unit: 'cây/giờ'),
+      VenueService(
+        id: 's4',
+        venueId: 'v2',
+        name: 'Thuê vợt cầu lông',
+        price: 30000,
+        unit: 'cây/giờ',
+      ),
     ],
   };
 
@@ -316,7 +337,10 @@ class MockStore {
     return null;
   }
 
-  static List<Map<String, dynamic>> timeSlotsFor(String venueId, DateTime date) {
+  static List<Map<String, dynamic>> timeSlotsFor(
+    String venueId,
+    DateTime date,
+  ) {
     final venue = venueById(venueId);
     if (venue == null) return const [];
     final hours = hoursOf(venueId);
@@ -324,14 +348,21 @@ class MockStore {
     final isToday = _sameDay(date, now);
     final nowMinutes = now.hour * 60 + now.minute;
     final dayBookings = bookings
-        .where((b) => b.venueId == venueId && b.status != 'cancelled' && _sameDay(b.date, date))
+        .where(
+          (b) =>
+              b.venueId == venueId &&
+              b.status != 'cancelled' &&
+              _sameDay(b.date, date),
+        )
         .toList();
 
     final slots = <Map<String, dynamic>>[];
     for (var h = hours[0]; h < hours[1]; h++) {
       final from = h * 60;
       final to = from + 60;
-      final booked = dayBookings.any((b) => _toMinutes(b.startTime) < to && _toMinutes(b.endTime) > from);
+      final booked = dayBookings.any(
+        (b) => _toMinutes(b.startTime) < to && _toMinutes(b.endTime) > from,
+      );
       final past = isToday && from <= nowMinutes;
       slots.add({
         'venueId': venueId,
@@ -346,10 +377,25 @@ class MockStore {
   }
 
   static String hourLabel(int hour) => '${hour.toString().padLeft(2, '0')}:00';
-  static bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
   static int _toMinutes(String hhmm) {
-    final parts = hhmm.split(':');
-    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    final parts = hhmm.trim().split(':');
+    if (parts.length != 2) return -1;
+
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59) {
+      return -1;
+    }
+
+    return hour * 60 + minute;
   }
 
   static Venue? venueById(String id) {
@@ -384,29 +430,44 @@ class MockStore {
     servicesByVenue[venue.id] = [];
   }
 
-  static bool isRangeAvailable(String venueId, DateTime date, String start, String end) {
-  final venue = venueById(venueId);
-  if (venue == null || venue.status != 'approved') return false;
+  static bool isRangeAvailable(
+    String venueId,
+    DateTime date,
+    String start,
+    String end,
+  ) {
+    final venue = venueById(venueId);
+    if (venue == null || venue.status != 'approved') return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final bookingDay = DateTime(date.year, date.month, date.day);
 
-  final from = _toMinutes(start.trim());
-  final to = _toMinutes(end.trim());
-  final hours = hoursOf(venueId);
+    if (bookingDay.isBefore(today)) {
+      return false;
+    }
 
-  // Kiểm tra nằm trong khung giờ mở cửa của sân
-  if (to <= from || from < hours[0] * 60 || to > hours[1] * 60) {
-    return false;
+    final from = _toMinutes(start.trim());
+    final to = _toMinutes(end.trim());
+    final hours = hoursOf(venueId);
+    if (from < 0 || to < 0) {
+      return false;
+    }
+
+    // Kiểm tra nằm trong khung giờ mở cửa của sân
+    if (to <= from || from < hours[0] * 60 || to > hours[1] * 60) {
+      return false;
+    }
+
+    // Kiểm tra trùng lịch với các booking đã confirmed hoặc pending
+    return !bookings.any(
+      (booking) =>
+          booking.venueId == venueId &&
+          booking.status != 'cancelled' &&
+          _sameDay(booking.date, date) &&
+          from < _toMinutes(booking.endTime.trim()) &&
+          to > _toMinutes(booking.startTime.trim()),
+    );
   }
-
-  // Kiểm tra trùng lịch với các booking đã confirmed hoặc pending
-  return !bookings.any(
-    (booking) =>
-        booking.venueId == venueId &&
-        booking.status != 'cancelled' &&
-        _sameDay(booking.date, date) &&
-        from < _toMinutes(booking.endTime.trim()) &&
-        to > _toMinutes(booking.startTime.trim()),
-  );
-}
 
   static bool confirmBooking(Booking booking, String method) {
     if (!booking.totalPrice.isFinite ||
@@ -415,7 +476,12 @@ class MockStore {
         bookings.any((item) => item.id == booking.id)) {
       return false;
     }
-    if (!isRangeAvailable(booking.venueId, booking.date, booking.startTime, booking.endTime)) {
+    if (!isRangeAvailable(
+      booking.venueId,
+      booking.date,
+      booking.startTime,
+      booking.endTime,
+    )) {
       return false;
     }
     booking.status = 'confirmed';

@@ -15,24 +15,18 @@ Future<void> start(WidgetTester tester) async {
 
 Future<void> press(WidgetTester tester, String text) async {
   final button = find.widgetWithText(ElevatedButton, text);
-  if (button.evaluate().isEmpty) {
-    await tester.scrollUntilVisible(
-      button,
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).first,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-  }
+
+  expect(
+    button,
+    findsOneWidget,
+    reason: 'Không tìm thấy ElevatedButton có text "$text".',
+  );
+
   await tester.ensureVisible(button);
   await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pumpAndSettle();
 }
-
 Future<void> registerForm(
   WidgetTester tester, {
   String email = 'new@gmail.com',

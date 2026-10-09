@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
@@ -92,6 +92,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
         (args['total'] as num?)?.toDouble() ??
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
+    debugPrint(
+      'PAYMENT ARGS: date=$date start=$startTime end=$endTime '
+      'venue=${venue.id} total=$total promo=$promoCode',
+    );
 
     final services = MockStore.servicesFor(
       venue.id,
@@ -157,23 +161,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
-              children: [
-                Icon(
-                  Icons.receipt_long_rounded,
-                  color: AppTheme.primary,
-                  size: 20,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Thông tin đơn đặt sân',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ],
+            const Text(
+              'Thông tin đơn đặt sân',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: AppTheme.textPrimary,
+              ),
             ),
             const Divider(height: 22, color: AppTheme.border),
             _priceLine('Tiền thuê sân', courtPrice),
@@ -266,18 +260,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Tổng thanh toán',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  const Expanded(
+                    child: Text(
+                      'Tổng thanh toán',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
-                  Text(
-                    _formatMoney(total),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 19,
-                      color: AppTheme.primary,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _formatMoney(total),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 19,
+                        color: AppTheme.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -676,21 +679,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  'Cần thanh toán',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textSecondary,
+                const Expanded(
+                  child: Text(
+                    'Cần thanh toán',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
-                Text(
-                  _formatMoney(total),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    color: AppTheme.primary,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _formatMoney(total),
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: AppTheme.primary,
+                    ),
                   ),
                 ),
               ],
@@ -756,6 +765,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final promoCode = args['promoCode'] as String?;
     final userId = MockStore.currentUser?.id ?? 'customer1';
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final bookingDate = DateTime(date.year, date.month, date.day);
+
+    if (bookingDate.isBefore(today)) {
+      await _showPastDateError();
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     await Future.delayed(const Duration(milliseconds: 1200));
@@ -768,7 +786,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       startTime,
       endTime,
     );
-
+    debugPrint(
+      'AVAILABILITY CHECK: venue=${venue.id} status=${venue.status} '
+      'date=$date start=$startTime end=$endTime result=$isAvailable',
+    );
     if (!isAvailable) {
       setState(() => _isProcessing = false);
       await _showSlotUnavailable();
@@ -879,6 +900,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
       bookingId: bookingId,
       paymentId: paymentId,
       transactionCode: transactionCode,
+    );
+  }
+
+  Future<void> _showPastDateError() {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.event_busy_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Ngày không hợp lệ'),
+          ],
+        ),
+        content: const Text(
+          'Ngày đặt sân không được là ngày trong quá khứ. '
+          'Vui lòng chọn lại ngày đặt sân.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
     );
   }
 

@@ -37,12 +37,20 @@ class _CustomerShellState extends State<CustomerShell> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: _buildBottomNav(context),
+Widget build(BuildContext context) {
+  if (_currentIndex < 0 || _currentIndex >= _pages.length) {
+    return const Scaffold(
+      body: Center(
+        child: Text('Tab không hợp lệ.'),
+      ),
     );
   }
+
+  return Scaffold(
+    body: IndexedStack(index: _currentIndex, children: _pages),
+    bottomNavigationBar: _buildBottomNav(context),
+  );
+}
 
   Widget _buildBottomNav(BuildContext context) {
     return Container(
