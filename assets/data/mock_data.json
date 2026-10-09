@@ -145,7 +145,6 @@
       "price_per_hour": 300000.0,
       "open_time": "06:00",
       "close_time": "22:00",
-      "image_url": "https://picsum.photos/seed/venueNhất/600/400",
       "status": "approved",
       "reject_reason": null,
       "reviewed_by": 1,
@@ -164,7 +163,6 @@
       "price_per_hour": 350000.0,
       "open_time": "06:00",
       "close_time": "22:00",
-      "image_url": "https://picsum.photos/seed/venuehuận/600/400",
       "status": "approved",
       "reject_reason": null,
       "reviewed_by": 1,
@@ -183,7 +181,6 @@
       "price_per_hour": 120000.0,
       "open_time": "06:00",
       "close_time": "22:00",
-      "image_url": "https://picsum.photos/seed/venueBình/600/400",
       "status": "approved",
       "reject_reason": null,
       "reviewed_by": 1,
@@ -202,7 +199,6 @@
       "price_per_hour": 250000.0,
       "open_time": "06:00",
       "close_time": "21:00",
-      "image_url": "https://picsum.photos/seed/venueĐiền/600/400",
       "status": "approved",
       "reject_reason": null,
       "reviewed_by": 1,
@@ -221,7 +217,6 @@
       "price_per_hour": 200000.0,
       "open_time": "07:00",
       "close_time": "21:00",
-      "image_url": "https://picsum.photos/seed/venueận 7/600/400",
       "status": "approved",
       "reject_reason": null,
       "reviewed_by": 1,
@@ -240,7 +235,6 @@
       "price_per_hour": 150000.0,
       "open_time": "06:00",
       "close_time": "22:00",
-      "image_url": "https://picsum.photos/seed/venueVấp/600/400",
       "status": "pending",
       "reject_reason": null,
       "reviewed_by": null,
@@ -259,11 +253,180 @@
       "price_per_hour": 100000.0,
       "open_time": "06:00",
       "close_time": "22:00",
-      "image_url": "https://picsum.photos/seed/venuehạnh/600/400",
       "status": "rejected",
       "reject_reason": "Thiếu giấy phép kinh doanh và hình ảnh sân",
       "reviewed_by": 1,
       "reviewed_at": "2026-09-20 09:00:00",
+      "created_at": "2026-09-18 09:00:00"
+    }
+  ],
+  "VenueImages": [
+    {
+      "image_id": 1,
+      "venue_id": 1,
+      "image_url": "https://picsum.photos/seed/venueNhất/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 2,
+      "venue_id": 1,
+      "image_url": "https://picsum.photos/seed/venue-1-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 3,
+      "venue_id": 1,
+      "image_url": "https://picsum.photos/seed/venue-1-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 4,
+      "venue_id": 2,
+      "image_url": "https://picsum.photos/seed/venuehuận/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 5,
+      "venue_id": 2,
+      "image_url": "https://picsum.photos/seed/venue-2-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 6,
+      "venue_id": 2,
+      "image_url": "https://picsum.photos/seed/venue-2-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 7,
+      "venue_id": 3,
+      "image_url": "https://picsum.photos/seed/venueBình/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 8,
+      "venue_id": 3,
+      "image_url": "https://picsum.photos/seed/venue-3-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 9,
+      "venue_id": 3,
+      "image_url": "https://picsum.photos/seed/venue-3-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 10,
+      "venue_id": 4,
+      "image_url": "https://picsum.photos/seed/venueĐiền/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 11,
+      "venue_id": 4,
+      "image_url": "https://picsum.photos/seed/venue-4-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 12,
+      "venue_id": 4,
+      "image_url": "https://picsum.photos/seed/venue-4-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 13,
+      "venue_id": 5,
+      "image_url": "https://picsum.photos/seed/venueận 7/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 14,
+      "venue_id": 5,
+      "image_url": "https://picsum.photos/seed/venue-5-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 15,
+      "venue_id": 5,
+      "image_url": "https://picsum.photos/seed/venue-5-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 16,
+      "venue_id": 6,
+      "image_url": "https://picsum.photos/seed/venueVấp/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 17,
+      "venue_id": 6,
+      "image_url": "https://picsum.photos/seed/venue-6-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 18,
+      "venue_id": 6,
+      "image_url": "https://picsum.photos/seed/venue-6-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 19,
+      "venue_id": 7,
+      "image_url": "https://picsum.photos/seed/venuehạnh/600/400",
+      "is_primary": 1,
+      "sort_order": 0,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 20,
+      "venue_id": 7,
+      "image_url": "https://picsum.photos/seed/venue-7-2/600/400",
+      "is_primary": 0,
+      "sort_order": 1,
+      "created_at": "2026-09-18 09:00:00"
+    },
+    {
+      "image_id": 21,
+      "venue_id": 7,
+      "image_url": "https://picsum.photos/seed/venue-7-3/600/400",
+      "is_primary": 0,
+      "sort_order": 2,
       "created_at": "2026-09-18 09:00:00"
     }
   ],
@@ -449,6 +612,7 @@
       "status": "blocked"
     }
   ],
+  "Services": [],
   "Promotions": [
     {
       "promo_id": 1,
@@ -514,6 +678,7 @@
       "slot_id": 1,
       "promo_id": null,
       "original_amount": 360000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 360000.0,
       "status": "completed",
@@ -529,6 +694,7 @@
       "slot_id": 2,
       "promo_id": 1,
       "original_amount": 144000.0,
+      "service_amount": 0.0,
       "discount_amount": 14400.0,
       "total_amount": 129600.0,
       "status": "completed",
@@ -544,6 +710,7 @@
       "slot_id": 3,
       "promo_id": null,
       "original_amount": 300000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 300000.0,
       "status": "completed",
@@ -559,6 +726,7 @@
       "slot_id": 4,
       "promo_id": null,
       "original_amount": 420000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 420000.0,
       "status": "cancelled",
@@ -574,6 +742,7 @@
       "slot_id": 5,
       "promo_id": 1,
       "original_amount": 240000.0,
+      "service_amount": 0.0,
       "discount_amount": 24000.0,
       "total_amount": 216000.0,
       "status": "completed",
@@ -589,6 +758,7 @@
       "slot_id": 6,
       "promo_id": 2,
       "original_amount": 360000.0,
+      "service_amount": 0.0,
       "discount_amount": 72000.0,
       "total_amount": 288000.0,
       "status": "confirmed",
@@ -604,6 +774,7 @@
       "slot_id": 7,
       "promo_id": null,
       "original_amount": 360000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 360000.0,
       "status": "confirmed",
@@ -619,6 +790,7 @@
       "slot_id": 8,
       "promo_id": null,
       "original_amount": 144000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 144000.0,
       "status": "confirmed",
@@ -634,6 +806,7 @@
       "slot_id": 9,
       "promo_id": null,
       "original_amount": 300000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 300000.0,
       "status": "pending",
@@ -649,6 +822,7 @@
       "slot_id": 10,
       "promo_id": 1,
       "original_amount": 420000.0,
+      "service_amount": 0.0,
       "discount_amount": 42000.0,
       "total_amount": 378000.0,
       "status": "pending",
@@ -664,6 +838,7 @@
       "slot_id": 11,
       "promo_id": 2,
       "original_amount": 240000.0,
+      "service_amount": 0.0,
       "discount_amount": 48000.0,
       "total_amount": 192000.0,
       "status": "confirmed",
@@ -679,6 +854,7 @@
       "slot_id": 12,
       "promo_id": null,
       "original_amount": 420000.0,
+      "service_amount": 0.0,
       "discount_amount": 0.0,
       "total_amount": 420000.0,
       "status": "cancelled",
@@ -689,6 +865,7 @@
       "cancelled_at": "2026-10-01 20:00:00"
     }
   ],
+  "BookingServices": [],
   "Payments": [
     {
       "payment_id": 1,
