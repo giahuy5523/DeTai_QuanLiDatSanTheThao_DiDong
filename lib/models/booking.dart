@@ -64,14 +64,17 @@ class Booking {
     DateTime? createdAt,
     List<BookingServiceItem>? serviceItems,
     List<String>? selectedServiceIds,
-  })  : totalPrice = totalPrice,
-        originalAmount = originalAmount ?? totalPrice,
-        serviceAmount = serviceAmount ?? 0.0,
-        discountAmount = discountAmount ?? 0.0,
-        createdAt = createdAt ?? DateTime.now(),
-        serviceItems = serviceItems ?? const [],
-        selectedServiceIds = selectedServiceIds ??
-            (serviceItems != null ? serviceItems.map((e) => e.serviceId).toList() : const []);
+  }) : totalPrice = totalPrice,
+       originalAmount = originalAmount ?? totalPrice,
+       serviceAmount = serviceAmount ?? 0.0,
+       discountAmount = discountAmount ?? 0.0,
+       createdAt = createdAt ?? DateTime.now(),
+       serviceItems = serviceItems ?? const [],
+       selectedServiceIds =
+           selectedServiceIds ??
+           (serviceItems != null
+               ? serviceItems.map((e) => e.serviceId).toList()
+               : const []);
 
   double get totalAmount => totalPrice;
 }
