@@ -5,7 +5,7 @@ import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/venue_image.dart';
 
-/// Màn hình Chi tiết Sân thể thao - Phong cách ALOBO.
+/// Màn hình Chi tiết Sân thể thao - Phong cách Nhom1_DatSanTheThao.
 /// Hiển thị thông tin sân, tiện ích, dịch vụ phụ trợ, đánh giá và nút đặt sân cố định.
 class VenueDetailScreen extends StatefulWidget {
   const VenueDetailScreen({super.key});
@@ -63,7 +63,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     );
   }
 
-  // Banner trên cùng: dùng ảnh thật nếu có, hoặc placeholder thể thao ALOBO
+  // Banner trên cùng: dùng ảnh thật nếu có, hoặc placeholder thể thao Nhom1_DatSanTheThao
   Widget _buildBanner(BuildContext context, Venue venue) {
     final images = MockStore.imageUrlsOf(venue.id);
 

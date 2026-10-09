@@ -6,7 +6,7 @@ import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
 
 /// Màn hình danh sách ưu đãi / mã khuyến mãi dành cho Khách hàng.
-/// Phong cách ALOBO với thẻ voucher bo góc, sao chép mã và nút dùng ngay.
+/// Phong cách Nhom1_DatSanTheThao với thẻ voucher bo góc, sao chép mã và nút dùng ngay.
 class CustomerPromotionScreen extends StatelessWidget {
   const CustomerPromotionScreen({super.key});
 
@@ -28,7 +28,7 @@ class CustomerPromotionScreen extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: [
-                // ─── Header Banner ALOBO ─────────────────────────────
+                // ─── Header Banner Nhom1_DatSanTheThao ─────────────────────────────
                 _buildHeaderBanner(),
                 const SizedBox(height: 20),
 
@@ -104,7 +104,7 @@ class CustomerPromotionScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
-                    'ALOBO REWARDS',
+                    'Nhom1_DatSanTheThao',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 10,
