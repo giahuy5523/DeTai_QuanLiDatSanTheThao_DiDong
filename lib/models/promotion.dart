@@ -1,4 +1,3 @@
-/// Model Khuyến mãi - tương ứng bảng Promotions trong ERD.
 class Promotion {
   final String id;
   final String code;
@@ -6,12 +5,16 @@ class Promotion {
   final DateTime expiryDate;
   final bool isActive;
 
+  // Số lượt sử dụng mã khuyến mãi
+  int usedCount;
+
   Promotion({
     required this.id,
     required this.code,
     required this.discountPercent,
     required this.expiryDate,
     this.isActive = true,
+    this.usedCount = 0,
   });
 
   bool isExpiredAt(DateTime now) => !now.isBefore(
@@ -35,13 +38,17 @@ class Promotion {
         id: 'p1',
         code: 'SAN10',
         discountPercent: 10,
-        expiryDate: DateTime.now().add(const Duration(days: 30)),
+        expiryDate: DateTime.now().add(
+          const Duration(days: 30),
+        ),
       ),
       Promotion(
         id: 'p2',
         code: 'SAN20TET',
         discountPercent: 20,
-        expiryDate: DateTime.now().add(const Duration(days: 60)),
+        expiryDate: DateTime.now().add(
+          const Duration(days: 60),
+        ),
       ),
     ];
   }
