@@ -68,7 +68,7 @@ Admin trước đây dùng replacement để mở Duyệt/Khuyến mãi làm m�
 
 **Use Case include và extend là gì?** include là bước bắt buộc dùng lại: đăng ký sân cần chọn đủ ảnh và preview. extend là hành vi tùy chọn: chọn dịch vụ hoặc áp dụng mã mở rộng đặt sân. Đăng nhập là tiền điều kiện của luồng nghiệp vụ, không cần vẽ mọi use case include Login như thể luôn đăng nhập lại.
 
-**47 test có nghĩa là không còn lỗi nào không?** Không. Nó xác nhận những tình huống trong test. Hộp chọn ảnh native, quyền truy cập và build iOS/macOS vẫn cần chạy trên thiết bị phù hợp; widget test dùng FakePicker.
+**47 test có nghĩa là không còn lỗi nào không?** Không. Nó xác nhận những tình huống trong test. Đã bổ sung 30 ca chạy thành công trên emulator Android 17, gồm picker thật hủy, chọn ba ảnh và gửi sân pending. Widget test vẫn dùng FakePicker. Picker hệ thống từng ANR trong phiên thử và chạy lại sau khi khởi động emulator đã qua; điện thoại thật, quyền ảnh trên Android cũ và build iOS/macOS vẫn cần thiết bị phù hợp để kiểm tra.
 
 **Có lưu dữ liệu thật không?** Không. MockStore là bộ nhớ trong process. Restart mất user, sân và đơn mới; assets JSON/SQL chưa được app load. Đây là phạm vi báo cáo lần 1.
 

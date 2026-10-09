@@ -202,7 +202,7 @@ void main() {
     await pick(tester);
     await press(tester, 'Gửi duyệt');
     expect(tester.takeException(), isNull);
-  });
+  }, tags: ['viewport']);
 
   testWidgets('Upload rejects empty fields and unreadable image', (
     tester,

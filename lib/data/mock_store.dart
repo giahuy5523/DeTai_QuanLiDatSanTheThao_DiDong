@@ -1,16 +1,9 @@
 import '../models/booking.dart';
 import '../models/promotion.dart';
 import '../models/service.dart';
-import '../models/venue.dart';
 import '../models/user.dart';
+import '../models/venue.dart';
 
-/// Kho dữ liệu tạm thời dùng cho giai đoạn giao diện/mô phỏng.
-///
-/// Ánh xạ sang ERD (10 bảng):
-///   Users -> users | SportTypes -> sportTypes | Venues -> venues
-///   VenueImages -> venueImages | TimeSlots -> timeSlotsFor() (sinh từ giờ mở cửa + bookings)
-///   Promotions -> promotions | Services -> servicesByVenue | Bookings -> bookings
-///   BookingServices -> Booking.selectedServiceIds | Payments -> payments
 class MockStore {
   MockStore._();
   static AppUser? currentUser;
@@ -24,7 +17,7 @@ class MockStore {
 
   static void logout() => currentUser = null;
 
-  // 1. Danh sách Người dùng
+  // 1. Users
   static final List<AppUser> users = [
     AppUser(
       id: 'customer1',
@@ -68,7 +61,7 @@ class MockStore {
     ),
   ];
 
-  // 2. Danh sách Môn thể thao (Khớp bảng SportTypes trong ERD)
+  // 2. SportTypes
   static final List<Map<String, dynamic>> sportTypes = [
     {'id': 1, 'name': 'Bóng đá', 'description': 'Sân cỏ nhân tạo 5-7 người'},
     {'id': 2, 'name': 'Cầu lông', 'description': 'Sân cầu lông trong nhà'},
@@ -77,7 +70,7 @@ class MockStore {
     {'id': 5, 'name': 'Pickleball', 'description': 'Sân pickleball'},
   ];
 
-  // 3. Danh sách Sân thể thao mở rộng
+  // 3. Venues
   static final List<Venue> venues = [
     Venue(
       id: 'v1',
@@ -85,7 +78,7 @@ class MockStore {
       sportTypeId: 1,
       sportType: 'Bóng đá',
       name: 'Sân bóng đá Thành Công',
-      address: '12 Lý Thường Kiệt, Tường 14',
+      address: '12 Lý Thường Kiệt, Phường 14',
       district: 'Tân Bình',
       city: 'TP.HCM',
       pricePerHour: 300000,
@@ -204,42 +197,26 @@ class MockStore {
       imageUrls: const [],
       latitude: 10.8000,
       longitude: 106.6580,
-      status: 'pending', // Chờ duyệt
-      rating: 0.0,
-    ),
-    Venue(
-      id: 'v9',
-      ownerId: 'owner1',
-      sportTypeId: 2,
-      sportType: 'Cầu lông',
-      name: 'Sân cầu lông Bình Thạnh',
-      address: '33 Bạch Đằng, Phường 24',
-      district: 'Bình Thạnh',
-      city: 'TP.HCM',
-      pricePerHour: 100000,
-      imageUrls: const [],
-      latitude: 10.8020,
-      longitude: 106.7100,
-      status: 'rejected', // Bị từ chối (không hiển thị cho khách)
+      status: 'pending',
       rating: 0.0,
     ),
   ];
 
-  /// Chỉ các sân đã được admin duyệt mới hiển thị cho khách hàng.
   static List<Venue> get approvedVenues =>
       venues.where((v) => v.status == 'approved').toList();
 
-  /// Danh sách quận/huyện của các sân đã duyệt (dùng cho bộ lọc khu vực).
   static List<String> get districts {
     final set = <String>{};
     for (final v in approvedVenues) {
-      final d = v.district;
-      if (d != null && d.isNotEmpty) set.add(d);
+      final district = v.district;
+      if (district != null && district.isNotEmpty) {
+        set.add(district);
+      }
     }
     return set.toList()..sort();
   }
 
-  // 3b. Ảnh sân (bảng VenueImages: venue_id, image_url, is_primary, sort_order)
+  // VenueImages
   static final List<Map<String, dynamic>> venueImages = [
     for (var i = 1; i <= 8; i++) ...[
       {
@@ -249,27 +226,15 @@ class MockStore {
         'isPrimary': true,
         'sortOrder': 1,
       },
-      {
-        'id': 'img${i}b',
-        'venueId': 'v$i',
-        'imageUrl': 'https://picsum.photos/seed/venue$i-2/800/500',
-        'isPrimary': false,
-        'sortOrder': 2,
-      },
     ],
   ];
 
-  /// Danh sách URL ảnh của một sân, đã sắp xếp (ảnh đại diện đứng đầu).
-  /// Muốn dùng: `imageUrls: MockStore.imageUrlsOf('v1')` trong constructor Venue.
   static List<String> imageUrlsOf(String venueId) {
     final rows = venueImages.where((e) => e['venueId'] == venueId).toList()
-      ..sort(
-        (a, b) => (a['sortOrder'] as int).compareTo(b['sortOrder'] as int),
-      );
+      ..sort((a, b) => (a['sortOrder'] as int).compareTo(b['sortOrder'] as int));
     return rows.map((e) => e['imageUrl'] as String).toList();
   }
 
-  // 3c. Giờ mở cửa - đóng cửa (Venues.open_time / close_time), đơn vị: giờ.
   static const Map<String, List<int>> openHours = {
     'v1': [6, 22],
     'v2': [6, 22],
@@ -281,113 +246,21 @@ class MockStore {
     'v8': [6, 22],
   };
 
-  static List<int> hoursOf(String venueId) =>
-      openHours[venueId] ?? const [6, 22];
+  static List<int> hoursOf(String venueId) => openHours[venueId] ?? const [6, 22];
 
-  // 4. Danh sách Khuyến mãi
   static final List<Promotion> promotions = Promotion.mockList();
 
-  // 5. Danh sách Dịch vụ đi kèm theo từng Sân
   static final Map<String, List<VenueService>> servicesByVenue = {
     'v1': [
-      VenueService(
-        id: 's1',
-        venueId: 'v1',
-        name: 'Thuê áo bib (bộ 10 cái)',
-        price: 30000,
-        unit: 'bộ',
-      ),
-      VenueService(
-        id: 's2',
-        venueId: 'v1',
-        name: 'Nước suối chai 500ml',
-        price: 10000,
-        unit: 'chai',
-      ),
-      VenueService(
-        id: 's3',
-        venueId: 'v1',
-        name: 'Bóng thi đấu',
-        price: 50000,
-        unit: 'quả/giờ',
-      ),
+      VenueService(id: 's1', venueId: 'v1', name: 'Thuê áo bib (bộ 10 cái)', price: 30000, unit: 'bộ'),
+      VenueService(id: 's2', venueId: 'v1', name: 'Nước suối chai 500ml', price: 10000, unit: 'chai'),
     ],
     'v2': [
-      VenueService(
-        id: 's4',
-        venueId: 'v2',
-        name: 'Thuê vợt cầu lông',
-        price: 30000,
-        unit: 'cây/giờ',
-      ),
-      VenueService(
-        id: 's5',
-        venueId: 'v2',
-        name: 'Mua quả cầu lông Vina',
-        price: 25000,
-        unit: 'quả',
-      ),
-    ],
-    'v3': [
-      VenueService(
-        id: 's6',
-        venueId: 'v3',
-        name: 'Thuê vợt Tennis',
-        price: 50000,
-        unit: 'cây/giờ',
-      ),
-      VenueService(
-        id: 's7',
-        venueId: 'v3',
-        name: 'Nước điện giải Revive',
-        price: 15000,
-        unit: 'chai',
-      ),
-    ],
-    'v4': [
-      VenueService(
-        id: 's8',
-        venueId: 'v4',
-        name: 'Thuê trọng tài',
-        price: 150000,
-        unit: 'trận',
-      ),
-      VenueService(
-        id: 's9',
-        venueId: 'v4',
-        name: 'Nước suối lạnh',
-        price: 10000,
-        unit: 'chai',
-      ),
-    ],
-    'v5': [
-      VenueService(
-        id: 's10',
-        venueId: 'v5',
-        name: 'Thuê bóng rổ Molten',
-        price: 30000,
-        unit: 'quả/giờ',
-      ),
-    ],
-    'v6': [
-      VenueService(
-        id: 's11',
-        venueId: 'v6',
-        name: 'Thuê vợt Pickleball',
-        price: 40000,
-        unit: 'cây/giờ',
-      ),
-      VenueService(
-        id: 's12',
-        venueId: 'v6',
-        name: 'Bóng Pickleball Franklin',
-        price: 35000,
-        unit: 'quả',
-      ),
+      VenueService(id: 's4', venueId: 'v2', name: 'Thuê vợt cầu lông', price: 30000, unit: 'cây/giờ'),
     ],
   };
 
-  // 6. Danh sách Đặt sân
+  // 6. Bookings
   static final List<Booking> bookings = [
     Booking(
       id: 'b1',
@@ -398,6 +271,7 @@ class MockStore {
       endTime: '19:00',
       totalPrice: 330000,
       status: 'confirmed',
+      paymentStatus: 'paid',
       paymentId: 'pay1',
       selectedServiceIds: const ['s1'],
     ),
@@ -410,183 +284,19 @@ class MockStore {
       endTime: '09:00',
       totalPrice: 120000,
       status: 'completed',
+      paymentStatus: 'paid',
       paymentId: 'pay2',
-    ),
-    Booking(
-      id: 'b3',
-      venueId: 'v4',
-      userId: 'customer1',
-      date: DateTime.now().add(const Duration(days: 2)),
-      startTime: '19:00',
-      endTime: '21:00',
-      totalPrice: 900000,
-      status: 'pending',
-      paymentId: 'pay3',
-    ),
-    Booking(
-      id: 'b4',
-      venueId: 'v6',
-      userId: 'customer2',
-      date: DateTime.now().subtract(const Duration(days: 1)),
-      startTime: '17:00',
-      endTime: '18:30',
-      totalPrice: 270000,
-      status: 'completed',
-      paymentId: 'pay4',
-    ),
-    Booking(
-      id: 'b5',
-      venueId: 'v1',
-      userId: 'customer2',
-      date: DateTime.now(),
-      startTime: '10:00',
-      endTime: '11:00',
-      totalPrice: 300000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b6',
-      venueId: 'v1',
-      userId: 'customer1',
-      date: DateTime.now(),
-      startTime: '15:00',
-      endTime: '16:00',
-      totalPrice: 300000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b7',
-      venueId: 'v2',
-      userId: 'customer2',
-      date: DateTime.now(),
-      startTime: '08:00',
-      endTime: '09:00',
-      totalPrice: 120000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b8',
-      venueId: 'v2',
-      userId: 'customer1',
-      date: DateTime.now(),
-      startTime: '19:00',
-      endTime: '20:00',
-      totalPrice: 120000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b9',
-      venueId: 'v3',
-      userId: 'customer2',
-      date: DateTime.now(),
-      startTime: '11:00',
-      endTime: '12:00',
-      totalPrice: 250000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b10',
-      venueId: 'v3',
-      userId: 'customer1',
-      date: DateTime.now(),
-      startTime: '17:00',
-      endTime: '18:00',
-      totalPrice: 250000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b11',
-      venueId: 'v4',
-      userId: 'customer2',
-      date: DateTime.now(),
-      startTime: '09:00',
-      endTime: '10:00',
-      totalPrice: 450000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b12',
-      venueId: 'v4',
-      userId: 'customer1',
-      date: DateTime.now(),
-      startTime: '18:00',
-      endTime: '20:00',
-      totalPrice: 900000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b13',
-      venueId: 'v5',
-      userId: 'customer2',
-      date: DateTime.now(),
-      startTime: '14:00',
-      endTime: '15:00',
-      totalPrice: 200000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b14',
-      venueId: 'v6',
-      userId: 'customer1',
-      date: DateTime.now(),
-      startTime: '08:00',
-      endTime: '09:00',
-      totalPrice: 180000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b15',
-      venueId: 'v6',
-      userId: 'customer2',
-      date: DateTime.now(),
-      startTime: '16:00',
-      endTime: '17:00',
-      totalPrice: 180000,
-      status: 'confirmed',
-      paymentId: null,
-    ),
-
-    Booking(
-      id: 'b16',
-      venueId: 'v7',
-      userId: 'customer1',
-      date: DateTime.now(),
-      startTime: '10:00',
-      endTime: '12:00',
-      totalPrice: 110000,
-      status: 'confirmed',
-      paymentId: null,
     ),
   ];
 
-  // 7. Thanh toán (bảng Payments) - khớp paymentId của các booking ở trên.
+  // 7. Payments
   static final List<Map<String, dynamic>> payments = [
     {
       'id': 'pay1',
       'bookingId': 'b1',
-      'method': 'momo', // cash | momo | vnpay | bank_transfer
+      'method': 'momo',
       'amount': 330000,
-      'status': 'success', // pending | success | failed | refunded
+      'status': 'success',
       'transactionCode': 'TXN1001',
     },
     {
@@ -597,22 +307,6 @@ class MockStore {
       'status': 'success',
       'transactionCode': null,
     },
-    {
-      'id': 'pay3',
-      'bookingId': 'b3',
-      'method': 'vnpay',
-      'amount': 900000,
-      'status': 'pending',
-      'transactionCode': 'TXN1003',
-    },
-    {
-      'id': 'pay4',
-      'bookingId': 'b4',
-      'method': 'bank_transfer',
-      'amount': 270000,
-      'status': 'success',
-      'transactionCode': 'TXN1004',
-    },
   ];
 
   static Map<String, dynamic>? paymentOfBooking(String bookingId) {
@@ -622,14 +316,7 @@ class MockStore {
     return null;
   }
 
-  // 8. Khung giờ (bảng TimeSlots) - sinh theo giờ mở cửa và các booking hiện có.
-  /// Trả về các khung giờ 1 tiếng của [venueId] trong ngày [date]:
-  /// {venueId, date, startTime, endTime, price, status}
-  /// status: 'available' | 'booked' (đã có booking chưa huỷ) | 'blocked' (đã qua giờ).
-  static List<Map<String, dynamic>> timeSlotsFor(
-    String venueId,
-    DateTime date,
-  ) {
+  static List<Map<String, dynamic>> timeSlotsFor(String venueId, DateTime date) {
     final venue = venueById(venueId);
     if (venue == null) return const [];
     final hours = hoursOf(venueId);
@@ -637,21 +324,14 @@ class MockStore {
     final isToday = _sameDay(date, now);
     final nowMinutes = now.hour * 60 + now.minute;
     final dayBookings = bookings
-        .where(
-          (b) =>
-              b.venueId == venueId &&
-              b.status != 'cancelled' &&
-              _sameDay(b.date, date),
-        )
+        .where((b) => b.venueId == venueId && b.status != 'cancelled' && _sameDay(b.date, date))
         .toList();
 
     final slots = <Map<String, dynamic>>[];
     for (var h = hours[0]; h < hours[1]; h++) {
       final from = h * 60;
       final to = from + 60;
-      final booked = dayBookings.any(
-        (b) => _toMinutes(b.startTime) < to && _toMinutes(b.endTime) > from,
-      );
+      final booked = dayBookings.any((b) => _toMinutes(b.startTime) < to && _toMinutes(b.endTime) > from);
       final past = isToday && from <= nowMinutes;
       slots.add({
         'venueId': venueId,
@@ -666,10 +346,7 @@ class MockStore {
   }
 
   static String hourLabel(int hour) => '${hour.toString().padLeft(2, '0')}:00';
-
-  static bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
+  static bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
   static int _toMinutes(String hhmm) {
     final parts = hhmm.split(':');
     return int.parse(parts[0]) * 60 + int.parse(parts[1]);
@@ -707,62 +384,45 @@ class MockStore {
     servicesByVenue[venue.id] = [];
   }
 
-  static bool isRangeAvailable(
-    String venueId,
-    DateTime date,
-    String start,
-    String end,
-  ) {
-    final venue = venueById(venueId);
-    if (venue == null || venue.status != 'approved') return false;
-    final timePattern = RegExp(r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$');
-    if (!timePattern.hasMatch(start) || !timePattern.hasMatch(end)) {
-      return false;
-    }
-    final from = _toMinutes(start);
-    final to = _toMinutes(end);
-    final hours = hoursOf(venueId);
-    final startsAt = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      from ~/ 60,
-      from % 60,
-    );
-    if (to <= from ||
-        from < hours[0] * 60 ||
-        to > hours[1] * 60 ||
-        !startsAt.isAfter(DateTime.now())) {
-      return false;
-    }
-    return !bookings.any(
-      (booking) =>
-          booking.venueId == venueId &&
-          booking.status != 'cancelled' &&
-          _sameDay(booking.date, date) &&
-          from < _toMinutes(booking.endTime) &&
-          to > _toMinutes(booking.startTime),
-    );
+  static bool isRangeAvailable(String venueId, DateTime date, String start, String end) {
+  final venue = venueById(venueId);
+  if (venue == null || venue.status != 'approved') return false;
+
+  final from = _toMinutes(start.trim());
+  final to = _toMinutes(end.trim());
+  final hours = hoursOf(venueId);
+
+  // Kiểm tra nằm trong khung giờ mở cửa của sân
+  if (to <= from || from < hours[0] * 60 || to > hours[1] * 60) {
+    return false;
   }
+
+  // Kiểm tra trùng lịch với các booking đã confirmed hoặc pending
+  return !bookings.any(
+    (booking) =>
+        booking.venueId == venueId &&
+        booking.status != 'cancelled' &&
+        _sameDay(booking.date, date) &&
+        from < _toMinutes(booking.endTime.trim()) &&
+        to > _toMinutes(booking.startTime.trim()),
+  );
+}
 
   static bool confirmBooking(Booking booking, String method) {
     if (!booking.totalPrice.isFinite ||
         booking.totalPrice < 0 ||
-        !['cash', 'momo', 'vnpay'].contains(method) ||
+        !['cash', 'momo', 'vnpay', 'bank_transfer'].contains(method) ||
         bookings.any((item) => item.id == booking.id)) {
       return false;
     }
-    if (!isRangeAvailable(
-      booking.venueId,
-      booking.date,
-      booking.startTime,
-      booking.endTime,
-    )) {
+    if (!isRangeAvailable(booking.venueId, booking.date, booking.startTime, booking.endTime)) {
       return false;
     }
+    booking.status = 'confirmed';
+    booking.paymentStatus = 'paid';
     bookings.add(booking);
     payments.add({
-      'id': booking.paymentId,
+      'id': booking.paymentId ?? 'pay_${DateTime.now().millisecondsSinceEpoch}',
       'bookingId': booking.id,
       'method': method,
       'amount': booking.totalPrice,
@@ -774,24 +434,16 @@ class MockStore {
 
   static AppUser? findUserByEmail(String email) {
     final normalizedEmail = email.trim().toLowerCase();
-
     for (final user in users) {
-      if (user.email.toLowerCase() == normalizedEmail) {
-        return user;
-      }
+      if (user.email.toLowerCase() == normalizedEmail) return user;
     }
-
     return null;
   }
 
-  static bool emailExists(String email) {
-    return findUserByEmail(email) != null;
-  }
+  static bool emailExists(String email) => findUserByEmail(email) != null;
 
   static void addUser(AppUser user) {
-    if (emailExists(user.email)) {
-      throw ArgumentError('Email đã được sử dụng');
-    }
+    if (emailExists(user.email)) throw ArgumentError('Email đã được sử dụng');
     users.add(user);
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/mock_store.dart';
 import '../models/venue.dart';
+import '../models/booking.dart';
 
 import '../screens/admin/approve_venue_screen.dart';
 import '../screens/admin/manage_promotion_screen.dart';
@@ -71,6 +72,7 @@ class AppRoutes {
       managePromotion: (_) => const ManagePromotionScreen(),
       statistics: (_) => const StatisticsScreen(),
     };
+
     return builders.map(
       (name, builder) => MapEntry(name, (context) {
         if (name == login || name == register) return builder(context);
@@ -82,58 +84,38 @@ class AppRoutes {
             : adminRoutes.contains(name)
             ? 'admin'
             : 'customer';
+
         if (role != requiredRole) {
           return const _RouteError('Bạn không có quyền truy cập màn hình này.');
         }
+
         final args = ModalRoute.of(context)?.settings.arguments;
+
         if ((name == venueDetail || name == booking) &&
             (args is! Venue || args.status != 'approved')) {
           return const _RouteError('Thông tin sân không hợp lệ.');
         }
+
         if (name == manageService &&
             (args is! String ||
-                MockStore.venueById(args)?.ownerId !=
-                    MockStore.currentUser?.id)) {
+                MockStore.venueById(args)?.ownerId != MockStore.currentUser?.id)) {
           return const _RouteError('Thông tin sân không hợp lệ.');
         }
-        if (name == customerShell &&
-            args != null &&
-            (args is! int || args < 0 || args > 4)) {
-          return const _RouteError('Tab không hợp lệ.');
+
+        // Kiểm tra tham số truyền vào Màn hình Xác nhận & Thanh toán
+        if (name == bookingConfirmation || name == payment) {
+          if (args is Booking) {
+            return builder(context);
+          }
+          if (args is! Map<String, dynamic> ||
+              args['venue'] is! Venue ||
+              args['date'] is! DateTime ||
+              (args['startTime'] ?? args['time']) is! String ||
+              args['total'] is! num) {
+            return const _RouteError('Thông tin đơn đặt sân không hợp lệ.');
+          }
         }
-        if ((name == payment || name == bookingConfirmation) &&
-            (args is! Map<String, dynamic> ||
-                args['venue'] is! Venue ||
-                args['date'] is! DateTime ||
-                (args['startTime'] ?? args['time']) is! String ||
-                (args['endTime'] != null && args['endTime'] is! String) ||
-                args['total'] is! num ||
-                !(args['total'] as num).isFinite ||
-                (args['total'] as num) < 0 ||
-                (args['serviceIds'] != null &&
-                    (args['serviceIds'] is! List ||
-                        (args['serviceIds'] as List).any(
-                          (id) => id is! String,
-                        ))) ||
-                (args['promoCode'] != null && args['promoCode'] is! String))) {
-          return const _RouteError('Thông tin thanh toán không hợp lệ.');
-        }
-        if (name == bookingConfirmation &&
-            (args as Map<String, dynamic>).entries.any(
-              (entry) =>
-                  {
-                    'courtPrice',
-                    'serviceTotal',
-                    'discount',
-                    'discountAmount',
-                    'subtotal',
-                  }.contains(entry.key) &&
-                  (entry.value is! num ||
-                      !(entry.value as num).isFinite ||
-                      (entry.value as num) < 0),
-            )) {
-          return const _RouteError('Thông tin thanh toán không hợp lệ.');
-        }
+
         return builder(context);
       }),
     );
@@ -143,6 +125,7 @@ class AppRoutes {
 class _RouteError extends StatelessWidget {
   const _RouteError(this.message);
   final String message;
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Không thể mở màn hình')),
