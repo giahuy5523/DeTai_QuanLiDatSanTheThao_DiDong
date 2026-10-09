@@ -36,6 +36,18 @@ class _SearchScreenState extends State<SearchScreen> {
 
   final TextEditingController _searchController = TextEditingController();
 
+  String _normalizeSearchText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[àáạảãâầấậẩẫăằắặẳẵ]'), 'a')
+        .replaceAll(RegExp(r'[èéẹẻẽêềếệểễ]'), 'e')
+        .replaceAll(RegExp(r'[ìíịỉĩ]'), 'i')
+        .replaceAll(RegExp(r'[òóọỏõôồốộổỗơờớợởỡ]'), 'o')
+        .replaceAll(RegExp(r'[ùúụủũưừứựửữ]'), 'u')
+        .replaceAll(RegExp(r'[ỳýỵỷỹ]'), 'y')
+        .replaceAll('đ', 'd');
+  }
+
   String _keyword = '';
   int? _sportTypeId; // SportTypes.sport_type_id
   RangeValues _priceRange = const RangeValues(_priceMin, _priceMax);
@@ -81,7 +93,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   List<Venue> _filterVenues() {
-    final query = _keyword.toLowerCase().trim();
+    final query = _normalizeSearchText(_keyword).trim();
     final checkAvailability = _date != null || _hour != null;
     final date = _date ?? DateTime.now();
 
@@ -91,12 +103,13 @@ class _SearchScreenState extends State<SearchScreen> {
       // Từ khóa: tên sân, địa chỉ, quận/huyện, thành phố, tên dịch vụ
       if (query.isNotEmpty) {
         final inVenue =
-            v.name.toLowerCase().contains(query) ||
-            v.address.toLowerCase().contains(query) ||
-            (v.district ?? '').toLowerCase().contains(query) ||
-            (v.city ?? '').toLowerCase().contains(query);
+            _normalizeSearchText(v.name).contains(query) ||
+            _normalizeSearchText(v.address).contains(query) ||
+            _normalizeSearchText(v.district ?? '').contains(query) ||
+            _normalizeSearchText(v.city ?? '').contains(query);
+
         final inService = services.any(
-          (s) => s.name.toLowerCase().contains(query),
+          (s) => _normalizeSearchText(s.name).contains(query),
         );
         if (!inVenue && !inService) return false;
       }

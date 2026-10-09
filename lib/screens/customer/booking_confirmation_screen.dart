@@ -41,7 +41,8 @@ class BookingConfirmationScreen extends StatelessWidget {
         ? rawArgs
         : <String, dynamic>{};
 
-    final venue = args['venue'] as Venue? ??
+    final venue =
+        args['venue'] as Venue? ??
         (MockStore.venues.isNotEmpty
             ? MockStore.venues.first
             : Venue.mockList().first);
@@ -49,8 +50,7 @@ class BookingConfirmationScreen extends StatelessWidget {
     final date = args['date'] as DateTime? ?? DateTime.now();
     final startTime =
         args['startTime'] as String? ?? args['time'] as String? ?? '08:00';
-    final endTime =
-        args['endTime'] as String? ?? _nextHour(startTime);
+    final endTime = args['endTime'] as String? ?? _nextHour(startTime);
 
     final serviceIds = List<String>.from(
       args['serviceIds'] as List<dynamic>? ?? const [],
@@ -58,20 +58,18 @@ class BookingConfirmationScreen extends StatelessWidget {
 
     final courtPrice =
         (args['courtPrice'] as num?)?.toDouble() ?? venue.pricePerHour;
-    final serviceTotal =
-        (args['serviceTotal'] as num?)?.toDouble() ?? 0;
-    final discount =
-        (args['discount'] as num?)?.toDouble() ?? 0;
-    final discountAmount =
-        (args['discountAmount'] as num?)?.toDouble() ?? 0;
-    final total = (args['total'] as num?)?.toDouble() ??
+    final serviceTotal = (args['serviceTotal'] as num?)?.toDouble() ?? 0;
+    final discount = (args['discount'] as num?)?.toDouble() ?? 0;
+    final discountAmount = (args['discountAmount'] as num?)?.toDouble() ?? 0;
+    final total =
+        (args['total'] as num?)?.toDouble() ??
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
 
     final currentUser = MockStore.currentUser;
-    final selectedServices = MockStore.servicesFor(venue.id)
-        .where((s) => serviceIds.contains(s.id))
-        .toList();
+    final selectedServices = MockStore.servicesFor(
+      venue.id,
+    ).where((s) => serviceIds.contains(s.id)).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -134,9 +132,7 @@ class BookingConfirmationScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.primaryLight,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primary.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -197,12 +193,14 @@ class BookingConfirmationScreen extends StatelessWidget {
                   size: 20,
                 ),
                 SizedBox(width: 8),
-                Text(
-                  'Thông tin người đặt',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: AppTheme.textPrimary,
+                Expanded(
+                  child: Text(
+                    'Thông tin người đặt',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -393,22 +391,20 @@ class BookingConfirmationScreen extends StatelessWidget {
                         )
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
-                          children: selectedServices.map(
-                            (s) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Text(
-                                  '${s.name} • ${s.price.toStringAsFixed(0)} đ/${s.unit}',
-                                  textAlign: TextAlign.end,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                    color: AppTheme.textPrimary,
-                                  ),
+                          children: selectedServices.map((s) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                '${s.name} • ${s.price.toStringAsFixed(0)} đ/${s.unit}',
+                                textAlign: TextAlign.end,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: AppTheme.textPrimary,
                                 ),
-                              );
-                            },
-                          ).toList(),
+                              ),
+                            );
+                          }).toList(),
                         ),
                 ),
               ],
@@ -559,8 +555,12 @@ class BookingConfirmationScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            _buildBullet('Khung giờ chỉ được giữ khi hệ thống tạo đơn đặt sân.'),
-            _buildBullet('Nếu thanh toán thất bại, anh có thể thử lại hoặc chọn phương thức khác.'),
+            _buildBullet(
+              'Khung giờ chỉ được giữ khi hệ thống tạo đơn đặt sân.',
+            ),
+            _buildBullet(
+              'Nếu thanh toán thất bại, anh có thể thử lại hoặc chọn phương thức khác.',
+            ),
             _buildBullet('Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.'),
           ],
         ),
@@ -679,10 +679,7 @@ class BookingConfirmationScreen extends StatelessWidget {
           width: 90,
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppTheme.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ),
         ),
         Expanded(
@@ -700,11 +697,7 @@ class BookingConfirmationScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCostRow(
-    String label,
-    double amount, {
-    Color? valueColor,
-  }) {
+  Widget _buildCostRow(String label, double amount, {Color? valueColor}) {
     final formatted = amount < 0
         ? '-${(-amount).toStringAsFixed(0)} đ'
         : '${amount.toStringAsFixed(0)} đ';
@@ -715,10 +708,7 @@ class BookingConfirmationScreen extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppTheme.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
           ),
         ),
         Text(

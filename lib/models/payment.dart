@@ -2,9 +2,8 @@
 /// method: "cash" | "momo" | "vnpay" | "bank_transfer"
 /// status: "pending" | "success" | "failed" | "refunded"
 class Payment {
-  final String id;
-  final String bookingId;
-  final double amount;
+  final String paymentId; // payment_id (PK)
+  final String bookingId; // booking_id (FK -> Bookings)
   final String method;
   String status;
   final String? transactionCode;
@@ -12,9 +11,8 @@ class Payment {
   final DateTime createdAt;
 
   Payment({
-    required this.id,
+    required this.paymentId,
     required this.bookingId,
-    required this.amount,
     required this.method,
     this.status = 'unpaid',
     this.transactionCode,

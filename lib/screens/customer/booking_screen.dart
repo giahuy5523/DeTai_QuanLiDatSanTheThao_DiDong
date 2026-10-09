@@ -28,14 +28,32 @@ class _BookingScreenState extends State<BookingScreen> {
 
   List<String> _timesFor(Venue venue, {bool includeClosing = false}) {
     final hours = MockStore.hoursOf(venue.id);
-    return [
-      for (
-        var hour = hours[0];
-        hour < hours[1] + (includeClosing ? 1 : 0);
-        hour++
-      )
+    final openingHour = hours[0];
+    final closingHour = hours[1];
+
+    var lastHour = closingHour;
+
+    // Giờ bắt đầu không được là giờ đóng cửa.
+    if (!includeClosing) {
+      lastHour = closingHour - 1;
+    }
+
+    var times = [
+      for (var hour = openingHour; hour <= lastHour; hour++)
         '${hour.toString().padLeft(2, '0')}:00',
     ];
+
+    // Nếu chọn hôm nay thì không hiển thị các giờ bắt đầu đã trôi qua.
+    if (!includeClosing && _sameDate(_date, DateTime.now())) {
+      final now = DateTime.now();
+      final currentMinutes = now.hour * 60 + now.minute;
+
+      times = times.where((time) {
+        return _timeToMinutes(time) > currentMinutes;
+      }).toList();
+    }
+
+    return times;
   }
 
   @override
@@ -138,11 +156,15 @@ class _BookingScreenState extends State<BookingScreen> {
 
   void _applyPromo() {
     final code = _promoController.text.trim().toUpperCase();
-    _appliedPromoCode = null;
+
+    setState(() {
+      _discount = 0;
+      _appliedPromoCode = null;
+      _promoMessage = null;
+    });
 
     if (code.isEmpty) {
       setState(() {
-        _discount = 0;
         _promoMessage = 'Vui lòng nhập mã khuyến mãi.';
       });
       return;
@@ -159,6 +181,7 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() {
       if (promo == null) {
         _discount = 0;
+        _appliedPromoCode = null;
         _promoMessage = 'Mã không hợp lệ hoặc đã hết hạn.';
       } else {
         _discount = promo.discountPercent;
@@ -224,6 +247,11 @@ class _BookingScreenState extends State<BookingScreen> {
       final qty = _selectedServices[service.id] ?? 0;
       return sum + (service.price * qty);
     });
+    debugPrint(
+      'BOOKING SERVICES: ${_selectedServices.toString()} '
+      'serviceTotal=$serviceTotal '
+      'services=${services.map((s) => '${s.id}:${s.price}').toList()}',
+    );
 
     final courtTotal = venue.pricePerHour * _durationHours;
     final subtotal = courtTotal + serviceTotal;
@@ -678,7 +706,10 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   return Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: qty > 0
                           ? AppTheme.primaryLight.withValues(alpha: 0.35)
@@ -722,15 +753,17 @@ class _BookingScreenState extends State<BookingScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline),
-                              color: qty > 0 ? AppTheme.primary : AppTheme.textSecondary,
+                              color: qty > 0
+                                  ? AppTheme.primary
+                                  : AppTheme.textSecondary,
                               onPressed: qty > 0
                                   ? () => setState(() {
-                                        if (qty == 1) {
-                                          _selectedServices.remove(service.id);
-                                        } else {
-                                          _selectedServices[service.id] = qty - 1;
-                                        }
-                                      })
+                                      if (qty == 1) {
+                                        _selectedServices.remove(service.id);
+                                      } else {
+                                        _selectedServices[service.id] = qty - 1;
+                                      }
+                                    })
                                   : null,
                             ),
                             Text(

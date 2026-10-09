@@ -2,18 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
-  if (finder.evaluate().isEmpty) {
-    await tester.scrollUntilVisible(
-      finder,
-      180,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-  }
+  expect(
+    finder,
+    findsOneWidget,
+    reason: 'Không tìm thấy widget cần tap: $finder',
+  );
+
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
