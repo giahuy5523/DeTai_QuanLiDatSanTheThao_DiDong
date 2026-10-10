@@ -32,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
         slivers: [
           // ─── SliverAppBar với banner Nhom1_DatSanTheThao ─────────────────────────
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: 160,
             floating: true,
             snap: true,
             pinned: false,
@@ -47,65 +47,67 @@ class _HomeScreenState extends State<HomeScreen> {
                     end: Alignment.bottomRight,
                   ),
                 ),
-                padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.sports_soccer,
-                          color: Colors.white70,
-                          size: 20,
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.sports_soccer,
+                              color: Colors.white70,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Nhom1_DatSanTheThao',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
+                        const SizedBox(height: 20),
+                        const Flexible(
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Nhom1_DatSanTheThao',
+                              'Tìm sân phù hợp\nvới bạn hôm nay!',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
+                                color: Colors.white,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                letterSpacing: 1,
+                                height: 1.3,
                               ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    const Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Tìm sân phù hợp\nvới bạn hôm nay!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
 
-          // ─── Search bar nổi ────────────────────────────────────────
+          // Thanh tìm kiếm nằm dưới banner, có khoảng cách riêng.
           SliverToBoxAdapter(
-            child: Transform.translate(
-              offset: const Offset(0, -20),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _SearchBar(),
-              ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: _SearchBar(),
             ),
           ),
 
@@ -124,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // ─── Chip lọc môn thể thao ─────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: _SportFilterRow(
                 onSelected: (sport) => setState(() => _sport = sport),
               ),
@@ -206,6 +208,7 @@ class _SearchBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.border),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
