@@ -70,6 +70,14 @@ class MockStore {
     {'id': 5, 'name': 'Pickleball', 'description': 'Sân pickleball'},
   ];
 
+  // Dùng cùng mã môn thể thao kiểu int như Venue và bộ lọc tìm kiếm.
+  static int? sportTypeIdFor(String name) {
+    for (final sport in sportTypes) {
+      if (sport['name'] == name) return sport['id'] as int;
+    }
+    return null;
+  }
+
   // 3. Venues
   static final List<Venue> venues = [
     Venue(
@@ -330,11 +338,19 @@ class MockStore {
     },
   ];
 
+  // Giữ lịch sử các lần thanh toán trong MockStore.
+  static List<Map<String, dynamic>> paymentsOfBooking(String bookingId) =>
+      payments.where((payment) => payment['bookingId'] == bookingId).toList();
+
+  // Ưu tiên lần thanh toán thành công gần nhất cho luồng hủy/hoàn tiền.
+  // Booking.paymentId là tham chiếu tùy chọn đến giao dịch hiện tại.
   static Map<String, dynamic>? paymentOfBooking(String bookingId) {
-    for (final p in payments) {
-      if (p['bookingId'] == bookingId) return p;
+    final matches = paymentsOfBooking(bookingId);
+    if (matches.isEmpty) return null;
+    for (final payment in matches.reversed) {
+      if (payment['status'] == 'success') return payment;
     }
-    return null;
+    return matches.last;
   }
 
   static List<Map<String, dynamic>> timeSlotsFor(
@@ -484,15 +500,18 @@ class MockStore {
     )) {
       return false;
     }
+    final paymentId =
+        booking.paymentId ?? 'pay_${DateTime.now().microsecondsSinceEpoch}';
+    booking.paymentId = paymentId;
     booking.status = 'confirmed';
-    booking.paymentStatus = 'paid';
+    booking.paymentStatus = method == 'cash' ? 'unpaid' : 'paid';
     bookings.add(booking);
     payments.add({
-      'id': booking.paymentId ?? 'pay_${DateTime.now().millisecondsSinceEpoch}',
+      'id': paymentId,
       'bookingId': booking.id,
       'method': method,
       'amount': booking.totalPrice,
-      'status': 'success',
+      'status': method == 'cash' ? 'pending' : 'success',
       'transactionCode': null,
     });
     return true;
