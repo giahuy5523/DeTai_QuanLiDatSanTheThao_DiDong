@@ -7,6 +7,8 @@ coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
 .metadata
+android/.gradle/
+android/.kotlin/
 
 # IDE
 .idea/
