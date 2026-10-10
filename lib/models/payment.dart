@@ -5,6 +5,7 @@ class Payment {
   final String paymentId; // payment_id (PK)
   final String bookingId; // booking_id (FK -> Bookings)
   final String method;
+  final double amount;
   String status;
   final String? transactionCode;
   DateTime? paidAt;
@@ -14,7 +15,8 @@ class Payment {
     required this.paymentId,
     required this.bookingId,
     required this.method,
-    this.status = 'unpaid',
+    required this.amount,
+    this.status = 'pending',
     this.transactionCode,
     this.paidAt,
     DateTime? createdAt,

@@ -88,6 +88,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
         name: _name.text.trim(),
         address: _address.text.trim(),
         sportType: _sportType,
+        sportTypeId: MockStore.sportTypeIdFor(_sportType),
         pricePerHour: double.parse(_price.text.trim()),
         imageUrls: _images.map((image) => image.path).toList(),
         latitude: 0,

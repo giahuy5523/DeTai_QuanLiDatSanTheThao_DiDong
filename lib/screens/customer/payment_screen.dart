@@ -803,7 +803,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final paymentId = 'pay$timestamp';
 
     // 2. Tạo Booking ở trạng thái pending (Khớp bước 32 Sequence & ERD)
-    // Đã bỏ thuộc tính paymentId theo đúng sơ đồ chuẩn hóa ERD
+    // Tham chiếu đến giao dịch thanh toán đang được mô phỏng.
     final pendingBooking = Booking(
       id: bookingId,
       venueId: venue.id,
@@ -817,6 +817,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       totalPrice: total,
       status: 'pending',
       paymentStatus: 'unpaid',
+      paymentId: paymentId,
       promotionCode: promoCode,
       selectedServiceIds: serviceIds,
     );
@@ -855,9 +856,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ? null
         : 'TXN${Random().nextInt(900000) + 100000}';
 
-    payment['status'] = 'success';
+    // Thanh toán tiền mặt chỉ xác nhận đặt chỗ; tiền sẽ thu tại sân.
+    payment['status'] = _method == 'cash' ? 'pending' : 'success';
     payment['transactionCode'] = transactionCode;
-    payment['paidAt'] = DateTime.now();
+    if (_method != 'cash') {
+      payment['paidAt'] = DateTime.now();
+    }
 
     MockStore.bookings.removeWhere((b) => b.id == bookingId);
 
@@ -875,6 +879,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       totalPrice: total,
       status: 'confirmed',
       paymentStatus: _method == 'cash' ? 'unpaid' : 'paid',
+      paymentId: paymentId,
       promotionCode: promoCode,
       selectedServiceIds: serviceIds,
     );
