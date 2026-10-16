@@ -11,7 +11,7 @@ import 'package:sportfield_booking/screens/admin/statistics_screen.dart';
 import 'package:sportfield_booking/screens/owner/manage_venue_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
-import 'widget_test.dart' show start, press;
+
 import 'test_helpers.dart';
 
 class FakePicker extends ImagePicker {

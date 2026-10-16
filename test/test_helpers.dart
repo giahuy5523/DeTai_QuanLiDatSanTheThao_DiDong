@@ -1,6 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:sportfield_booking/main.dart';
+
+Future<void> start(WidgetTester tester) async {
+  await tester.pumpWidget(const SportFieldBookingApp());
+  await tester.pumpAndSettle();
+}
+
+Future<void> press(WidgetTester tester, String text) async {
+  final button = find.widgetWithText(ElevatedButton, text);
+
+  expect(
+    button,
+    findsOneWidget,
+    reason: 'Không tìm thấy ElevatedButton có text "$text".',
+  );
+
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+}
+
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   expect(
     finder,

@@ -7,7 +7,6 @@ import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
 import 'package:sportfield_booking/screens/customer/home_screen.dart';
 import 'test_helpers.dart';
-import 'widget_test.dart' show press;
 
 Future<void> openRoute(
   WidgetTester tester,

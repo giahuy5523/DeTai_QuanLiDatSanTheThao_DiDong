@@ -1,32 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sportfield_booking/main.dart';
+import 'test_helpers.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/screens/auth/login_screen.dart';
 import 'package:sportfield_booking/screens/auth/register_screen.dart';
 import 'package:sportfield_booking/screens/customer/home_screen.dart';
 import 'package:sportfield_booking/screens/owner/manage_venue_screen.dart';
 import 'package:sportfield_booking/screens/admin/statistics_screen.dart';
-
-Future<void> start(WidgetTester tester) async {
-  await tester.pumpWidget(const SportFieldBookingApp());
-  await tester.pumpAndSettle();
-}
-
-Future<void> press(WidgetTester tester, String text) async {
-  final button = find.widgetWithText(ElevatedButton, text);
-
-  expect(
-    button,
-    findsOneWidget,
-    reason: 'Không tìm thấy ElevatedButton có text "$text".',
-  );
-
-  await tester.ensureVisible(button);
-  await tester.pumpAndSettle();
-  await tester.tap(button);
-  await tester.pumpAndSettle();
-}
 
 Future<void> registerForm(
   WidgetTester tester, {
