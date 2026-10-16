@@ -230,7 +230,16 @@ class MockStore {
       {
         'id': 'img${i}a',
         'venueId': 'v$i',
-        'imageUrl': 'https://picsum.photos/seed/venue$i-1/800/500',
+        'imageUrl': [
+          'assets/sports_dataset/football/football_001.jpg',
+          'assets/sports_dataset/badminton/badminton_001.jpg',
+          'assets/sports_dataset/tennis/tennis_001.jpg',
+          'assets/sports_dataset/football/football_002.jpg',
+          'assets/sports_dataset/basketball/basketball_001.jpg',
+          'assets/sports_dataset/pickleball/pickleball_001.jpg',
+          'assets/sports_dataset/badminton/badminton_002.jpg',
+          'assets/sports_dataset/football/football_003.jpg',
+        ][i - 1],
         'isPrimary': true,
         'sortOrder': 1,
       },

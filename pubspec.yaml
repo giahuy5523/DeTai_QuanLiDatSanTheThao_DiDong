@@ -25,3 +25,9 @@ flutter:
   assets:
     - assets/data/mock_data.json
     - assets/db/database.sql
+    - assets/sports_dataset/
+    - assets/sports_dataset/football/
+    - assets/sports_dataset/badminton/
+    - assets/sports_dataset/tennis/
+    - assets/sports_dataset/basketball/
+    - assets/sports_dataset/pickleball/
