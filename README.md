@@ -56,7 +56,7 @@ Môi trường tối thiểu: Flutter 3.41, Dart 3.11 (do `image_picker`). Máy 
 
 Màn đăng ký sân chọn ảnh thật từ máy bằng `image_picker`, xem trước/xóa ảnh và yêu cầu tối thiểu 3 ảnh khác đường dẫn. Sân gửi duyệt được thêm vào dữ liệu giả của phiên chạy; chưa upload Storage. Danh sách khách hàng chỉ hiển thị sân đã duyệt.
 
-Tài liệu phần Gia Huy: [tiến độ và phân tích](docs/gia_huy/README.md), [test thủ công](docs/gia_huy/test_thu_cong.md), [học code và vấn đáp](docs/gia_huy/hoc_code_va_van_dap.md).
+Tài liệu kỹ thuật: [phân tích yêu cầu và Use Case](docs/gia_huy/README.md), [hướng dẫn kiểm thử thủ công](docs/gia_huy/test_thu_cong.md).
 
 ```bash
 flutter pub get
