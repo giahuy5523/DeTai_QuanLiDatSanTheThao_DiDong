@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   image_picker: ^1.2.4
+  path_provider: ^2.1.6
 
 dev_dependencies:
   integration_test:
@@ -23,5 +24,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/images/auth_banners/
     - assets/data/mock_data.json
     - assets/db/database.sql
