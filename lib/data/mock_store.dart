@@ -536,6 +536,31 @@ class MockStore {
 
   static bool emailExists(String email) => findUserByEmail(email) != null;
 
+  /// Replace this update point with the shared SQLite repository later.
+  static AppUser? updateCurrentProfile({
+    required String userId,
+    required String name,
+    required String phone,
+    required String? avatarPath,
+  }) {
+    final user = currentUser;
+    if (user == null || user.id != userId) return null;
+    final index = users.indexWhere((entry) => entry.id == userId);
+    if (index < 0) return null;
+    final updated = AppUser(
+      id: user.id,
+      name: name.trim(),
+      email: user.email,
+      phone: phone.trim(),
+      password: user.password,
+      role: user.role,
+      avatarPath: avatarPath,
+    );
+    users[index] = updated;
+    currentUser = updated;
+    return updated;
+  }
+
   static void addUser(AppUser user) {
     if (emailExists(user.email)) throw ArgumentError('Email đã được sử dụng');
     users.add(user);

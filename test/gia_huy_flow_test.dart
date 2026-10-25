@@ -41,6 +41,7 @@ XFile photo(int index) => XFile.fromData(
 Future<void> login(WidgetTester tester, String role) async {
   await start(tester);
   await tester.enterText(find.byType(TextFormField).first, '$role@gmail.com');
+  await tester.enterText(find.byType(TextFormField).last, '123456');
   await press(tester, 'Đăng nhập');
 }
 

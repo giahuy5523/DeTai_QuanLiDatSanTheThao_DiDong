@@ -15,10 +15,11 @@ Future<void> registerForm(
   String password = 'abcdef',
   String confirmation = 'abcdef',
 }) async {
+  await tester.ensureVisible(find.text('Chưa có tài khoản? Đăng ký'));
   await tester.tap(find.text('Chưa có tài khoản? Đăng ký'));
   await tester.pumpAndSettle();
   final fields = find.byType(TextFormField);
-  final values = ['Gia Huy', email, phone, password, confirmation];
+  final values = [phone, email, 'Gia Huy', password, confirmation];
   for (var i = 0; i < values.length; i++) {
     await tester.ensureVisible(fields.at(i));
     await tester.enterText(fields.at(i), values[i]);
@@ -47,6 +48,7 @@ void main() {
         find.byType(TextFormField).first,
         ' ${role.toUpperCase()}@GMAIL.COM ',
       );
+      await tester.enterText(find.byType(TextFormField).last, '123456');
       await press(tester, 'Đăng nhập');
       final screen = role == 'customer'
           ? HomeScreen
@@ -95,9 +97,7 @@ void main() {
       await start(tester);
       await registerForm(tester, email: ' NEW@GMAIL.COM ');
       if (role == 'owner') {
-        final dropdown = find.byType(DropdownButtonFormField<String>);
-        await tester.ensureVisible(dropdown);
-        await tester.tap(dropdown);
+        await tester.ensureVisible(find.text('Chủ sân'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Chủ sân').last);
         await tester.pumpAndSettle();
@@ -117,10 +117,15 @@ void main() {
         expect(find.text('Chưa có đơn đặt sân.'), findsOneWidget);
         await tester.tap(find.text('Tài khoản'));
         await tester.pumpAndSettle();
-        expect(find.text('Gia Huy'), findsOneWidget);
-        final logout = find.text('Đăng xuất');
+        expect(find.text('Gia Huy'), findsWidgets);
+        final logout = find.widgetWithText(OutlinedButton, 'Đăng xuất');
+        ScaffoldMessenger.of(tester.element(logout)).hideCurrentSnackBar();
+        await tester.pumpAndSettle();
         await tester.ensureVisible(logout);
+        await tester.pumpAndSettle();
         await tester.tap(logout);
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Đăng xuất'));
       } else {
         expect(find.text('Sân bóng đá Thành Công'), findsNothing);
         await tester.tap(find.byTooltip('Đăng xuất'));
@@ -177,6 +182,7 @@ void main() {
   ) async {
     await start(tester);
     await tester.enterText(find.byType(TextFormField).first, 'admin@gmail.com');
+    await tester.enterText(find.byType(TextFormField).last, '123456');
     await press(tester, 'Đăng nhập');
     await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
@@ -205,15 +211,15 @@ void main() {
     'Empty registration is rejected and admin registration is unavailable',
     (tester) async {
       await start(tester);
+      await tester.ensureVisible(find.text('Chưa có tài khoản? Đăng ký'));
       await tester.tap(find.text('Chưa có tài khoản? Đăng ký'));
       await tester.pumpAndSettle();
       await press(tester, 'Tạo tài khoản');
       expect(find.text('Không được để trống'), findsOneWidget);
       expect(MockStore.users.length, originalUsers.length);
-      final dropdown = tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
-      );
-      expect(dropdown.items!.map((item) => item.value), ['customer', 'owner']);
+      expect(find.text('Khách hàng'), findsOneWidget);
+      expect(find.text('Chủ sân'), findsOneWidget);
+      expect(find.text('Admin'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

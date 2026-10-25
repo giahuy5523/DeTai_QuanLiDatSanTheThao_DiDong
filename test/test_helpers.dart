@@ -9,7 +9,10 @@ Future<void> start(WidgetTester tester) async {
 }
 
 Future<void> press(WidgetTester tester, String text) async {
-  final button = find.widgetWithText(ElevatedButton, text);
+  final button = find.widgetWithText(
+    ElevatedButton,
+    text == 'Đăng nhập' || text == 'Tạo tài khoản' ? text.toUpperCase() : text,
+  );
 
   expect(
     button,

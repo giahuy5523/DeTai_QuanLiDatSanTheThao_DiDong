@@ -23,7 +23,10 @@ void main() {
     await tester.pumpWidget(const SportFieldBookingApp());
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, 'owner@gmail.com');
-    await tester.tap(find.text('Đăng nhập'));
+    await tester.enterText(find.byType(TextFormField).last, '123456');
+    await tester.ensureVisible(find.text('ĐĂNG NHẬP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ĐĂNG NHẬP'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Đăng ký sân'));
     await tester.pumpAndSettle();
