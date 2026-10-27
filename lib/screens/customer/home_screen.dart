@@ -20,9 +20,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final venues = MockStore.venues
-        .where((v) =>
-            v.status == 'approved' &&
-            (_sport == null || v.sportType == _sport))
+        .where(
+          (v) =>
+              v.status == 'approved' &&
+              (_sport == null || v.sportType == _sport),
+        )
         .toList();
     final allApproved = MockStore.venues
         .where((v) => v.status == 'approved')
@@ -69,9 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Text(
                       'Sân nổi bật',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
-                          ),
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
                   ),
                   TextButton(
@@ -103,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   scrollDirection: Axis.horizontal,
                   itemCount: venues.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 14),
+                  separatorBuilder: (_, _) => const SizedBox(width: 14),
                   itemBuilder: (context, i) =>
                       _buildFeaturedCard(context, venues[i]),
                 ),
@@ -166,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 8, 20, 30),
+              padding: const EdgeInsets.fromLTRB(22, 8, 20, 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -236,17 +238,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       color: AppTheme.primary,
       alignment: Alignment.center,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.stadium_outlined, color: Colors.white70, size: 42),
-          const SizedBox(height: 8),
-          Text(
-            venue.name,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 15),
-          ),
-        ],
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.stadium_outlined, color: Colors.white70, size: 42),
+            const SizedBox(height: 8),
+            Text(
+              'Ảnh sân thể thao',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 15),
+            ),
+          ],
+        ),
       ),
     );
   }

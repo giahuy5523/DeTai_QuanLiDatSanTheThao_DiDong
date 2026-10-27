@@ -8,6 +8,9 @@ class AppUser {
   final String password;
   final String role;
 
+  /// Application-owned local image; persist the path when SQLite is integrated.
+  final String? avatarPath;
+
   AppUser({
     required this.id,
     required this.name,
@@ -15,5 +18,6 @@ class AppUser {
     required this.phone,
     required this.password,
     this.role = 'customer',
+    this.avatarPath,
   });
 }

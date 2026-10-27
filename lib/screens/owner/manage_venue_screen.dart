@@ -68,11 +68,12 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               itemCount: ownVenues.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
+              separatorBuilder: (_, _) => const SizedBox(height: 18),
               itemBuilder: (context, index) {
                 final venue = ownVenues[index];
                 final images = MockStore.imageUrlsOf(venue.id);
                 return Container(
+                  key: ValueKey(venue.id),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(22),
@@ -113,8 +114,8 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                                   color: venue.status == 'approved'
                                       ? const Color(0xFFE8F4EF)
                                       : venue.status == 'pending'
-                                          ? const Color(0xFFFFF0C2)
-                                          : const Color(0xFFFBE4E4),
+                                      ? const Color(0xFFFFF0C2)
+                                      : const Color(0xFFFBE4E4),
                                   borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: Text(
@@ -125,8 +126,8 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                                     color: venue.status == 'approved'
                                         ? const Color(0xFF087451)
                                         : venue.status == 'pending'
-                                            ? const Color(0xFF806300)
-                                            : Colors.red.shade700,
+                                        ? const Color(0xFF806300)
+                                        : Colors.red.shade700,
                                   ),
                                 ),
                               ),
@@ -187,7 +188,10 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                                   child: OutlinedButton.icon(
                                     onPressed: () =>
                                         _showEditVenue(context, venue),
-                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                    ),
                                     label: const Text('Thông tin'),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: const Color(0xFF087451),
@@ -239,12 +243,14 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                                       color: Color(0xFF087451),
                                     ),
                                     SizedBox(width: 8),
-                                    Text(
-                                      'Quản lý dịch vụ kèm theo',
-                                      style: TextStyle(
-                                        color: Color(0xFF087451),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
+                                    Expanded(
+                                      child: Text(
+                                        'Quản lý dịch vụ kèm theo',
+                                        style: TextStyle(
+                                          color: Color(0xFF087451),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ],
