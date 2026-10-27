@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
-import '../../widgets/venue_card.dart';
+import '../../widgets/venue_image.dart';
 
 /// Trang chủ khách hàng - hiển thị banner tìm kiếm và danh sách sân nổi bật.
 /// Thuộc CustomerShell, không có BottomNavBar riêng.
@@ -19,134 +20,58 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final venues = MockStore.venues
-        .where(
-          (v) =>
-              v.status == 'approved' &&
-              (_sport == null || v.sportType == _sport),
-        )
+        .where((v) =>
+            v.status == 'approved' &&
+            (_sport == null || v.sportType == _sport))
+        .toList();
+    final allApproved = MockStore.venues
+        .where((v) => v.status == 'approved')
         .toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: CustomScrollView(
         slivers: [
-          // ─── SliverAppBar với banner Nhom1_DatSanTheThao ─────────────────────────
-          SliverAppBar(
-            expandedHeight: 160,
-            floating: true,
-            snap: true,
-            pinned: false,
-            automaticallyImplyLeading: false,
-            backgroundColor: AppTheme.primary,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primary, Color(0xFF047857)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 245,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  if (allApproved.isNotEmpty)
+                    _buildBanner(context, allApproved.first)
+                  else
+                    _buildEmptyBanner(),
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 0,
+                    child: _SearchBar(),
                   ),
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.sports_soccer,
-                              color: Colors.white70,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Nhom1_DatSanTheThao',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        const Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Tìm sân phù hợp\nvới bạn hôm nay!',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                height: 1.3,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                ],
               ),
             ),
           ),
-
-          // Thanh tìm kiếm nằm dưới banner, có khoảng cách riêng.
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-              child: _SearchBar(),
-            ),
-          ),
-
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoutes.venueList),
-                icon: const Icon(Icons.list_alt),
-                label: const Text('Xem tất cả sân'),
-              ),
-            ),
-          ),
-
-          // ─── Chip lọc môn thể thao ─────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: const EdgeInsets.only(top: 24),
               child: _SportFilterRow(
                 onSelected: (sport) => setState(() => _sport = sport),
               ),
             ),
           ),
-
-          // ─── Section tiêu đề ─────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Text(
                       'Sân nổi bật',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimary,
+                          ),
                     ),
                   ),
                   TextButton(
@@ -158,40 +83,273 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-
-          // ─── Danh sách sân ──────────────────────────────────────────
-          venues.isEmpty
-              ? const SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text(
-                        'Hiện chưa có sân nào được duyệt.',
-                        style: TextStyle(color: AppTheme.textSecondary),
-                      ),
-                    ),
-                  ),
-                )
-              : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: VenueCard(
-                          venue: venues[i],
-                          onTap: () => Navigator.pushNamed(
-                            context,
-                            AppRoutes.venueDetail,
-                            arguments: venues[i],
-                          ),
-                        ),
-                      ),
-                      childCount: venues.length,
-                    ),
+          if (venues.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(28),
+                child: Center(
+                  child: Text(
+                    'Hiện chưa có sân nào được duyệt.',
+                    style: TextStyle(color: AppTheme.textSecondary),
                   ),
                 ),
+              ),
+            )
+          else
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 230,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: venues.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 14),
+                  itemBuilder: (context, i) =>
+                      _buildFeaturedCard(context, venues[i]),
+                ),
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+              child: OutlinedButton(
+                onPressed: () =>
+                    Navigator.pushNamed(context, AppRoutes.venueList),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primary,
+                  side: const BorderSide(color: AppTheme.primary),
+                  shape: const StadiumBorder(),
+                ),
+                child: const Text('Xem tất cả sân'),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBanner(BuildContext context, Venue venue) {
+    // Ảnh banner sân vận động lấy từ nguồn ảnh trực tuyến.
+    const bannerImageUrl =
+        'https://images.pexels.com/photos/30747154/pexels-photo-30747154.jpeg?auto=compress&cs=tinysrgb&w=1600';
+
+    return Container(
+      height: 220,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppTheme.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            bannerImageUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPlaceholderBanner(venue),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.12),
+                  AppTheme.primary.withValues(alpha: 0.88),
+                ],
+              ),
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 8, 20, 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Xin chào, ${MockStore.currentUser?.name ?? 'bạn'}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Tìm sân phù hợp\nvới bạn hôm nay!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      height: 1.25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Đặt sân nhanh chóng',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyBanner() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppTheme.primary, Color(0xFF047857)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+      ),
+      child: const SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(22, 28, 20, 60),
+          child: Text(
+            'Xin chào!\nTìm sân phù hợp với bạn hôm nay!',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 21,
+              height: 1.3,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderBanner(Venue venue) {
+    return Container(
+      color: AppTheme.primary,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.stadium_outlined, color: Colors.white70, size: 42),
+          const SizedBox(height: 8),
+          Text(
+            venue.name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 15),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturedCard(BuildContext context, Venue venue) {
+    final images = MockStore.imageUrlsOf(venue.id);
+    return SizedBox(
+      width: 218,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.venueDetail,
+            arguments: venue,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 104,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (images.isNotEmpty)
+                      VenueImage(
+                        source: images.first,
+                        placeholder: _buildPlaceholderBanner(venue),
+                      )
+                    else
+                      _buildPlaceholderBanner(venue),
+                    Positioned(
+                      left: 10,
+                      top: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          venue.sportType,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                child: Text(
+                  venue.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+                child: Text(
+                  venue.address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 5, 10, 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.star, color: Color(0xFFFFC928), size: 17),
+                    const SizedBox(width: 4),
+                    const Text('4.8', style: TextStyle(fontSize: 12)),
+                    const Spacer(),
+                    Flexible(
+                      child: Text(
+                        '${venue.pricePerHour.toStringAsFixed(0)}đ/1 giờ',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -204,10 +362,10 @@ class _SearchBar extends StatelessWidget {
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, AppRoutes.search),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppTheme.border),
           boxShadow: [
             BoxShadow(
@@ -225,18 +383,6 @@ class _SearchBar extends StatelessWidget {
               child: Text(
                 'Tìm tên sân, khu vực, môn thể thao...',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.tune_rounded,
-                color: AppTheme.primary,
-                size: 18,
               ),
             ),
           ],

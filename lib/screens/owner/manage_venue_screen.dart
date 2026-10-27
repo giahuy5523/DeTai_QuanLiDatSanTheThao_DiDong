@@ -4,6 +4,7 @@ import '../../models/booking.dart';
 import '../../models/user.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
+import '../../widgets/venue_image.dart';
 
 class ManageVenueScreen extends StatefulWidget {
   const ManageVenueScreen({super.key});
@@ -20,8 +21,14 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
         .toList();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F4F8),
       appBar: AppBar(
-        title: const Text('Quản lý sân & lịch đặt'),
+        backgroundColor: const Color(0xFFF5F4F8),
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'Quản lý sân và lịch đặt',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
         actions: [
           IconButton(
             tooltip: 'Đăng xuất',
@@ -35,9 +42,12 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
               );
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF087451),
+        foregroundColor: Colors.white,
         onPressed: () async {
           final result = await Navigator.pushNamed(
             context,
@@ -55,81 +65,215 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
       ),
       body: ownVenues.isEmpty
           ? const Center(child: Text('Bạn chưa có sân nào được đăng ký.'))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ...ownVenues.map(
-                  (venue) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              itemCount: ownVenues.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 18),
+              itemBuilder: (context, index) {
+                final venue = ownVenues[index];
+                final images = MockStore.imageUrlsOf(venue.id);
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.035),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 126,
+                        width: double.infinity,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (images.isNotEmpty)
+                              VenueImage(
+                                source: images.first,
+                                placeholder: _buildVenuePlaceholder(venue),
+                              )
+                            else
+                              _buildVenuePlaceholder(venue),
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: venue.status == 'approved'
+                                      ? const Color(0xFFE8F4EF)
+                                      : venue.status == 'pending'
+                                          ? const Color(0xFFFFF0C2)
+                                          : const Color(0xFFFBE4E4),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
                                 child: Text(
-                                  venue.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 17,
+                                  _statusLabel(venue.status),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: venue.status == 'approved'
+                                        ? const Color(0xFF087451)
+                                        : venue.status == 'pending'
+                                            ? const Color(0xFF806300)
+                                            : Colors.red.shade700,
                                   ),
                                 ),
                               ),
-                              Chip(label: Text(_statusLabel(venue.status))),
-                            ],
-                          ),
-                          Text(
-                            venue.address,
-                            style: TextStyle(color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${venue.sportType} • ${venue.pricePerHour.toStringAsFixed(0)} đ/giờ',
-                            style: TextStyle(color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () =>
-                                      _showEditVenue(context, venue),
-                                  icon: const Icon(Icons.edit),
-                                  label: const Text('Thông tin'),
-                                ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 9, 16, 13),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              venue.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () =>
-                                      _showBookings(context, venue.id),
-                                  icon: const Icon(Icons.calendar_month),
-                                  label: const Text('Lịch đặt'),
-                                ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              venue.address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: () => Navigator.pushNamed(
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    venue.sportType,
+                                    style: const TextStyle(
+                                      color: Color(0xFF72958A),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${venue.pricePerHour.toStringAsFixed(0)}đ/1 giờ',
+                                  style: const TextStyle(
+                                    color: Color(0xFF087451),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _showEditVenue(context, venue),
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    label: const Text('Thông tin'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF087451),
+                                      side: const BorderSide(
+                                        color: Color(0xFF78A99A),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 9,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _showBookings(context, venue.id),
+                                    icon: const Icon(
+                                      Icons.calendar_month_outlined,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Lịch đặt'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF087451),
+                                      side: const BorderSide(
+                                        color: Color(0xFF78A99A),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 9,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            InkWell(
+                              onTap: () => Navigator.pushNamed(
                                 context,
                                 AppRoutes.manageService,
                                 arguments: venue.id,
                               ),
-                              icon: const Icon(Icons.room_service_outlined),
-                              label: const Text('Quản lý dịch vụ kèm theo'),
+                              child: const Padding(
+                                padding: EdgeInsets.only(top: 2),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.restaurant_outlined,
+                                      size: 18,
+                                      color: Color(0xFF087451),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Quản lý dịch vụ kèm theo',
+                                      style: TextStyle(
+                                        color: Color(0xFF087451),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
+    );
+  }
+
+  Widget _buildVenuePlaceholder(Venue venue) {
+    return Container(
+      color: const Color(0xFF087451),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.image_outlined, color: Colors.white70, size: 30),
+          const SizedBox(height: 5),
+          const Text('Ảnh sân', style: TextStyle(color: Colors.white70)),
+        ],
+      ),
     );
   }
 
