@@ -254,6 +254,19 @@ class MockStore {
     return rows.map((e) => e['imageUrl'] as String).toList();
   }
 
+  static void setVenueImages(String venueId, List<String> urls) {
+  venueImages.removeWhere((e) => e['venueId'] == venueId);
+  for (var i = 0; i < urls.length; i++) {
+    venueImages.add({
+      'id': 'img_${venueId}_$i',
+      'venueId': venueId,
+      'imageUrl': urls[i],
+      'isPrimary': i == 0,
+      'sortOrder': i + 1,
+      });
+    }
+  }
+
   static const Map<String, List<int>> openHours = {
     'v1': [6, 22],
     'v2': [6, 22],
