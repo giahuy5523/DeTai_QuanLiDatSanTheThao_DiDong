@@ -33,3 +33,5 @@ flutter:
     - assets/sports_dataset/tennis/
     - assets/sports_dataset/basketball/
     - assets/sports_dataset/pickleball/
+    - assets/payment/
+    - assets/services/

@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
@@ -251,7 +250,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             _priceLine('Tiền thuê sân', courtPrice),
             if (serviceTotal > 0) _priceLine('Dịch vụ', serviceTotal),
             if (discountAmount > 0)
-              _priceLine('Giảm giá', -discountAmount, positive: true),
+              _priceLine(discount > 0 ? 'Giảm giá (${discount.toStringAsFixed(0)}%)' : 'Giảm giá', -discountAmount, positive: true),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -415,6 +414,44 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  Widget _paymentMethodVisual(String id) {
+    final assetByMethod = <String, String>{
+      'momo': 'assets/payment/momo.jpg',
+      'vnpay': 'assets/payment/vnpay.jpg',
+      'bank_transfer': 'assets/payment/bank_transfer.jpg',
+    };
+    final asset = assetByMethod[id];
+    if (asset == null) {
+      return Icon(
+        _paymentIcon(id),
+        color: _method == id ? AppTheme.primary : AppTheme.textSecondary,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Image.asset(
+        asset,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => Tooltip(
+          message: 'Thiếu ảnh logo: $asset',
+          child: Center(
+            child: Text(
+              'Thiếu\nlogo',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: _method == id
+                    ? AppTheme.primary
+                    : AppTheme.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMethodCard({
     required String id,
     required String title,
@@ -453,10 +490,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 color: selected ? Colors.white : AppTheme.background,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                _paymentIcon(id),
-                color: selected ? AppTheme.primary : AppTheme.textSecondary,
-              ),
+              child: _paymentMethodVisual(id),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -801,10 +835,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final bookingId = 'b$timestamp';
     final paymentId = 'pay$timestamp';
+    final normalizedPromoCode = promoCode?.trim().toUpperCase();
 
-    // 2. Tạo Booking ở trạng thái pending (Khớp bước 32 Sequence & ERD)
-    // Tham chiếu đến giao dịch thanh toán đang được mô phỏng.
-    final pendingBooking = Booking(
+    final matchingPromotion = normalizedPromoCode == null ||
+            normalizedPromoCode.isEmpty
+        ? null
+        : MockStore.promotions
+              .where(
+                (p) =>
+                    p.code.trim().toUpperCase() == normalizedPromoCode &&
+                    p.isValidAt(now),
+              )
+              .firstOrNull;
+
+    final promoId = matchingPromotion?.id;
+
+    final booking = Booking(
       id: bookingId,
       venueId: venue.id,
       userId: userId,
@@ -819,84 +865,48 @@ class _PaymentScreenState extends State<PaymentScreen> {
       paymentStatus: 'unpaid',
       paymentId: paymentId,
       promotionCode: promoCode,
+      promoId: promoId,
       selectedServiceIds: serviceIds,
     );
 
-    MockStore.addBooking(pendingBooking);
-
-    // 3. Tạo Payments ở trạng thái pending (Khớp bước 41 Sequence & Bảng Payments trong ERD)
-    final payment = <String, dynamic>{
-      'id': paymentId,
-      'bookingId': bookingId, // Khóa ngoại FK trỏ tới Bookings
-      'method': _method,
-      'amount': total,
-      'status': 'pending',
-      'transactionCode': null,
-      'createdAt': DateTime.now(),
-    };
-    MockStore.payments.add(payment);
-
-    final paymentSuccess = !_simulateFailure;
-
-    if (!paymentSuccess) {
-      // Thanh toán thất bại (Khớp bước 46 Sequence)
-      payment['status'] = 'failed';
-      payment['transactionCode'] = 'TXN-FAILED-$timestamp';
-
-      // Cập nhật booking trạng thái cancelled/failed thay vì xóa cứng
-      MockStore.bookings.removeWhere((b) => b.id == bookingId);
-
-      setState(() => _isProcessing = false);
-      await _showPaymentFailed(bookingId: bookingId, paymentId: paymentId);
-      return;
-    }
-
-    // 4. Thanh toán thành công (Khớp bước 42-43 Sequence)
-    final transactionCode = _method == 'cash'
-        ? null
-        : 'TXN${Random().nextInt(900000) + 100000}';
-
-    // Thanh toán tiền mặt chỉ xác nhận đặt chỗ; tiền sẽ thu tại sân.
-    payment['status'] = _method == 'cash' ? 'pending' : 'success';
-    payment['transactionCode'] = transactionCode;
-    if (_method != 'cash') {
-      payment['paidAt'] = DateTime.now();
-    }
-
-    MockStore.bookings.removeWhere((b) => b.id == bookingId);
-
-    // Cập nhật trạng thái Booking sang confirmed & paid (hoặc unpaid nếu thanh toán tiền mặt)
-    final confirmedBooking = Booking(
-      id: bookingId,
-      venueId: venue.id,
-      userId: userId,
-      date: date,
-      startTime: startTime,
-      endTime: endTime,
-      originalAmount: courtPrice,
-      serviceAmount: serviceTotal,
-      discountAmount: discountAmount,
-      totalPrice: total,
-      status: 'confirmed',
-      paymentStatus: _method == 'cash' ? 'unpaid' : 'paid',
-      paymentId: paymentId,
-      promotionCode: promoCode,
-      selectedServiceIds: serviceIds,
+    final result = MockStore.processBookingPayment(
+      booking: booking,
+      method: _method,
+      simulateFailure: _simulateFailure,
     );
 
-    MockStore.addBooking(confirmedBooking);
-
-    // 5. Tăng lượt sử dụng mã giảm giá (Cập nhật sau khi thanh toán thành công)
-    if (promoCode != null && promoCode.isNotEmpty) {
-      try {
-        final dynamic promo = MockStore.promotions.firstWhere(
-          (p) => p.code.toLowerCase() == promoCode.toLowerCase(),
-        );
-        promo.usedCount = (promo.usedCount ?? 0) + 1;
-      } catch (_) {}
-    }
+    if (!mounted) return;
 
     setState(() => _isProcessing = false);
+
+    if (!result.isSuccess) {
+      if (result.failureReason == 'Khung giờ không còn trống.') {
+        await _showSlotUnavailable();
+      } else if (result.booking != null && result.payment != null) {
+        await _showPaymentFailed(
+          bookingId: bookingId,
+          paymentId: paymentId,
+        );
+      } else {
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Không thể xử lý đặt sân'),
+            content: Text(
+              result.failureReason ??
+                  'Thông tin đặt sân không hợp lệ. Vui lòng kiểm tra và thử lại.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Đóng'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
 
     await _showPaymentSuccess(
       venue: venue,
@@ -906,7 +916,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       total: total,
       bookingId: bookingId,
       paymentId: paymentId,
-      transactionCode: transactionCode,
+      transactionCode: result.transactionCode,
     );
   }
 

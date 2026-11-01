@@ -3,6 +3,7 @@ import '../../data/mock_store.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/venue_image.dart';
 
 /// Màn hình xác nhận thông tin đặt sân.
 /// Luồng: Chọn sân -> Xác nhận thông tin -> Chọn phương thức thanh toán.
@@ -229,6 +230,43 @@ class BookingConfirmationScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildVenuePhoto(Venue venue) {
+    final images = MockStore.imageUrlsOf(venue.id);
+    if (images.isEmpty) {
+      return _missingVenueImage('Chưa có ảnh cho sân ${venue.name}.');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: VenueImage(
+          source: images.first,
+          placeholder: _missingVenueImage(
+            'Ảnh sân ${venue.name} không tải được. Kiểm tra đường dẫn ảnh.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _missingVenueImage(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+      ),
+    );
+  }
+
   Widget _buildVenueCard(Venue venue) {
     return Card(
       child: Padding(
@@ -236,6 +274,8 @@ class BookingConfirmationScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildVenuePhoto(venue),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Icon(

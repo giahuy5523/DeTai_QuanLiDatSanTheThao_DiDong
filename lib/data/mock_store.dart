@@ -1,8 +1,29 @@
+import 'dart:math';
 import '../models/booking.dart';
 import '../models/promotion.dart';
 import '../models/service.dart';
 import '../models/user.dart';
 import '../models/venue.dart';
+
+/// Kết quả xử lý thanh toán và tạo đơn đặt sân.
+/// Điểm tích hợp để sau này chuyển đổi sang SQLite Repository transaction.
+class BookingPaymentResult {
+  final bool isSuccess;
+  final bool isSlotAvailable;
+  final String? failureReason;
+  final Booking? booking;
+  final Map<String, dynamic>? payment;
+  final String? transactionCode;
+
+  const BookingPaymentResult({
+    required this.isSuccess,
+    required this.isSlotAvailable,
+    this.failureReason,
+    this.booking,
+    this.payment,
+    this.transactionCode,
+  });
+}
 
 class MockStore {
   MockStore._();
@@ -483,6 +504,14 @@ class MockStore {
       return false;
     }
 
+    // Nếu chọn hôm nay thì giờ bắt đầu không được trong quá khứ
+    if (_sameDay(date, now)) {
+      final nowMinutes = now.hour * 60 + now.minute;
+      if (from <= nowMinutes) {
+        return false;
+      }
+    }
+
     // Kiểm tra trùng lịch với các booking đã confirmed hoặc pending
     return !bookings.any(
       (booking) =>
@@ -494,37 +523,261 @@ class MockStore {
     );
   }
 
-  static bool confirmBooking(Booking booking, String method) {
+  /// Xử lý tạo booking và payment thống nhất theo đúng quy ước nghiệp vụ.
+  /// Điểm tích hợp tập trung để sau này thay bằng SQLite Repository transaction.
+  static BookingPaymentResult processBookingPayment({
+    required Booking booking,
+    required String method,
+    bool simulateFailure = false,
+    String? transactionCode,
+  }) {
+    // 1. Kiểm tra tính hợp lệ cơ bản của đơn và phương thức
     if (!booking.totalPrice.isFinite ||
         booking.totalPrice < 0 ||
         !['cash', 'momo', 'vnpay', 'bank_transfer'].contains(method) ||
         bookings.any((item) => item.id == booking.id)) {
-      return false;
+      return const BookingPaymentResult(
+        isSuccess: false,
+        isSlotAvailable: false,
+        failureReason: 'Thông tin đơn đặt sân hoặc phương thức không hợp lệ.',
+      );
     }
+
+    // 2. Kiểm tra mã khuyến mãi trước khi ghi nhận booking/payment.
+    final normalizedPromoCode = booking.promotionCode?.trim().toUpperCase();
+    final hasPromoCode =
+        normalizedPromoCode != null && normalizedPromoCode.isNotEmpty;
+    final hasPromoId = booking.promoId != null && booking.promoId!.isNotEmpty;
+
+    final amountsAreValid =
+        booking.originalAmount.isFinite &&
+        booking.originalAmount >= 0 &&
+        booking.serviceAmount.isFinite &&
+        booking.serviceAmount >= 0 &&
+        booking.discountAmount.isFinite &&
+        booking.discountAmount >= 0 &&
+        booking.totalPrice.isFinite &&
+        booking.totalPrice >= 0;
+
+    final subtotal = booking.originalAmount + booking.serviceAmount;
+
+    if (!amountsAreValid || !subtotal.isFinite) {
+      return const BookingPaymentResult(
+        isSuccess: false,
+        isSlotAvailable: true,
+        failureReason: 'Số tiền đặt sân không hợp lệ.',
+      );
+    }
+
+    if (hasPromoCode) {
+      final promotion = promotions
+          .where(
+            (p) => p.code.trim().toUpperCase() == normalizedPromoCode,
+          )
+          .firstOrNull;
+
+      if (promotion == null || !promotion.isValidAt(DateTime.now())) {
+        return const BookingPaymentResult(
+          isSuccess: false,
+          isSlotAvailable: true,
+          failureReason: 'Mã khuyến mãi không hợp lệ hoặc đã hết hạn.',
+        );
+      }
+
+      final expectedDiscount =
+          subtotal * promotion.discountPercent / 100;
+      final expectedTotal = subtotal - expectedDiscount;
+
+      if (!expectedDiscount.isFinite ||
+          !expectedTotal.isFinite ||
+          expectedDiscount < 0 ||
+          expectedTotal < 0 ||
+          booking.promoId != promotion.id ||
+          (booking.discountAmount - expectedDiscount).abs() > 0.01 ||
+          (booking.totalPrice - expectedTotal).abs() > 0.01) {
+        return const BookingPaymentResult(
+          isSuccess: false,
+          isSlotAvailable: true,
+          failureReason: 'Thông tin giảm giá không khớp với mã khuyến mãi.',
+        );
+      }
+    } else {
+      if (hasPromoId ||
+          booking.discountAmount > 0.01 ||
+          (booking.totalPrice - subtotal).abs() > 0.01) {
+        return const BookingPaymentResult(
+          isSuccess: false,
+          isSlotAvailable: true,
+          failureReason: 'Thông tin đơn đặt sân hoặc khuyến mãi không hợp lệ.',
+        );
+      }
+    }
+    // 3. Kiểm tra lại tính khả dụng của khung giờ ngay trước khi ghi nhận
     if (!isRangeAvailable(
       booking.venueId,
       booking.date,
       booking.startTime,
       booking.endTime,
     )) {
-      return false;
+      return const BookingPaymentResult(
+        isSuccess: false,
+        isSlotAvailable: false,
+        failureReason: 'Khung giờ không còn trống.',
+      );
     }
+
     final paymentId =
         booking.paymentId ?? 'pay_${DateTime.now().microsecondsSinceEpoch}';
     booking.paymentId = paymentId;
+
+    final isOnlinePayment = method != 'cash';
+
+    // 3. Phân nhánh: Mô phỏng thanh toán trực tuyến thất bại
+    if (isOnlinePayment && simulateFailure) {
+      final failedTxn =
+          transactionCode ?? 'TXN-FAILED-${DateTime.now().microsecondsSinceEpoch}';
+      booking.status = 'cancelled';
+      booking.paymentStatus = 'unpaid';
+      booking.cancelReason = 'Thanh toán trực tuyến thất bại';
+      booking.cancelledAt = DateTime.now();
+
+      final paymentRecord = <String, dynamic>{
+        'id': paymentId,
+        'bookingId': booking.id,
+        'method': method,
+        'amount': booking.totalPrice,
+        'status': 'failed',
+        'transactionCode': failedTxn,
+        'createdAt': DateTime.now(),
+      };
+
+      bookings.add(booking);
+      payments.add(paymentRecord);
+
+      return BookingPaymentResult(
+        isSuccess: false,
+        isSlotAvailable: true,
+        failureReason: 'Giao dịch thanh toán trực tuyến không thành công.',
+        booking: booking,
+        payment: paymentRecord,
+        transactionCode: failedTxn,
+      );
+    }
+
+    // 4. Phân nhánh: Thanh toán thành công (Tiền mặt hoặc Trực tuyến)
     booking.status = 'confirmed';
-    booking.paymentStatus = method == 'cash' ? 'unpaid' : 'paid';
+    final String? successTxn;
+    final Map<String, dynamic> paymentRecord;
+
+    if (method == 'cash') {
+      // Tiền mặt tại sân: booking confirmed, paymentStatus unpaid, payment pending
+      successTxn = null;
+      booking.paymentStatus = 'unpaid';
+      paymentRecord = <String, dynamic>{
+        'id': paymentId,
+        'bookingId': booking.id,
+        'method': method,
+        'amount': booking.totalPrice,
+        'status': 'pending',
+        'transactionCode': null,
+        'createdAt': DateTime.now(),
+      };
+    } else {
+      // Trực tuyến thành công: booking confirmed, paymentStatus paid, payment success
+      successTxn = transactionCode ?? 'TXN${Random().nextInt(900000) + 100000}';
+      booking.paymentStatus = 'paid';
+      paymentRecord = <String, dynamic>{
+        'id': paymentId,
+        'bookingId': booking.id,
+        'method': method,
+        'amount': booking.totalPrice,
+        'status': 'success',
+        'transactionCode': successTxn,
+        'paidAt': DateTime.now(),
+        'createdAt': DateTime.now(),
+      };
+    }
+
     bookings.add(booking);
-    payments.add({
-      'id': paymentId,
-      'bookingId': booking.id,
-      'method': method,
-      'amount': booking.totalPrice,
-      'status': method == 'cash' ? 'pending' : 'success',
-      'transactionCode': null,
-    });
+    payments.add(paymentRecord);
+
+    // 5. Tăng lượt sử dụng mã khuyến mãi một lần duy nhất khi thành công
+    final promoId = booking.promoId;
+    if (promoId != null && promoId.isNotEmpty) {
+      final promoIndex = promotions.indexWhere((p) => p.id == promoId);
+      if (promoIndex != -1) {
+        promotions[promoIndex].usedCount++;
+      }
+    }
+
+    return BookingPaymentResult(
+      isSuccess: true,
+      isSlotAvailable: true,
+      booking: booking,
+      payment: paymentRecord,
+      transactionCode: successTxn,
+    );
+  }
+
+  /// Wrapper tương thích ngược cho confirmBooking
+  static bool confirmBooking(
+    Booking booking,
+    String method, {
+    bool simulateFailure = false,
+    String? transactionCode,
+  }) {
+    final result = processBookingPayment(
+      booking: booking,
+      method: method,
+      simulateFailure: simulateFailure,
+      transactionCode: transactionCode,
+    );
+    return result.isSuccess;
+  }
+
+  /// Hủy đơn đặt sân và hoàn tiền mô phỏng tập trung tại MockStore.
+  /// Điểm tích hợp để sau này chuyển đổi sang SQLite Repository transaction.
+  static bool cancelBooking(String bookingId) {
+    final bookingIndex = bookings.indexWhere((b) => b.id == bookingId);
+    if (bookingIndex == -1) return false;
+
+    final booking = bookings[bookingIndex];
+    if (booking.status != 'pending' && booking.status != 'confirmed') {
+      return false;
+    }
+
+    final payment = paymentOfBooking(bookingId);
+    final isMarkedPaid = booking.paymentStatus == 'paid';
+
+    // Không hủy đơn nếu trạng thái thanh toán không nhất quán.
+    if (isMarkedPaid &&
+        (payment == null || payment['status'] != 'success')) {
+      return false;
+    }
+
+    final shouldRefund = isMarkedPaid;
+
+    if (shouldRefund) {
+      payment!['status'] = 'refunded';
+      booking.paymentStatus = 'refunded';
+    }
+
+    booking.status = 'cancelled';
+    booking.cancelReason = 'Khách hàng chủ động hủy';
+    booking.cancelledAt = DateTime.now();
+
+    // Hoàn trả lượt sử dụng khuyến mãi nếu có
+    final promoId = booking.promoId;
+    if (promoId != null && promoId.isNotEmpty) {
+      final promoIndex = promotions.indexWhere((p) => p.id == promoId);
+      if (promoIndex != -1 && promotions[promoIndex].usedCount > 0) {
+        promotions[promoIndex].usedCount--;
+      }
+    }
+
     return true;
   }
+
 
   static AppUser? findUserByEmail(String email) {
     final normalizedEmail = email.trim().toLowerCase();

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../utils/app_theme.dart';
+import '../../widgets/venue_image.dart';
 
 // ============================================================================
 // Repository: xử lý hủy đơn và giải phóng khung giờ trong MockStore.
@@ -8,28 +10,39 @@ import '../../data/mock_store.dart';
 
 class BookingRepository {
   static Map<String, dynamic>? cancelBooking(String bookingId) {
-    final bookingIndex =
-        MockStore.bookings.indexWhere((booking) => booking.id == bookingId);
+    final bookingIndex = MockStore.bookings.indexWhere(
+      (booking) => booking.id == bookingId,
+    );
 
     if (bookingIndex == -1) return null;
 
     final booking = MockStore.bookings[bookingIndex];
 
-    // Chỉ cho phép hủy đơn đang chờ xác nhận hoặc đã xác nhận.
+    // Chỉ cho phép hủy đơn đang chờ hoặc đã xác nhận.
     if (booking.status != 'pending' && booking.status != 'confirmed') {
       return null;
     }
 
+    final payment = MockStore.paymentOfBooking(bookingId);
+    final isMarkedPaid = booking.paymentStatus == 'paid';
+
+    if (isMarkedPaid &&
+        (payment == null || payment['status'] != 'success')) {
+      // Dữ liệu thanh toán không nhất quán: không hủy đơn.
+      return null;
+    }
+
+    final shouldRefund = isMarkedPaid;
+
+    // Hoàn tiền mô phỏng trước khi thay đổi trạng thái đơn.
+    if (shouldRefund) {
+      final refunded = PaymentService.processRefund(bookingId);
+      if (!refunded) return null;
+    }
+
     final oldStatus = booking.status;
     final promoId = booking.promoId;
-    final payment = MockStore.paymentOfBooking(bookingId);
 
-    // Chỉ hoàn tiền khi cả Booking và Payment đều ghi nhận đã thanh toán.
-    final shouldRefund = booking.paymentStatus == 'paid' &&
-        payment != null &&
-        payment['status'] == 'success';
-
-    // Cập nhật đơn đặt sân.
     booking.status = 'cancelled';
     booking.cancelReason = 'Khách hàng chủ động hủy';
     booking.cancelledAt = DateTime.now();
@@ -37,9 +50,6 @@ class BookingRepository {
     if (shouldRefund) {
       booking.paymentStatus = 'refunded';
     }
-
-    // MockStore.timeSlotsFor() tự bỏ qua booking có status == 'cancelled',
-    // vì vậy khung giờ sẽ không còn bị đơn này chiếm giữ.
 
     return {
       'oldStatus': oldStatus,
@@ -55,8 +65,9 @@ class BookingRepository {
 
 class PromotionService {
   static bool cancelPromoUse(String promoId) {
-    final promoIndex =
-        MockStore.promotions.indexWhere((promotion) => promotion.id == promoId);
+    final promoIndex = MockStore.promotions.indexWhere(
+      (promotion) => promotion.id == promoId,
+    );
 
     if (promoIndex == -1) return false;
 
@@ -66,6 +77,11 @@ class PromotionService {
     if (promotion.usedCount <= 0) return false;
 
     promotion.usedCount--;
+    debugPrint(
+      'PROMO COUNT AFTER CANCELLATION: '
+      'code=${promotion.code}, '
+      'usedCount=${promotion.usedCount}',
+    );
     return true;
   }
 }
@@ -98,26 +114,10 @@ class BookingController {
     if (result == null) return false;
 
     final promoId = result['promoId'] as String?;
-    final shouldRefund = result['shouldRefund'] as bool;
 
-    // opt: đơn có sử dụng mã khuyến mãi.
+    // Chỉ trừ lượt nếu đơn đã được hủy thành công.
     if (promoId != null && promoId.isNotEmpty) {
       PromotionService.cancelPromoUse(promoId);
-    }
-
-    // opt: đơn đã thanh toán thành công.
-    if (shouldRefund) {
-      final refunded = PaymentService.processRefund(bookingId);
-
-      // Nếu không cập nhật được Payment, khôi phục trạng thái paymentStatus
-      // để tránh Booking báo đã hoàn tiền trong khi Payment chưa được cập nhật.
-      if (!refunded) {
-        final bookingIndex =
-            MockStore.bookings.indexWhere((booking) => booking.id == bookingId);
-        if (bookingIndex != -1) {
-          MockStore.bookings[bookingIndex].paymentStatus = 'paid';
-        }
-      }
     }
 
     return true;
@@ -138,8 +138,9 @@ class BookingHistoryScreen extends StatefulWidget {
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   @override
   Widget build(BuildContext context) {
-    final bookings =
-        MockStore.customerBookings(MockStore.currentUser?.id ?? '');
+    final bookings = MockStore.customerBookings(
+      MockStore.currentUser?.id ?? '',
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Lịch sử đặt sân')),
@@ -152,7 +153,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               itemBuilder: (context, index) {
                 final booking = bookings[index];
                 final venue = MockStore.venueById(booking.venueId);
-                final canCancel = booking.status == 'pending' ||
+                final canCancel =
+                    booking.status == 'pending' ||
                     booking.status == 'confirmed';
 
                 return Card(
@@ -161,6 +163,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildVenuePhoto(
+                          booking.venueId,
+                          venue?.name ?? 'Sân thể thao',
+                        ),
+                        const SizedBox(height: 10),
                         Text(
                           venue?.name ?? 'Sân thể thao',
                           style: const TextStyle(fontWeight: FontWeight.w800),
@@ -205,8 +212,46 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     );
   }
 
+  Widget _buildVenuePhoto(String venueId, String venueName) {
+    final images = MockStore.imageUrlsOf(venueId);
+    if (images.isEmpty) {
+      return _missingVenueImage('Chưa có ảnh cho sân $venueName.');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: double.infinity,
+        height: 130,
+        child: VenueImage(
+          source: images.first,
+          placeholder: _missingVenueImage(
+            'Ảnh sân $venueName không tải được. Kiểm tra đường dẫn ảnh.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _missingVenueImage(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+      ),
+    );
+  }
+
   Widget _statusChip(String status) {
-    final label = {
+    final label =
+        {
           'pending': 'Chờ xác nhận',
           'confirmed': 'Đã xác nhận',
           'cancelled': 'Đã hủy',
@@ -222,21 +267,21 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
     if (!mounted) return;
 
-    if (success) {
-      setState(() {});
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Đã hủy đơn đặt sân thành công.')),
-        );
-    } else {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Không thể hủy đơn này. Vui lòng kiểm tra trạng thái đơn.'),
+    setState(() {});
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Đã hủy đơn đặt sân thành công.'
+                : 'Không thể hủy đơn này. Vui lòng kiểm tra trạng thái đơn.',
           ),
-        );
-    }
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 }

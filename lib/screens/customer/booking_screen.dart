@@ -5,6 +5,7 @@ import '../../models/promotion.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/venue_image.dart';
 
 /// Màn hình đặt sân - phong cách Nhom1_DatSanTheThao.
 class BookingScreen extends StatefulWidget {
@@ -259,6 +260,7 @@ class _BookingScreenState extends State<BookingScreen> {
     final total = subtotal - discountAmount;
 
     final canContinue =
+        venue.status == 'approved' &&
         _startTime != null &&
         _endTime != null &&
         _durationHours > 0 &&
@@ -315,6 +317,43 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
+  Widget _buildVenuePhoto(Venue venue, {double height = 140}) {
+    final images = MockStore.imageUrlsOf(venue.id);
+    if (images.isEmpty) {
+      return _missingImageNotice('Chưa có ảnh cho sân ${venue.name}.');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: height,
+        width: double.infinity,
+        child: VenueImage(
+          source: images.first,
+          placeholder: _missingImageNotice(
+            'Ảnh sân ${venue.name} không tải được. Kiểm tra đường dẫn ảnh.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _missingImageNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+      ),
+    );
+  }
+
   Widget _buildVenueInfoCard(Venue venue) {
     return Card(
       child: Padding(
@@ -322,6 +361,8 @@ class _BookingScreenState extends State<BookingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildVenuePhoto(venue, height: 150),
+            const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -688,6 +729,49 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
+  Widget _serviceImage(String serviceName) {
+    final normalized = serviceName.toLowerCase();
+    final asset = normalized.contains('nước')
+        ? 'assets/services/water.jpg'
+        : normalized.contains('vợt')
+            ? 'assets/services/racket.jpg'
+            : normalized.contains('giày')
+                ? 'assets/services/shoes.jpg'
+                : null;
+    if (asset == null) {
+      return _missingServiceImage('Chưa có ảnh cho dịch vụ: $serviceName');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.asset(
+        asset,
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _missingServiceImage('Thiếu ảnh: $asset'),
+      ),
+    );
+  }
+
+  Widget _missingServiceImage(String message) {
+    return Container(
+      width: 56,
+      height: 56,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 8, color: AppTheme.textSecondary),
+      ),
+    );
+  }
+
   Widget _buildServicesCard(List services) {
     return Card(
       child: Padding(
@@ -723,6 +807,8 @@ class _BookingScreenState extends State<BookingScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        _serviceImage(service.name),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -998,11 +1084,15 @@ class _BookingScreenState extends State<BookingScreen> {
                 child: Text(
                   canContinue
                       ? 'Tiếp tục'
-                      : _startTime == null
-                      ? 'Chọn giờ bắt đầu'
-                      : _endTime == null
-                      ? 'Chọn giờ kết thúc'
-                      : 'Khung giờ không khả dụng',
+                      : venue.status != 'approved'
+                          ? (venue.status == 'pending'
+                              ? 'Sân đang chờ duyệt'
+                              : 'Sân chưa thể đặt')
+                          : _startTime == null
+                              ? 'Chọn giờ bắt đầu'
+                              : _endTime == null
+                                  ? 'Chọn giờ kết thúc'
+                                  : 'Khung giờ không khả dụng',
                 ),
               ),
             ),

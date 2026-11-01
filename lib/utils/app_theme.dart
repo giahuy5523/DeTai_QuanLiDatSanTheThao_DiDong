@@ -4,14 +4,14 @@ class AppTheme {
   AppTheme._();
 
   // Màu sắc thương hiệu Nhom1_DatSanTheThao
-  static const primary = Color(0xFF059669); // Xanh ngọc lục bảo thể thao
-  static const primaryDark = Color(0xFF064E3B);
-  static const primaryLight = Color(0xFFE6F4EA);
-  static const secondary = Color(0xFF10B981);
-  static const accent = Color(0xFF00B14F);
-  static const background = Color(0xFFF8FAFC);
+  static const primary = Color(0xFF0F8B5F); // Xanh thương hiệu theo quy chuẩn nhóm
+  static const primaryDark = Color(0xFF0B6849);
+  static const primaryLight = Color(0xFFE5F4ED);
+  static const secondary = Color(0xFF20A875);
+  static const accent = Color(0xFFFFB547);
+  static const background = Color(0xFFF5F7FA);
   static const cardColor = Colors.white;
-  static const textPrimary = Color(0xFF0F172A);
+  static const textPrimary = Color(0xFF172B3A);
   static const textSecondary = Color(0xFF64748B);
   static const border = Color(0xFFE2E8F0);
   static const warning = Color(0xFFF59E0B);
@@ -29,6 +29,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Roboto',
       colorScheme: colorScheme,
       scaffoldBackgroundColor: background,
       appBarTheme: const AppBarTheme(
@@ -101,19 +102,19 @@ class AppTheme {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: primary, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: error),
         ),
         labelStyle: const TextStyle(color: textSecondary, fontSize: 14),
@@ -126,7 +127,7 @@ class AppTheme {
           minimumSize: const Size.fromHeight(50),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
@@ -137,7 +138,7 @@ class AppTheme {
           side: const BorderSide(color: primary, width: 1.2),
           minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),

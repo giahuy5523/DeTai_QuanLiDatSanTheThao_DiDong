@@ -383,6 +383,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                                       discountPercent: discountVal,
                                       expiryDate: selectedDate,
                                       isActive: isActive,
+                                      usedCount: promotion.usedCount,
                                     );
                                   }
                                 } else {

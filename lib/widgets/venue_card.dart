@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../data/mock_store.dart';
 import '../models/venue.dart';
+import 'venue_image.dart';
 import '../utils/app_theme.dart';
 
 /// Thẻ hiển thị thông tin sân thể thao theo phong cách Nhom1_DatSanTheThao.
@@ -9,21 +11,6 @@ class VenueCard extends StatelessWidget {
   final Venue venue;
   final VoidCallback onTap;
 
-  IconData _iconFor(String sportType) {
-    switch (sportType) {
-      case 'Bóng đá':
-        return Icons.sports_soccer;
-      case 'Bóng rổ':
-        return Icons.sports_basketball;
-      case 'Tennis':
-      case 'Cầu lông':
-        return Icons.sports_tennis;
-      case 'Bóng chuyền':
-        return Icons.sports_volleyball;
-      default:
-        return Icons.sports;
-    }
-  }
 
   Color _colorFor(String sportType) {
     switch (sportType) {
@@ -43,7 +30,6 @@ class VenueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sportColor = _colorFor(venue.sportType);
-    final sportBg = sportColor.withValues(alpha: 0.1);
 
     return Card(
       child: InkWell(
@@ -55,17 +41,12 @@ class VenueCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ─── Thumbnail ────────────────────────────────────
-              Container(
+              SizedBox(
                 width: 90,
                 height: 90,
-                decoration: BoxDecoration(
-                  color: sportBg,
+                child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  _iconFor(venue.sportType),
-                  size: 40,
-                  color: sportColor,
+                  child: _buildVenueThumbnail(venue),
                 ),
               ),
               const SizedBox(width: 14),
@@ -163,6 +144,33 @@ class VenueCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+  Widget _buildVenueThumbnail(Venue venue) {
+    final images = MockStore.imageUrlsOf(venue.id);
+
+    if (images.isEmpty) {
+      return Container(
+        color: Colors.grey.shade100,
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_not_supported_outlined, size: 26),
+            SizedBox(height: 4),
+            Text('Chưa có ảnh', style: TextStyle(fontSize: 10)),
+          ],
+        ),
+      );
+    }
+
+    return VenueImage(
+      source: images.first,
+      placeholder: Container(
+        color: Colors.grey.shade100,
+        alignment: Alignment.center,
+        child: const Icon(Icons.broken_image_outlined, size: 26),
       ),
     );
   }

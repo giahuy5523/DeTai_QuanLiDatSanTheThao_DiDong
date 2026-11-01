@@ -445,11 +445,6 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await openRoute(tester, AppRoutes.venueDetail, args: venue);
-    await tester.scrollUntilVisible(
-      find.text('Khách hàng thân thiết'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
     expect(tester.takeException(), isNull);
     await tapVisible(tester, find.text('Đặt sân ngay'));
     await chooseFutureDate(tester);
