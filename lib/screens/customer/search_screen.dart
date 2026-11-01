@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
-import '../../widgets/venue_card.dart';
+import '../../widgets/venue_image.dart';
 
 enum _SortOption { none, priceAsc, priceDesc, nameAsc }
 
@@ -615,43 +615,192 @@ class _SearchScreenState extends State<SearchScreen> {
         .map((s) => s['startTime'] as String)
         .toList();
     final services = MockStore.servicesFor(v.id);
+    final images = MockStore.imageUrlsOf(v.id);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        VenueCard(
-          venue: v,
-          onTap: () =>
-              Navigator.pushNamed(context, AppRoutes.venueDetail, arguments: v),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            _InfoChip(
-              icon: free.isEmpty ? Icons.event_busy : Icons.event_available,
-              text: free.isEmpty
-                  ? 'Hết giờ trống $dayLabel'
-                  : 'Còn ${free.length} giờ trống $dayLabel',
-              color: free.isEmpty ? Colors.red.shade700 : Colors.green.shade700,
-            ),
-            if (services.isNotEmpty)
-              _InfoChip(
-                icon: Icons.room_service_outlined,
-                text: '${services.length} dịch vụ đi kèm',
-                color: Colors.blueGrey.shade600,
-              ),
-          ],
-        ),
-        if (free.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            'Giờ trống: ${free.take(5).join(' · ')}${free.length > 5 ? '  +${free.length - 5}' : ''}',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: () =>
+                Navigator.pushNamed(context, AppRoutes.venueDetail, arguments: v),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 108,
+                  height: 108,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (images.isNotEmpty)
+                          VenueImage(
+                            source: images.first,
+                            placeholder: _buildVenuePlaceholder(v),
+                          )
+                        else
+                          _buildVenuePlaceholder(v),
+                        Positioned(
+                          left: 6,
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              v.sportType,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF087451),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 108,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Còn sân',
+                                style: TextStyle(
+                                  color: Color(0xFF16805D),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          v.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          v.address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.2,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.star,
+                              color: Color(0xFFFFC928),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 4),
+                            const Text('4.8', style: TextStyle(fontSize: 12)),
+                            const Spacer(),
+                            Flexible(
+                              child: Text(
+                                '${_formatPrice(v.pricePerHour)} / giờ',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFF087451),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              _InfoChip(
+                icon: free.isEmpty ? Icons.event_busy : Icons.event_available,
+                text: free.isEmpty
+                    ? 'Hết giờ trống $dayLabel'
+                    : 'Còn ${free.length} giờ trống',
+                color: free.isEmpty ? Colors.red.shade700 : Colors.green.shade700,
+              ),
+              if (services.isNotEmpty)
+                _InfoChip(
+                  icon: Icons.room_service_outlined,
+                  text: '${services.length} dịch vụ đi kèm',
+                  color: Colors.blueGrey.shade600,
+                ),
+            ],
+          ),
+          if (free.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              '${free.take(3).join(' · ')}${free.length > 3 ? ' · +${free.length - 3}' : ''}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVenuePlaceholder(Venue venue) {
+    return Container(
+      color: const Color(0xFF087451),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        color: Colors.white70,
+        size: 30,
+      ),
     );
   }
 

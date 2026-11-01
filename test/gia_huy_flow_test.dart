@@ -41,6 +41,7 @@ XFile photo(int index) => XFile.fromData(
 Future<void> login(WidgetTester tester, String role) async {
   await start(tester);
   await tester.enterText(find.byType(TextFormField).first, '$role@gmail.com');
+  await tester.enterText(find.byType(TextFormField).last, '123456');
   await press(tester, 'Đăng nhập');
 }
 
@@ -108,7 +109,16 @@ void main() {
     (tester) async {
       await login(tester, 'customer');
       final listButton = find.text('Xem tất cả sân');
-      await tester.ensureVisible(listButton);
+      await tester.scrollUntilVisible(
+        listButton,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(HomeScreen),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(listButton);
       await tester.pumpAndSettle();
       expect(find.byType(VenueListScreen), findsOneWidget);
@@ -167,7 +177,10 @@ void main() {
       await tester.scrollUntilVisible(newVenue, 150);
       await tester.pumpAndSettle();
       expect(newVenue, findsOneWidget);
-      final card = find.ancestor(of: newVenue, matching: find.byType(Card));
+      final card = find.ancestor(
+        of: newVenue,
+        matching: find.byKey(ValueKey(MockStore.venues.last.id)),
+      );
       final services = find.descendant(
         of: card,
         matching: find.text('Quản lý dịch vụ kèm theo'),
@@ -190,7 +203,16 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await login(tester, 'customer');
-    await tester.ensureVisible(find.text('Xem tất cả sân'));
+    await tester.scrollUntilVisible(
+      find.text('Xem tất cả sân'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(HomeScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('Xem tất cả sân'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
