@@ -91,10 +91,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
         (args['total'] as num?)?.toDouble() ??
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
-    debugPrint(
-      'PAYMENT ARGS: date=$date start=$startTime end=$endTime '
-      'venue=${venue.id} total=$total promo=$promoCode',
-    );
 
     final services = MockStore.servicesFor(
       venue.id,
@@ -822,10 +818,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       startTime,
       endTime,
     );
-    debugPrint(
-      'AVAILABILITY CHECK: venue=${venue.id} status=${venue.status} '
-      'date=$date start=$startTime end=$endTime result=$isAvailable',
-    );
+
     if (!isAvailable) {
       setState(() => _isProcessing = false);
       await _showSlotUnavailable();

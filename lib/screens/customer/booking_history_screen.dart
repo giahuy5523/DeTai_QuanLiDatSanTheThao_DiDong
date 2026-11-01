@@ -77,11 +77,7 @@ class PromotionService {
     if (promotion.usedCount <= 0) return false;
 
     promotion.usedCount--;
-    debugPrint(
-      'PROMO COUNT AFTER CANCELLATION: '
-      'code=${promotion.code}, '
-      'usedCount=${promotion.usedCount}',
-    );
+
     return true;
   }
 }

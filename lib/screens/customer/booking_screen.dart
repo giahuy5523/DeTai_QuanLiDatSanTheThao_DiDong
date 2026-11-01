@@ -248,11 +248,6 @@ class _BookingScreenState extends State<BookingScreen> {
       final qty = _selectedServices[service.id] ?? 0;
       return sum + (service.price * qty);
     });
-    debugPrint(
-      'BOOKING SERVICES: ${_selectedServices.toString()} '
-      'serviceTotal=$serviceTotal '
-      'services=${services.map((s) => '${s.id}:${s.price}').toList()}',
-    );
 
     final courtTotal = venue.pricePerHour * _durationHours;
     final subtotal = courtTotal + serviceTotal;
