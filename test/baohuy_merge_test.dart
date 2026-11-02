@@ -343,7 +343,7 @@ void main() {
     'Admin rejects NaN and duplicate codes then creates edits deletes promo',
     (tester) async {
       await openRoute(tester, AppRoutes.managePromotion, role: 'admin');
-      await tapVisible(tester, find.byTooltip('Thêm khuyến mãi mới'));
+      await tapVisible(tester, find.text('Thêm mã'));
       final fields = find.byType(TextField);
       await tester.enterText(fields.at(0), 'MERGE25');
       await tester.enterText(fields.at(1), 'NaN');
@@ -364,9 +364,11 @@ void main() {
       expect(MockStore.promotions.last.code, 'MERGE25');
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
-      final card = find.ancestor(
-        of: find.text('MERGE25'),
-        matching: find.byType(Card),
+      final card = find.byKey(const ValueKey('promo-MERGE25'));
+      await tester.scrollUntilVisible(
+        card,
+        200,
+        scrollable: find.byType(Scrollable).first,
       );
       await tapVisible(
         tester,
@@ -379,7 +381,7 @@ void main() {
       await tester.pumpAndSettle();
       await tapVisible(
         tester,
-        find.descendant(of: card, matching: find.byTooltip('Xóa mã')),
+        find.descendant(of: card, matching: find.text('Xóa')),
       );
       await press(tester, 'Xác nhận xóa');
       expect(MockStore.promotions.any((p) => p.code == 'MERGE25'), isFalse);
@@ -402,7 +404,7 @@ void main() {
       );
     await openRoute(tester, AppRoutes.managePromotion, role: 'admin');
     await tapVisible(tester, find.text('Chỉnh sửa'));
-    await tapVisible(tester, find.byIcon(Icons.calendar_today_rounded));
+    await tapVisible(tester, find.text('Đổi ngày'));
     expect(find.byType(DatePickerDialog), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -422,16 +424,16 @@ void main() {
       await tester.enterText(find.byType(TextField).at(1), 'Infinity');
       await press(tester, 'Thêm');
       expect(MockStore.servicesFor(venue.id), isEmpty);
-      await tapVisible(tester, find.text('Thêm dịch vụ'));
-      await tester.enterText(find.byType(TextField).at(0), 'Thuê bóng');
       await tester.enterText(find.byType(TextField).at(1), '20000');
+      await tester.enterText(find.byType(TextField).at(2), 'lần');
       await press(tester, 'Thêm');
       expect(MockStore.servicesFor(venue.id).single.price, 20000);
-      await tapVisible(tester, find.byTooltip('Sửa'));
+      await tapVisible(tester, find.text('Sửa'));
       await tester.enterText(find.byType(TextField).at(1), '25000');
       await press(tester, 'Lưu');
       expect(MockStore.servicesFor(venue.id).single.price, 25000);
-      await tapVisible(tester, find.byTooltip('Xóa'));
+      await tapVisible(tester, find.text('Xóa'));
+      await press(tester, 'Xóa');
       expect(MockStore.servicesFor(venue.id), isEmpty);
       expect(tester.takeException(), isNull);
     },
@@ -445,11 +447,6 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await openRoute(tester, AppRoutes.venueDetail, args: venue);
-    await tester.scrollUntilVisible(
-      find.text('Khách hàng thân thiết'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
     expect(tester.takeException(), isNull);
     await tapVisible(tester, find.text('Đặt sân ngay'));
     await chooseFutureDate(tester);
@@ -519,10 +516,7 @@ void main() {
     tester,
   ) async {
     await openRoute(tester, AppRoutes.statistics, role: 'admin');
-    Finder pendingCard() => find.ancestor(
-      of: find.text('Sân chờ duyệt'),
-      matching: find.byType(Card),
-    );
+    Finder pendingCard() => find.byKey(const ValueKey('metric-Sân chờ duyệt'));
     expect(
       find.descendant(of: pendingCard(), matching: find.text('1')),
       findsOneWidget,

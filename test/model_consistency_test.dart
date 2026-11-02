@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sportfield_booking/screens/customer/booking_history_screen.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/payment.dart';
@@ -9,6 +10,10 @@ void main() {
   final initialBookings = List<Booking>.of(MockStore.bookings);
   final initialPayments = List<Map<String, dynamic>>.of(MockStore.payments);
 
+  final initialPromotionUsedCounts = {
+    for (final promotion in MockStore.promotions)
+      promotion.id: promotion.usedCount,
+  };
   tearDown(() {
     MockStore.bookings
       ..clear()
@@ -16,6 +21,13 @@ void main() {
     MockStore.payments
       ..clear()
       ..addAll(initialPayments);
+
+    for (final promotion in MockStore.promotions) {
+      final initialCount = initialPromotionUsedCounts[promotion.id];
+      if (initialCount != null) {
+        promotion.usedCount = initialCount;
+      }
+    }
   });
 
   test('SportType IDs match venue IDs and the search filter', () {
@@ -68,6 +80,47 @@ void main() {
     endTime: '18:00',
     totalPrice: 300000,
   );
+  test('Cancellation rejects paid booking when payment is missing', () {
+    final booking = futureBooking(
+      'paid-without-payment-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    booking.status = 'confirmed';
+    booking.paymentStatus = 'paid';
+    MockStore.bookings.add(booking);
+
+    final result = BookingRepository.cancelBooking(booking.id);
+
+    expect(result, isNull);
+    expect(booking.status, 'confirmed');
+    expect(booking.paymentStatus, 'paid');
+    expect(booking.cancelledAt, isNull);
+    expect(MockStore.paymentOfBooking(booking.id), isNull);
+  });
+
+  test('Cancellation rejects paid booking when payment failed', () {
+    final booking = futureBooking(
+      'paid-with-failed-payment-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    booking.status = 'confirmed';
+    booking.paymentStatus = 'paid';
+    MockStore.bookings.add(booking);
+
+    final payment = <String, dynamic>{
+      'id': 'failed-${DateTime.now().microsecondsSinceEpoch}',
+      'bookingId': booking.id,
+      'status': 'failed',
+      'amount': booking.totalPrice,
+    };
+    MockStore.payments.add(payment);
+
+    final result = BookingRepository.cancelBooking(booking.id);
+
+    expect(result, isNull);
+    expect(booking.status, 'confirmed');
+    expect(booking.paymentStatus, 'paid');
+    expect(booking.cancelledAt, isNull);
+    expect(payment['status'], 'failed');
+  });
 
   test('Simulated online payment stores ID and paid status', () {
     final booking = futureBooking('model-payment-online');
@@ -80,6 +133,151 @@ void main() {
     expect(booking.paymentStatus, 'paid');
   });
 
+  test('processBookingPayment rejects invalid promotion amounts', () {
+    final promo = MockStore.promotions.firstWhere((p) => p.code == 'SAN10');
+    final bookingCount = MockStore.bookings.length;
+    final paymentCount = MockStore.payments.length;
+    final usedCount = promo.usedCount;
+
+    final invalidBookings = [
+      Booking(
+        id: 'invalid-nan-${DateTime.now().microsecondsSinceEpoch}',
+        venueId: 'v1',
+        userId: 'customer1',
+        date: DateTime.now().add(const Duration(days: 30)),
+        startTime: '17:00',
+        endTime: '18:00',
+        totalPrice: double.nan,
+        originalAmount: 300000,
+        discountAmount: 30000,
+        promoId: promo.id,
+        promotionCode: promo.code,
+      ),
+      Booking(
+        id: 'invalid-discount-${DateTime.now().microsecondsSinceEpoch}',
+        venueId: 'v1',
+        userId: 'customer1',
+        date: DateTime.now().add(const Duration(days: 30)),
+        startTime: '18:00',
+        endTime: '19:00',
+        totalPrice: 250000,
+        originalAmount: 300000,
+        discountAmount: 10000,
+        promoId: promo.id,
+        promotionCode: promo.code,
+      ),
+      Booking(
+        id: 'invalid-promo-id-${DateTime.now().microsecondsSinceEpoch}',
+        venueId: 'v1',
+        userId: 'customer1',
+        date: DateTime.now().add(const Duration(days: 30)),
+        startTime: '19:00',
+        endTime: '20:00',
+        totalPrice: 270000,
+        originalAmount: 300000,
+        discountAmount: 30000,
+        promoId: 'wrong-promo-id',
+        promotionCode: promo.code,
+      ),
+    ];
+
+    for (final booking in invalidBookings) {
+      final result = MockStore.processBookingPayment(
+        booking: booking,
+        method: 'momo',
+      );
+      expect(result.isSuccess, isFalse);
+    }
+
+    expect(MockStore.bookings.length, bookingCount);
+    expect(MockStore.payments.length, paymentCount);
+    expect(promo.usedCount, usedCount);
+  });
+
+  test('Failed online payment does not consume promotion usage', () {
+    final promo = MockStore.promotions.firstWhere((p) => p.code == 'SAN10');
+    final usedCount = promo.usedCount;
+    final booking = Booking(
+      id: 'failed-promo-${DateTime.now().microsecondsSinceEpoch}',
+      venueId: 'v1',
+      userId: 'customer1',
+      date: DateTime.now().add(const Duration(days: 30)),
+      startTime: '17:00',
+      endTime: '18:00',
+      totalPrice: 270000,
+      originalAmount: 300000,
+      discountAmount: 30000,
+      promoId: promo.id,
+      promotionCode: promo.code,
+    );
+
+    final result = MockStore.processBookingPayment(
+      booking: booking,
+      method: 'momo',
+      simulateFailure: true,
+    );
+
+    expect(result.isSuccess, isFalse);
+    expect(booking.status, 'cancelled');
+    expect(booking.paymentStatus, 'unpaid');
+    expect(promo.usedCount, usedCount);
+    expect(MockStore.paymentOfBooking(booking.id)?['status'], 'failed');
+  });
+
+  test('Cancelling a promotion booking twice decrements usage only once', () {
+    final promo = MockStore.promotions.firstWhere((p) => p.code == 'SAN10');
+    final booking = Booking(
+      id: 'cancel-promo-${DateTime.now().microsecondsSinceEpoch}',
+      venueId: 'v1',
+      userId: 'customer1',
+      date: DateTime.now().add(const Duration(days: 30)),
+      startTime: '17:00',
+      endTime: '18:00',
+      totalPrice: 270000,
+      originalAmount: 300000,
+      discountAmount: 30000,
+      promoId: promo.id,
+      promotionCode: promo.code,
+    );
+
+    expect(MockStore.confirmBooking(booking, 'cash'), isTrue);
+    final countAfterBooking = promo.usedCount;
+
+    expect(MockStore.cancelBooking(booking.id), isTrue);
+    expect(promo.usedCount, countAfterBooking - 1);
+
+    expect(MockStore.cancelBooking(booking.id), isFalse);
+    expect(promo.usedCount, countAfterBooking - 1);
+  });
+  test('BookingController cancellation decrements promo usage once', () {
+    final promo = MockStore.promotions.firstWhere((p) => p.code == 'SAN10');
+
+    final booking = Booking(
+      id:
+          'controller-cancel-promo-'
+          '${DateTime.now().microsecondsSinceEpoch}',
+      venueId: 'v1',
+      userId: 'customer1',
+      date: DateTime.now().add(const Duration(days: 30)),
+      startTime: '17:00',
+      endTime: '18:00',
+      totalPrice: 270000,
+      originalAmount: 300000,
+      discountAmount: 30000,
+      promoId: promo.id,
+      promotionCode: promo.code,
+    );
+
+    expect(MockStore.confirmBooking(booking, 'cash'), isTrue);
+    final countAfterBooking = promo.usedCount;
+
+    expect(BookingController.cancelBooking(booking.id), isTrue);
+    expect(booking.status, 'cancelled');
+    expect(promo.usedCount, countAfterBooking - 1);
+
+    expect(BookingController.cancelBooking(booking.id), isFalse);
+    expect(promo.usedCount, countAfterBooking - 1);
+  });
   test('Cash booking stays unpaid with a pending payment record', () {
     final booking = futureBooking('model-payment-cash');
     expect(MockStore.confirmBooking(booking, 'cash'), isTrue);

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../data/mock_store.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/venue_image.dart';
 
-/// Màn hình Chi tiết Sân thể thao - Phong cách Nhom1_DatSanTheThao.
-/// Hiển thị thông tin sân, tiện ích, dịch vụ phụ trợ, đánh giá và nút đặt sân cố định.
 class VenueDetailScreen extends StatefulWidget {
   const VenueDetailScreen({super.key});
 
@@ -16,6 +15,15 @@ class VenueDetailScreen extends StatefulWidget {
 
 class _VenueDetailScreenState extends State<VenueDetailScreen> {
   bool _isFavorite = false;
+  int _currentImageIndex = 0;
+  final PageController _imagePageController = PageController();
+  bool _showFullInfo = false;
+
+  @override
+  void dispose() {
+    _imagePageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +32,30 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text('Chi tiết sân'),
+        leading: IconButton(
+          tooltip: 'Quay lại',
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          IconButton(
+            tooltip: _isFavorite ? 'Bỏ yêu thích' : 'Thêm vào yêu thích',
+            icon: Icon(
+              _isFavorite
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              color: _isFavorite ? AppTheme.error : AppTheme.primary,
+            ),
+            onPressed: () => setState(() => _isFavorite = !_isFavorite),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: CustomScrollView(
         slivers: [
           // Banner hình ảnh hoặc placeholder thể thao kèm nút Back và Yêu thích
@@ -31,7 +63,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
           // Nội dung chi tiết cuộn được
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            padding: const EdgeInsets.fromLTRB(14, 18, 14, 36),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // Thẻ thông tin tổng quan sân
@@ -58,142 +90,325 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
         ],
       ),
 
-      // Thanh điều hướng đặt sân cố định ở dưới đáy
       bottomNavigationBar: _buildBottomCTA(context, venue),
     );
   }
 
-  // Banner trên cùng: dùng ảnh thật nếu có, hoặc placeholder thể thao Nhom1_DatSanTheThao
   Widget _buildBanner(BuildContext context, Venue venue) {
     final images = MockStore.imageUrlsOf(venue.id);
+    final itemCount = images.isEmpty ? 1 : images.length;
 
-    return SizedBox(
-      height: 250,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (images.isNotEmpty)
-            VenueImage(
-              source: images.first,
-              placeholder: _buildPlaceholderBanner(venue),
-            )
-          else
-            _buildPlaceholderBanner(venue),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 315,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              PageView.builder(
+                controller: _imagePageController,
+                itemCount: itemCount,
+                onPageChanged: (index) =>
+                    setState(() => _currentImageIndex = index),
+                itemBuilder: (context, index) {
+                  if (images.isEmpty) {
+                    return _buildPlaceholderBanner(venue);
+                  }
 
-          // Lớp gradient bóng mờ để nút Back & Yêu thích luôn rõ nét
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 90,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withValues(alpha: 0.4),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showFullScreenGallery(
+                      context,
+                      images,
+                      initialIndex: index,
+                      venue: venue,
+                    ),
+                    child: VenueImage(
+                      source: images[index],
+                      placeholder: _buildPlaceholderBanner(venue),
+                    ),
+                  );
+                },
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.28),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.18),
+                        ],
+                        stops: const [0, 0.42, 1],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-
-          // Nút quay lại và nút yêu thích nổi
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 16,
-            right: 16,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildCircleActionButton(
-                  icon: Icons.arrow_back_rounded,
-                  tooltip: 'Quay lại',
-                  onPressed: () => Navigator.pop(context),
+              Positioned(
+                top: 14,
+                left: 14,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.48),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getSportIcon(venue.sportType),
+                        color: Colors.white,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        venue.sportType,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                _buildCircleActionButton(
-                  icon: _isFavorite
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  iconColor: _isFavorite ? Colors.red : AppTheme.textPrimary,
-                  onPressed: () => setState(() => _isFavorite = !_isFavorite),
+              ),
+              if (images.length > 1) ...[
+                Positioned(
+                  left: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _galleryArrow(
+                      icon: Icons.chevron_left_rounded,
+                      onTap: () => _imagePageController.previousPage(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOut,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _galleryArrow(
+                      icon: Icons.chevron_right_rounded,
+                      onTap: () => _imagePageController.nextPage(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOut,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 14,
+                  bottom: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.66),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.photo_library_outlined,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${_currentImageIndex + 1}/$itemCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
+            ],
+          ),
+        ),
+        if (images.length > 1)
+          SizedBox(
+            height: 78,
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+              scrollDirection: Axis.horizontal,
+              itemCount: images.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final selected = index == _currentImageIndex;
+                return GestureDetector(
+                  onTap: () => _imagePageController.animateToPage(
+                    index,
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOut,
+                  ),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 88,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected ? AppTheme.primary : AppTheme.border,
+                        width: selected ? 2 : 1,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: VenueImage(
+                      source: images[index],
+                      placeholder: _buildPlaceholderBanner(venue),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
-        ],
+      ],
+    );
+  }
+
+  Widget _galleryArrow({required IconData icon, required VoidCallback onTap}) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.9),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, color: AppTheme.textPrimary, size: 24),
+        ),
       ),
     );
+  }
+
+  Future<void> _showFullScreenGallery(
+    BuildContext context,
+    List<String> images, {
+    required int initialIndex,
+    required Venue venue,
+  }) async {
+    if (images.isEmpty) return;
+
+    final controller = PageController(initialPage: initialIndex);
+    var currentIndex = initialIndex;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.black,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Dialog.fullscreen(
+                backgroundColor: Colors.black,
+                child: Scaffold(
+                  backgroundColor: Colors.black,
+                  appBar: AppBar(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    title: Text(
+                      '${currentIndex + 1}/${images.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    centerTitle: true,
+                    leading: IconButton(
+                      tooltip: 'Đóng ảnh',
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                  body: PageView.builder(
+                    controller: controller,
+                    itemCount: images.length,
+                    onPageChanged: (index) {
+                      setDialogState(() => currentIndex = index);
+                    },
+                    itemBuilder: (context, index) {
+                      return Center(
+                        child: InteractiveViewer(
+                          minScale: 1,
+                          maxScale: 4,
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: double.infinity,
+                            child: VenueImage(
+                              source: images[index],
+                              placeholder: _buildPlaceholderBanner(venue),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Widget _buildPlaceholderBanner(Venue venue) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppTheme.primaryDark, AppTheme.primary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _getSportIcon(venue.sportType),
-              size: 76,
-              color: Colors.white.withValues(alpha: 0.9),
+      color: AppTheme.background,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.image_not_supported_outlined,
+            size: 42,
+            color: AppTheme.textSecondary,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Chưa có ảnh cho sân ${venue.name}.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                venue.sportType,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCircleActionButton({
-    required IconData icon,
-    String? tooltip,
-    required VoidCallback onPressed,
-    Color? iconColor,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Hãy bổ sung ảnh sân vào dữ liệu trước khi sử dụng.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
           ),
         ],
-      ),
-      child: IconButton(
-        tooltip: tooltip,
-        icon: Icon(icon, color: iconColor ?? AppTheme.textPrimary, size: 20),
-        onPressed: onPressed,
-        constraints: const BoxConstraints(minWidth: 42, minHeight: 42),
-        padding: EdgeInsets.zero,
       ),
     );
   }
@@ -202,7 +417,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   Widget _buildHeaderCard(Venue venue) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -213,7 +428,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   child: Text(
                     venue.name,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 22,
+                      height: 1.15,
                       fontWeight: FontWeight.w800,
                       color: AppTheme.textPrimary,
                     ),
@@ -266,9 +482,15 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  '• 50+ lượt đặt',
-                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                const Expanded(
+                  child: Text(
+                    'Đánh giá của khách hàng',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                    softWrap: true,
+                  ),
                 ),
               ],
             ),
@@ -294,6 +516,45 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.primaryLight, Colors.white],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppTheme.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    '${_formatPrice(venue.pricePerHour)} đ',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const Text(
+                    '/ giờ',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -317,11 +578,60 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             const SizedBox(height: 10),
             _buildInfoRow(
               'Giá niêm yết',
-              '${venue.pricePerHour.toStringAsFixed(0)} đ / giờ',
+              '${_formatPrice(venue.pricePerHour)} đ / giờ',
             ),
             const SizedBox(height: 10),
-            _buildInfoRow('Tiêu chuẩn', 'Mặt sàn chất lượng cao, chống trơn'),
-            const SizedBox(height: 18),
+            _buildInfoRow('Loại hình', venue.sportType),
+            const SizedBox(height: 10),
+            _buildInfoRow('Trạng thái', switch (venue.status) {
+              'approved' => 'Đang hoạt động',
+              'pending' => 'Chờ duyệt',
+              'rejected' => 'Bị từ chối',
+              _ => 'Không xác định',
+            }),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 200),
+              crossFadeState: _showFullInfo
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox(height: 8),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.background,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoRow('Khu vực', _venueArea(venue)),
+                      const SizedBox(height: 8),
+                      _buildInfoRow(
+                        'Tọa độ',
+                        '${venue.latitude.toStringAsFixed(5)}, ${venue.longitude.toStringAsFixed(5)}',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showFullInfo = !_showFullInfo),
+                icon: Icon(
+                  _showFullInfo
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 18,
+                ),
+                label: Text(_showFullInfo ? 'Thu gọn' : 'Xem thêm thông tin'),
+              ),
+            ),
+            const SizedBox(height: 8),
             const Text(
               'Tiện ích sẵn có',
               style: TextStyle(
@@ -398,7 +708,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         ),
                       ),
                       Text(
-                        '${s.price.toStringAsFixed(0)} đ / ${s.unit}',
+                        '${_formatPrice(s.price)} đ / ${s.unit}',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -416,8 +726,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   }
 
   // Thẻ "Đánh giá"
+  // Chỉ hiển thị điểm rating có trong model; không tự tạo số lượt đánh giá hoặc nội dung review.
   Widget _buildReviewsCard(Venue venue) {
-    final ratingValue = venue.rating > 0 ? venue.rating : 5.0;
+    final hasRating = venue.rating > 0;
+    final ratingValue = venue.rating.clamp(0.0, 5.0);
 
     return Card(
       child: Padding(
@@ -427,106 +739,102 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           children: [
             _buildSectionHeader(Icons.star_outline_rounded, 'Đánh giá'),
             const Divider(height: 22, color: AppTheme.border),
-            Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            if (!hasRating)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.background,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Column(
                   children: [
+                    Icon(
+                      Icons.rate_review_outlined,
+                      color: AppTheme.primary,
+                      size: 30,
+                    ),
+                    SizedBox(height: 8),
                     Text(
-                      ratingValue.toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
+                      'Chưa có đánh giá',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    Row(
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < ratingValue.floor()
-                              ? Icons.star_rounded
-                              : (i < ratingValue
-                                    ? Icons.star_half_rounded
-                                    : Icons.star_outline_rounded),
-                          size: 16,
-                          color: Colors.amber,
-                        ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Thông tin đánh giá sẽ xuất hiện khi có dữ liệu.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(width: 18),
-                const Expanded(
-                  child: Text(
-                    'Được đánh giá cao về độ bằng phẳng của mặt sân và ánh sáng vào buổi tối.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                      height: 1.4,
+              )
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryLight,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          ratingValue.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(
+                            5,
+                            (i) => Icon(
+                              i < ratingValue.floor()
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              size: 15,
+                              color: Colors.amber.shade700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Điểm sân',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.background,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.border, width: 0.8),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundColor: AppTheme.primary,
-                        child: Text(
-                          'A',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Text(
+                      'Điểm đánh giá hiện có của sân. Chi tiết nhận xét chưa được cung cấp trong dữ liệu ứng dụng.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.45,
+                        color: AppTheme.textSecondary,
                       ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Khách hàng thân thiết',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Gần đây',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Sân đẹp, thoáng mát và hệ thống đèn chiếu sáng rất chuẩn. Đặt sân qua ứng dụng tiện lợi và nhanh chóng.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                      height: 1.4,
                     ),
                   ),
                 ],
               ),
-            ),
           ],
         ),
       ),
@@ -566,35 +874,64 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            Container(
-              height: 90,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppTheme.primaryLight,
+            Material(
+              color: AppTheme.primaryLight,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.2),
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.navigation_rounded,
-                      size: 26,
-                      color: AppTheme.primary,
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+
+                  await Clipboard.setData(
+                    ClipboardData(
+                      text: '${venue.latitude}, ${venue.longitude}',
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Tọa độ: ${venue.latitude.toStringAsFixed(4)}, ${venue.longitude.toStringAsFixed(4)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primaryDark,
-                      ),
+                  );
+
+                  if (!mounted) return;
+
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Đã sao chép tọa độ sân')),
+                  );
+                },
+                child: Container(
+                  height: 90,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.2),
                     ),
-                  ],
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.location_on_rounded,
+                          size: 25,
+                          color: AppTheme.primary,
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          '${venue.latitude.toStringAsFixed(5)}, ${venue.longitude.toStringAsFixed(5)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryDark,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        const Text(
+                          'Chạm để sao chép tọa độ',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -606,8 +943,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
   // Thanh Booking CTA dính ở đáy (Sticky Bottom CTA)
   Widget _buildBottomCTA(BuildContext context, Venue venue) {
+    final canBook = venue.status == 'approved';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -639,7 +977,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     text: TextSpan(
                       children: [
                         TextSpan(
-                          text: '${venue.pricePerHour.toStringAsFixed(0)} đ',
+                          text: '${_formatPrice(venue.pricePerHour)} đ',
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
@@ -664,13 +1002,21 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             Expanded(
               flex: 6,
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.pushNamed(
-                  context,
-                  AppRoutes.booking,
-                  arguments: venue,
-                ),
+                onPressed: canBook
+                    ? () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.booking,
+                        arguments: venue,
+                      )
+                    : null,
                 icon: const Icon(Icons.calendar_month_rounded, size: 20),
-                label: const Text('Đặt sân ngay'),
+                label: Text(
+                  canBook
+                      ? 'Đặt sân ngay'
+                      : venue.status == 'pending'
+                          ? 'Sân đang chờ duyệt'
+                          : 'Sân chưa thể đặt',
+                ),
               ),
             ),
           ],
@@ -682,14 +1028,25 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   Widget _buildSectionHeader(IconData icon, String title) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: AppTheme.primary),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: AppTheme.textPrimary,
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryLight,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, size: 19, color: AppTheme.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+              letterSpacing: -0.2,
+            ),
           ),
         ),
       ],
@@ -723,13 +1080,13 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppTheme.background,
-            borderRadius: BorderRadius.circular(12),
+            color: AppTheme.primaryLight,
+            borderRadius: BorderRadius.circular(15),
             border: Border.all(color: AppTheme.border),
           ),
-          child: Icon(icon, size: 22, color: AppTheme.primary),
+          child: Icon(icon, size: 24, color: AppTheme.primary),
         ),
         const SizedBox(height: 6),
         Text(
@@ -742,6 +1099,25 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
         ),
       ],
     );
+  }
+
+  String _formatPrice(num value) {
+    final digits = value.round().toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  String _venueArea(Venue venue) {
+    final parts = [venue.district, venue.city]
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    return parts.isEmpty ? 'Chưa cập nhật' : parts.join(', ');
   }
 
   IconData _getSportIcon(String sportType) {
