@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
@@ -31,9 +32,9 @@ class FakePicker extends ImagePicker {
 }
 
 XFile photo(int index) => XFile.fromData(
-  base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
-  ),
+  File(
+    'assets/sports_dataset/football/football_00$index.jpg',
+  ).readAsBytesSync(),
   name: 'photo$index.png',
   path: 'photo$index.png',
 );
@@ -67,19 +68,60 @@ Future<void> openUpload(WidgetTester tester, FakePicker picker) async {
   );
   await tester.tap(find.text('Open'));
   await tester.pumpAndSettle();
-  final fields = find.byType(TextFormField);
-  for (final (index, value) in [
-    'Sân Gia Huy',
-    '123 TP.HCM',
-    '200000',
-  ].indexed) {
-    await tester.enterText(fields.at(index), value);
-  }
+  await fillUpload(tester, 'Sân Gia Huy', '123 TP.HCM', '200000');
+}
+
+Future<void> uploadField(
+  WidgetTester tester,
+  String label,
+  String value,
+) async {
+  final field = find.byWidgetPredicate(
+    (widget) => widget is TextField && widget.decoration?.labelText == label,
+  );
+  await tester.scrollUntilVisible(
+    field,
+    100,
+    scrollable: find
+        .descendant(
+          of: find.byType(UploadVenueScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.enterText(field, value);
+  await tester.pumpAndSettle();
+}
+
+Future<void> fillUpload(
+  WidgetTester tester,
+  String name,
+  String address,
+  String price,
+) async {
+  await uploadField(tester, 'Tên sân', name);
+  await uploadField(tester, 'Địa chỉ', address);
+  await uploadField(tester, 'Giá thuê / giờ', price);
+  tester.widget<TextField>(find.byType(TextField).last).controller!.text =
+      price;
+  final sport = find.byType(DropdownButtonFormField<String>);
+  await tester.ensureVisible(sport);
+  await tester.tap(sport);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Bóng đá').last);
+  await tester.pumpAndSettle();
 }
 
 Future<void> pick(WidgetTester tester) async {
-  final button = find.text('Chọn ảnh từ máy');
-  await tester.ensureVisible(button);
+  final screen = find
+      .descendant(
+        of: find.byType(UploadVenueScreen),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  await tester.drag(screen, const Offset(0, 1200));
+  await tester.pumpAndSettle();
+  final button = find.byIcon(Icons.add).last;
   await tester.tap(button);
   await tester.pumpAndSettle();
 }
@@ -163,18 +205,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Đăng ký sân'));
       await tester.pumpAndSettle();
-      for (final (index, value) in [
-        'Sân mới Huy',
-        'TP.HCM',
-        '150000',
-      ].indexed) {
-        await tester.enterText(find.byType(TextFormField).at(index), value);
-      }
+      await fillUpload(tester, 'Sân mới Huy', 'TP.HCM', '150000');
       await pick(tester);
       await press(tester, 'Gửi duyệt');
       expect(find.byType(ManageVenueScreen), findsOneWidget);
       final newVenue = find.text('Sân mới Huy');
-      await tester.scrollUntilVisible(newVenue, 150);
+      await tester.scrollUntilVisible(
+        newVenue,
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       expect(newVenue, findsOneWidget);
       final card = find.ancestor(
@@ -183,13 +223,13 @@ void main() {
       );
       final services = find.descendant(
         of: card,
-        matching: find.text('Quản lý dịch vụ kèm theo'),
+        matching: find.text('Dịch vụ'),
       );
       await tester.ensureVisible(services);
       await tester.pumpAndSettle();
       await tester.tap(services);
       await tester.pumpAndSettle();
-      expect(find.text('Chưa có dịch vụ.'), findsOneWidget);
+      expect(find.text('Chưa có dịch vụ'), findsOneWidget);
       expect(find.text('Nước suối'), findsNothing);
       expect(tester.takeException(), isNull);
     },
@@ -234,11 +274,11 @@ void main() {
         XFile.fromData(base64Decode('YWJj'), name: 'bad.png', path: 'bad.png'),
       ];
     await openUpload(tester, picker);
-    await tester.enterText(find.byType(TextFormField).first, '   ');
+    await uploadField(tester, 'Tên sân', '   ');
     await press(tester, 'Gửi duyệt');
     expect(find.text('Không được để trống'), findsOneWidget);
     await pick(tester);
-    expect(find.text('Ảnh sân: 0 / tối thiểu 3'), findsOneWidget);
+    expect(find.text('0 / 8 ảnh'), findsOneWidget);
     expect(
       find.text(
         'Không thể chọn ảnh. Vui lòng kiểm tra quyền truy cập và thử lại.',
@@ -254,7 +294,7 @@ void main() {
     final picker = FakePicker()..files = [photo(1), photo(2), photo(3)];
     await openUpload(tester, picker);
     await pick(tester);
-    expect(find.byType(Image), findsNWidgets(3));
+    expect(find.text('3 / 8 ảnh'), findsOneWidget);
     await press(tester, 'Gửi duyệt');
     expect(find.byType(UploadVenueScreen), findsNothing);
     final venue = MockStore.venues.last;
@@ -273,17 +313,18 @@ void main() {
       await openUpload(tester, picker);
       await pick(tester);
       await pick(tester);
-      expect(find.text('Ảnh sân: 2 / tối thiểu 3'), findsOneWidget);
+      expect(find.text('2 / 8 ảnh'), findsOneWidget);
       await press(tester, 'Gửi duyệt');
       expect(
         find.text('Vui lòng chọn tối thiểu 3 ảnh khác nhau.'),
         findsOneWidget,
       );
-      final remove = find.byTooltip('Xóa ảnh 1');
+      await pick(tester);
+      final remove = find.bySemanticsLabel('Xóa ảnh 1');
       await tester.ensureVisible(remove);
       await tester.tap(remove);
       await tester.pumpAndSettle();
-      expect(find.text('Ảnh sân: 1 / tối thiểu 3'), findsOneWidget);
+      expect(find.text('1 / 8 ảnh'), findsOneWidget);
       expect(MockStore.venues.length, originalVenues.length);
     },
   );
@@ -294,7 +335,7 @@ void main() {
     final picker = FakePicker();
     await openUpload(tester, picker);
     await pick(tester);
-    expect(find.text('Ảnh sân: 0 / tối thiểu 3'), findsOneWidget);
+    expect(find.text('0 / 8 ảnh'), findsOneWidget);
     picker.fail = true;
     await pick(tester);
     expect(
@@ -306,14 +347,16 @@ void main() {
     picker.fail = false;
     picker.files = [photo(1), photo(2), photo(3)];
     await pick(tester);
-    expect(find.text('Ảnh sân: 3 / tối thiểu 3'), findsOneWidget);
+    expect(find.text('3 / 8 ảnh'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   for (final price in ['abc', '-1', '0', 'NaN', 'Infinity']) {
     testWidgets('Upload rejects price $price', (tester) async {
       await openUpload(tester, FakePicker());
-      await tester.enterText(find.byType(TextFormField).last, price);
+      await uploadField(tester, 'Giá thuê / giờ', price);
+      tester.widget<TextField>(find.byType(TextField).last).controller!.text =
+          price;
       await press(tester, 'Gửi duyệt');
       expect(find.text('Nhập giá lớn hơn 0'), findsOneWidget);
       expect(MockStore.venues.length, originalVenues.length);

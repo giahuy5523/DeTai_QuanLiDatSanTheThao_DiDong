@@ -6,6 +6,87 @@ import '../../models/user.dart';
 import '../../models/venue.dart';
 import 'admin_drawer.dart';
 
+/// Carousel ảnh sân: vuốt ngang để xem, góc trên phải hiện "1 / 3 ảnh".
+class _VenueImageCarousel extends StatefulWidget {
+  const _VenueImageCarousel({
+    super.key,
+    required this.images,
+    required this.height,
+    required this.errorPlaceholder,
+  });
+
+  final List<String> images;
+  final double height;
+  final Widget errorPlaceholder;
+
+  @override
+  State<_VenueImageCarousel> createState() => _VenueImageCarouselState();
+}
+
+class _VenueImageCarouselState extends State<_VenueImageCarousel> {
+  final PageController _controller = PageController();
+  int _current = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.images.length;
+
+    return SizedBox(
+      height: widget.height,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: total,
+            onPageChanged: (index) => setState(() => _current = index),
+            itemBuilder: (context, index) => VenueImage(
+              source: widget.images[index],
+              placeholder: widget.errorPlaceholder,
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${_current + 1} / $total ảnh',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ApproveVenueScreen extends StatefulWidget {
   const ApproveVenueScreen({super.key});
 
@@ -22,13 +103,24 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   @override
   Widget build(BuildContext context) {
     final pending = _pending;
+    const primaryGreen = Color(0xFF0F8B5F);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Duyệt sân mới'),
+        title: const Text(
+          'Duyệt sân mới',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         actions: [if (Navigator.canPop(context)) const BackButton()],
+        backgroundColor: primaryGreen,
+        foregroundColor: Colors.white,
       ),
-      drawer: const AdminDrawer(selectedIndex: 1),
+      drawer: AdminDrawer(
+        selectedIndex: 1,
+        pendingVenueCount: MockStore.venues
+            .where((v) => v.status == 'pending')
+            .length,
+      ),
       body: pending.isEmpty
           ? _buildEmptyState()
           : ListView.separated(
@@ -46,6 +138,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   // Hiển thị số lượng sân và trạng thái không có sân
   Widget _buildSummaryHeader(int count) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -55,43 +148,23 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.pending_actions_outlined,
+          Text(
+            '$count sân đang chờ duyệt',
+            style: const TextStyle(
               color: Colors.white,
-              size: 26,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$count sân đang chờ duyệt',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Kiểm tra thông tin trước khi phê duyệt',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 2),
+          Text(
+            'Kiểm tra thông tin trước khi phê duyệt',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontSize: 13,
             ),
           ),
         ],
@@ -166,10 +239,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _infoRow(
-                  Icons.location_on_outlined,
-                  '${venue.address}, ${venue.district}, ${venue.city}',
-                ),
+                _infoRow('${venue.address}, ${venue.district}, ${venue.city}'),
                 if (owner != null) ...[
                   const SizedBox(height: 16),
                   _buildOwnerSection(owner),
@@ -211,17 +281,15 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
           top: 12,
           left: 12,
           child: _badge(
-            icon: Icons.hourglass_top_rounded,
             label: 'Chờ duyệt',
-            background: AppTheme.warning,
-            foreground: Colors.white,
+            background: Color(0xFFF59E0B),
+            foreground: Colors.black,
           ),
         ),
         Positioned(
           left: 12,
           bottom: 12,
           child: _badge(
-            icon: Icons.sports_outlined,
             label: venue.sportType,
             background: Colors.white,
             foreground: AppTheme.primaryDark,
@@ -231,7 +299,6 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
           right: 12,
           bottom: 12,
           child: _badge(
-            icon: Icons.payments_outlined,
             label: '${_formatPrice(venue.pricePerHour)} đ/giờ',
             background: AppTheme.primary,
             foreground: Colors.white,
@@ -242,7 +309,6 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   }
 
   Widget _badge({
-    required IconData icon,
     required String label,
     required Color background,
     required Color foreground,
@@ -253,29 +319,18 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
         color: background,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: foreground),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: foreground,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
 
   Widget _buildOwnerSection(AppUser owner) {
-    final initial = owner.name.trim().isEmpty
-        ? '?'
-        : owner.name.trim().characters.first.toUpperCase();
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -289,17 +344,11 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
         children: [
           Row(
             children: [
-              CircleAvatar(
+              // Ảnh đại diện mặc định của người dùng
+              const CircleAvatar(
                 radius: 20,
-                backgroundColor: AppTheme.primary,
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
+                backgroundColor: AppTheme.primaryLight,
+                child: Icon(Icons.person, size: 24, color: AppTheme.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -328,9 +377,9 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          _infoRow(Icons.phone_outlined, owner.phone),
+          _infoRow(owner.phone),
           const SizedBox(height: 8),
-          _infoRow(Icons.email_outlined, owner.email),
+          _infoRow(owner.email),
         ],
       ),
     );
@@ -340,22 +389,29 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.error,
-              side: const BorderSide(color: AppTheme.error, width: 1.2),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => _confirmReject(venue),
-            icon: const Icon(Icons.close_rounded),
-            label: const Text('Từ chối'),
+            child: const Text('Từ chối'),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: ElevatedButton.icon(
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () => _updateStatus(venue, 'approved'),
-            icon: const Icon(Icons.check_rounded),
-            label: const Text('Duyệt'),
+            child: const Text('Duyệt'),
           ),
         ),
       ],
@@ -366,52 +422,34 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   Widget _buildVenueImage(Venue venue) {
     final images = MockStore.imageUrlsOf(venue.id);
     if (images.isEmpty) {
-      return _imagePlaceholder(Icons.image_not_supported_outlined);
+      return _imagePlaceholder();
     }
 
-    return SizedBox(
+    return _VenueImageCarousel(
+      key: ValueKey('carousel_${venue.id}'),
+      images: images,
       height: _imageHeight,
-      width: double.infinity,
-      child: VenueImage(
-        source: images.first,
-        placeholder: _imagePlaceholder(Icons.broken_image_outlined),
-      ),
+      errorPlaceholder: _imagePlaceholder(),
     );
   }
 
-  Widget _imagePlaceholder(IconData icon) {
+  Widget _imagePlaceholder() {
     return Container(
       height: _imageHeight,
       width: double.infinity,
       color: AppTheme.primaryLight,
-      child: Center(
-        child: Icon(
-          icon,
-          size: 52,
-          color: AppTheme.primary.withValues(alpha: 0.6),
-        ),
-      ),
     );
   }
 
   // Thông tin sân
-  Widget _infoRow(IconData icon, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 19, color: AppTheme.primary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.35,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-        ),
-      ],
+  Widget _infoRow(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        height: 1.35,
+        color: AppTheme.textPrimary,
+      ),
     );
   }
 
