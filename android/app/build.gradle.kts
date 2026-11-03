@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
-    // Apply Flutter after the Android plugin; AGP provides built-in Kotlin.
+    id("org.jetbrains.kotlin.android")
+    // Apply Flutter after the Android and Kotlin plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sportfield_booking/data/account_repository.dart';
@@ -13,6 +15,11 @@ void main() {
   testWidgets('Android SQLite registration profile restart and logout', (
     tester,
   ) async {
+    expect(
+      Pbkdf2(macAlgorithm: Hmac.sha256(), iterations: 600000, bits: 256),
+      isA<FlutterPbkdf2>(),
+      reason: 'Android must use native PBKDF2',
+    );
     final path = '${await getDatabasesPath()}/account_integration_test.db';
     AccountRepository? repository;
     final seeds = List<AppUser>.of(MockStore.users);
@@ -26,9 +33,19 @@ void main() {
           name: 'Gia Huy Android',
           email: 'android-check@example.com',
           phone: '0987654321',
-          password: 'android-test-password',
+          password: 'Mật-khẩu-kiểm-thử-2026',
         );
         await AccountService.register(user);
+        // Fixed PBKDF2 fixture verifies compatibility with existing Dart hashes.
+        await repository!.database.update(
+          'Users',
+          {
+            'password_hash':
+                'AAECAwQFBgcICQoLDA0ODw==:aLUC1xz1FP2qzjEX2wi6iZPxG5S3xXancrLDx+9d6V4=',
+          },
+          where: 'user_id = ?',
+          whereArgs: [user.id],
+        );
         final loggedIn = await AccountService.login(user.email, user.password);
         expect(loggedIn?.id, user.id);
       });

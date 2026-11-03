@@ -8,6 +8,7 @@ Cập nhật 03/11/2026. Phần Gia Huy trên nhánh `codex/gia-huy-account-comp
 - `AccountRepository.open()` tạo `accounts.db` phiên bản 1; chỉ seed khi tạo database lần đầu. Dữ liệu đăng ký mới không bị ghi đè khi mở app lại.
 - `Users`: `user_id TEXT PRIMARY KEY`, `full_name`, `email COLLATE NOCASE UNIQUE`, `phone UNIQUE`, `password_hash`, `role`, `avatar_path` nullable, `is_active`.
 - `Session`: một dòng id=1, user_id khóa ngoại tới Users, expires_at theo milliseconds. Phiên tối đa 30 ngày; khôi phục chỉ khi tài khoản đang active và phiên còn hạn. Đăng xuất xóa dòng phiên.
+- Android dùng cryptography_flutter để thực thi PBKDF2 native (đăng ký plugin tự động). Hash cũ có mật khẩu Unicode được kiểm tra tương thích; không giảm số vòng hoặc xóa dữ liệu.
 - Mật khẩu: PBKDF2-HMAC-SHA256, 600.000 vòng, salt ngẫu nhiên 16 byte, khóa 256 bit. Chỉ hash và salt nằm trong database; AppUser đọc từ SQLite có password rỗng.
 - Đăng ký chỉ cho customer/owner; email chuẩn hóa lowercase; database chặn trùng email/SĐT. Không tự đăng ký Admin.
 - AccountService cập nhật danh sách Users/currentUser trong MockStore để những màn hiện có vẫn tra cứu được ID. Khi chạy test UI độc lập không gọi main(), service chưa được khởi tạo sẽ giữ adapter MockStore; đây không phải đường fallback khi startup lỗi.

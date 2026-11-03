@@ -8,6 +8,92 @@ import 'package:sportfield_booking/models/user.dart';
 void main() {
   sqfliteFfiInit();
   test(
+    'SQLite rejects duplicate phones and cross-account profile writes',
+    () async {
+      final seed = [
+        for (final (index, role) in ['customer', 'owner', 'admin'].indexed)
+          AppUser(
+            id: role,
+            name: role,
+            email: '$role@example.test',
+            phone: '090000000${index + 1}',
+            password: 'test-password',
+            role: role,
+          ),
+      ];
+      final repo = await AccountRepository.open(
+        seed: seed,
+        factory: databaseFactoryFfi,
+        path: inMemoryDatabasePath,
+      );
+      try {
+        for (final user in seed) {
+          expect(
+            (await repo.login(user.email, user.password))?.role,
+            user.role,
+          );
+          expect((await repo.restoreSession())?.id, user.id);
+        }
+        await repo.login(seed.first.email, seed.first.password);
+        await expectLater(
+          repo.register(
+            AppUser(
+              id: 'duplicate-phone',
+              name: 'Other',
+              email: 'other@example.test',
+              phone: seed.first.phone,
+              password: 'test-password',
+            ),
+          ),
+          throwsArgumentError,
+        );
+        await expectLater(
+          repo.updateProfile(
+            userId: 'customer',
+            name: 'Changed',
+            phone: seed[1].phone,
+            avatarPath: '/new.png',
+          ),
+          throwsArgumentError,
+        );
+        final unchanged = await repo.restoreSession();
+        expect(unchanged?.name, 'customer');
+        expect(unchanged?.phone, seed.first.phone);
+        expect(unchanged?.avatarPath, isNull);
+        expect(
+          await repo.updateProfile(
+            userId: 'owner',
+            name: 'Unauthorized',
+            phone: '0912345678',
+            avatarPath: null,
+          ),
+          isNull,
+        );
+        final owner = (await repo.allUsers()).singleWhere(
+          (u) => u.id == 'owner',
+        );
+        expect(owner.name, 'owner');
+        expect(owner.phone, seed[1].phone);
+        await repo.database.update(
+          'Users',
+          {
+            'password_hash':
+                'AAECAwQFBgcICQoLDA0ODw==:aLUC1xz1FP2qzjEX2wi6iZPxG5S3xXancrLDx+9d6V4=',
+          },
+          where: 'user_id = ?',
+          whereArgs: ['customer'],
+        );
+        expect(
+          (await repo.login(seed.first.email, 'Mật-khẩu-kiểm-thử-2026'))?.id,
+          'customer',
+        );
+      } finally {
+        await repo.database.close();
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+  test(
     'SQLite accounts survive reopen, protect roles and clear sessions',
     () async {
       final directory = await Directory.systemTemp.createTemp('accounts_test_');
