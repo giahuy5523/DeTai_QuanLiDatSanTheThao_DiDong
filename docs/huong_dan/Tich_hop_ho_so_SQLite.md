@@ -1,27 +1,29 @@
-# Hồ sơ Customer — bàn giao tích hợp SQLite
+# Tài khoản và hồ sơ SQLite
 
-## Luồng hiện tại
+Cập nhật 03/11/2026. Phần Gia Huy trên nhánh `codex/gia-huy-account-completion`.
 
-- `ProfileScreen` đọc người dùng hiện tại từ `MockStore`; email chỉ đọc.
-- Chọn ảnh bằng `image_picker`, đọc và giải mã ảnh, chuyển thành PNG để xem trước. Chưa bấm Lưu thì chưa cập nhật model hoặc tạo file avatar.
-- Khi Lưu: validation tên/số điện thoại → `AvatarStorage.save` chép PNG vào `getApplicationDocumentsDirectory()/avatars/` → `MockStore.updateCurrentProfile` cập nhật cả danh sách users và currentUser → cập nhật UI, snackbar thành công.
-- Update giữ nguyên id, email, password và role. Kiểm tra userId tránh ghi nhầm tài khoản nếu phiên đã đổi trong lúc lưu.
-- Chọn Xóa ảnh chỉ thay đổi bản xem trước; bấm Lưu mới xóa đường dẫn model và dọn file cũ thuộc thư mục avatar của app. Không xóa ảnh gốc trong thư viện.
-- Hủy picker, ảnh không giải mã được, lỗi ghi file không thay đổi dữ liệu hồ sơ đã lưu. Mất file avatar hiển thị icon người dự phòng.
-- Đăng xuất cần xác nhận; xóa currentUser và dọn Navigator stack.
+## Luồng thực thi
 
-## Phần Đạt cần nối khi làm SQLite
+- `main()` khởi tạo SQLite qua `AccountService.initialize()` trước khi mở app. Lỗi mở dữ liệu hiển thị màn Thử lại, không âm thầm chuyển sang dữ liệu mock.
+- `AccountRepository.open()` tạo `accounts.db` phiên bản 1; chỉ seed khi tạo database lần đầu. Dữ liệu đăng ký mới không bị ghi đè khi mở app lại.
+- `Users`: `user_id TEXT PRIMARY KEY`, `full_name`, `email COLLATE NOCASE UNIQUE`, `phone UNIQUE`, `password_hash`, `role`, `avatar_path` nullable, `is_active`.
+- `Session`: một dòng id=1, user_id khóa ngoại tới Users, expires_at theo milliseconds. Phiên tối đa 30 ngày; khôi phục chỉ khi tài khoản đang active và phiên còn hạn. Đăng xuất xóa dòng phiên.
+- Mật khẩu: PBKDF2-HMAC-SHA256, 600.000 vòng, salt ngẫu nhiên 16 byte, khóa 256 bit. Chỉ hash và salt nằm trong database; AppUser đọc từ SQLite có password rỗng.
+- Đăng ký chỉ cho customer/owner; email chuẩn hóa lowercase; database chặn trùng email/SĐT. Không tự đăng ký Admin.
+- AccountService cập nhật danh sách Users/currentUser trong MockStore để những màn hiện có vẫn tra cứu được ID. Khi chạy test UI độc lập không gọi main(), service chưa được khởi tạo sẽ giữ adapter MockStore; đây không phải đường fallback khi startup lỗi.
+- Hồ sơ ghi SQLite thành công rồi mới báo thành công và dọn avatar cũ. Chọn ảnh nhưng chưa Lưu chỉ thay đổi preview. File ảnh nằm trong documents/avatars; không xóa ảnh gốc của picker.
+- Tất cả nút đăng xuất Customer/Owner/Admin gọi AccountService, xóa phiên bền vững rồi dọn Navigator stack.
 
-1. Đối chiếu schema Users cuối cùng và bổ sung cột nullable `avatar_path` nếu chưa có; viết migration cho database đã tồn tại, không chỉ sửa seed.
-2. Ánh xạ `AppUser.avatarPath` ↔ `avatar_path` trong repository chung; lưu cùng tên và số điện thoại theo id người dùng.
-3. Thay điểm cập nhật `MockStore.updateCurrentProfile` bằng repository. Chỉ báo thành công khi transaction hoàn tất. Cập nhật session/UI bằng người dùng mới sau khi commit.
-4. Khi đăng nhập/khôi phục phiên, đọc hồ sơ từ SQLite; kiểm tra avatar path có còn tồn tại. Đường dẫn file không phải URL cloud và không tự di chuyển sang máy khác.
-5. Nếu database ghi thất bại sau khi tạo ảnh mới, dọn file mới; chỉ xóa ảnh cũ sau khi cập nhật database thành công.
+## Hợp đồng tích hợp với Quốc Đạt
 
-## Giới hạn phải nói đúng
+Database tài khoản được tách riêng để không tự ý thay schema toàn nhóm. Runtime hiện dùng ID chuỗi (`customer1`, `owner1`, ...), còn file thiết kế `assets/db/database.sql` dùng ID số và cột avatar_url. Không trộn hai schema hay coi file SQL cũ là runtime.
 
-Hiện metadata vẫn chỉ nằm trong bộ nhớ MockStore: có thể đăng xuất/đăng nhập lại trong cùng lần chạy và thấy thông tin đã sửa; khởi động lại toàn bộ app sẽ trở về seed. File PNG được lưu trong thư mục ứng dụng nhưng liên kết tới tài khoản chưa được lưu bền vững. Chưa tích hợp SQLite, đồng bộ server hoặc cloud avatar. Mật khẩu vẫn là dữ liệu mock của dự án.
+Khi Đạt tích hợp database chung: thống nhất một kiểu ID hoặc bảng ánh xạ; giữ liên kết owner_id/customer_id của sân/booking; migrate Users/avatar_path và phiên theo transaction, không xóa database để nâng phiên bản. Có thể truyền Database chung vào AccountRepository sau khi migrate schema phù hợp. Giữ lại dữ liệu người dùng trước và sau chuyển đổi; không chép password rỗng từ AppUser vào password_hash.
 
-## Kiểm thử
+Các bảng sân, booking, dịch vụ, khuyến mãi, thanh toán chưa được chuyển sang SQLite trong phần việc này. Chưa có đồng bộ đa thiết bị, xác minh email/SĐT, Google/Apple, sinh trắc học hoặc reset mật khẩu từ xa. Phiên local không phải token backend. Seed chỉ phục vụ demo đồ án.
 
-`test/profile_test.dart`: lưu tên/số điện thoại và giữ identity; validation trên màn 360px; xem trước/lưu/xóa avatar; hủy/quyền truy cập/ảnh lỗi; lỗi lưu file; xác nhận/hủy đăng xuất; ghi và xóa file giới hạn trong thư mục avatar của app.
+## Kiểm tra
+
+- `test/account_repository_test.dart`: SQLite thật, register/login, hash, trùng email, chặn đăng ký Admin, sửa hồ sơ/avatar rồi đóng/mở lại, logout, phiên hết hạn và tài khoản bị khóa.
+- `test/profile_test.dart`: picker, preview, lưu/xóa ảnh, lỗi tệp và xác nhận đăng xuất.
+- `integration_test/account_sqlite_test.dart`: SQLite trên Android, đăng ký/đăng nhập qua service, sửa hồ sơ qua UI, đóng/mở kết nối để khôi phục và xóa phiên. Không thay thế kiểm tra force-stop toàn tiến trình.

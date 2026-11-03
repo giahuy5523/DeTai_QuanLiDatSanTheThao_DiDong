@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
-/// Image files only; profile metadata stays in MockStore until SQLite.
+/// Owns avatar files; account metadata is persisted by AccountRepository.
 class AvatarStorage {
   Future<Directory> _directory() async {
     final root = await getApplicationDocumentsDirectory();

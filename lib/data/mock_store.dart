@@ -802,7 +802,7 @@ class MockStore {
 
   static bool emailExists(String email) => findUserByEmail(email) != null;
 
-  /// Replace this update point with the shared SQLite repository later.
+  /// In-memory adapter for isolated widget tests; runtime uses AccountService.
   static AppUser? updateCurrentProfile({
     required String userId,
     required String name,
