@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/app_routes.dart';
-import '../../data/mock_store.dart';
+import '../../data/account_service.dart';
 import '../../utils/auth_validation.dart';
 import 'auth_layout.dart';
 
@@ -15,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  bool _busy = false;
   bool _obscure = true;
   bool _phoneMode = false;
   final _phone = TextEditingController();
@@ -27,29 +28,44 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
+  Future<void> _login() async {
+    if (_busy) return;
     if (_phoneMode) {
       showBackendNotice(context);
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final user = MockStore.login(_email.text, _password.text);
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email hoặc mật khẩu không đúng.')),
-      );
-      return;
-    }
-    switch (user.role) {
-      case 'owner':
-        Navigator.pushReplacementNamed(context, AppRoutes.manageVenue);
-        break;
-      case 'admin':
-        Navigator.pushReplacementNamed(context, AppRoutes.statistics);
-        break;
-      default:
-        Navigator.pushReplacementNamed(context, AppRoutes.customerShell);
+    setState(() => _busy = true);
+    try {
+      final user = await AccountService.login(_email.text, _password.text);
+      if (!mounted) return;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Email hoặc mật khẩu không đúng.')),
+        );
+        return;
+      }
+      switch (user.role) {
+        case 'owner':
+          Navigator.pushReplacementNamed(context, AppRoutes.manageVenue);
+          break;
+        case 'admin':
+          Navigator.pushReplacementNamed(context, AppRoutes.statistics);
+          break;
+        default:
+          Navigator.pushReplacementNamed(context, AppRoutes.customerShell);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể đăng nhập. Vui lòng thử lại.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -78,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: const Color(0xFFF0F3F6),
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
@@ -132,7 +148,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           const SizedBox(height: 2),
-          ElevatedButton(onPressed: _login, child: const Text('ĐĂNG NHẬP')),
+          ElevatedButton(
+            onPressed: _busy ? null : _login,
+            child: Text(_busy ? 'ĐANG ĐĂNG NHẬP…' : 'ĐĂNG NHẬP'),
+          ),
           const SizedBox(height: 12),
           TextButton(
             style: TextButton.styleFrom(
@@ -169,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _social('●', 'Đăng nhập với Apple'),
           const SizedBox(height: 12),
           TextButton(
-            onPressed: _register,
+            onPressed: _busy ? null : _register,
             child: const Text('Chưa có tài khoản? Đăng ký'),
           ),
         ],
@@ -195,7 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
             foregroundColor: selected ? Colors.white : authInk,
             side: BorderSide(color: selected ? authGreen : authBorder),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
           child: Text(
@@ -215,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
       minimumSize: const Size.fromHeight(41),
       side: const BorderSide(color: authBorder),
       padding: const EdgeInsets.symmetric(horizontal: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     child: Row(
       children: [

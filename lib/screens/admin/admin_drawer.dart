@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../data/mock_store.dart';
+import '../../data/account_service.dart';
 import '../../utils/app_routes.dart';
 
 class AdminDrawer extends StatelessWidget {
@@ -19,13 +19,13 @@ class AdminDrawer extends StatelessWidget {
   });
 
   static const _bg = Color(0xFFF5F7FA);
-  static const _primary = Color(0xFF0F8A5F);
+  static const _primary = Color(0xFF0F8B5F);
   static const _primaryDark = Color(0xFF065F46);
   static const _selectedBg = Color(0xFFA7F3D0);
   static const _textDark = Color(0xFF10241C);
   static const _textMuted = Color(0xFF64748B);
   static const _divider = Color(0xFFB7F0D8);
-  static const _badge = Color(0xFFFFB347);
+  static const _badge = Color(0xFFFFB547);
   static const _danger = Color(0xFFEF4444);
 
   Future<void> _goTo(BuildContext context, String route) async {
@@ -35,8 +35,20 @@ class AdminDrawer extends StatelessWidget {
     onReturn?.call();
   }
 
-  void _logout(BuildContext context) {
-    MockStore.logout();
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await AccountService.logout();
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể đăng xuất. Vui lòng thử lại.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.login,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/account_service.dart';
 import '../../models/user.dart';
 import '../../utils/auth_validation.dart';
 import 'auth_layout.dart';
@@ -19,6 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _password = TextEditingController();
   final _confirmation = TextEditingController();
   String _role = 'customer';
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -30,20 +32,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_busy) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final email = _email.text.trim().toLowerCase();
-    MockStore.addUser(
-      AppUser(
-        id: 'user${DateTime.now().microsecondsSinceEpoch}',
-        name: _name.text.trim(),
-        email: email,
-        phone: _phone.text.trim(),
-        password: _password.text,
-        role: _role,
-      ),
-    );
-    Navigator.pop(context, email);
+    setState(() => _busy = true);
+    try {
+      await AccountService.register(
+        AppUser(
+          id: 'user${DateTime.now().microsecondsSinceEpoch}',
+          name: _name.text.trim(),
+          email: email,
+          phone: _phone.text.trim(),
+          password: _password.text,
+          role: _role,
+        ),
+      );
+      if (mounted) Navigator.pop(context, email);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ArgumentError
+                  ? '${error.message}'
+                  : 'Không thể tạo tài khoản. Vui lòng thử lại.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -116,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 26),
           ElevatedButton(
-            onPressed: _submit,
+            onPressed: _busy ? null : _submit,
             child: const Text('TẠO TÀI KHOẢN'),
           ),
           TextButton(
@@ -151,7 +171,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             foregroundColor: selected ? Colors.white : authInk,
             side: BorderSide(color: selected ? authGreen : authBorder),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
           child: Text(

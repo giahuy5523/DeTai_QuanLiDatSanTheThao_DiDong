@@ -4,7 +4,9 @@ class AppTheme {
   AppTheme._();
 
   // Màu sắc thương hiệu Nhom1_DatSanTheThao
-  static const primary = Color(0xFF0F8B5F); // Xanh thương hiệu theo quy chuẩn nhóm
+  static const primary = Color(
+    0xFF0F8B5F,
+  ); // Xanh thương hiệu theo quy chuẩn nhóm
   static const primaryDark = Color(0xFF0B6849);
   static const primaryLight = Color(0xFFE5F4ED);
   static const secondary = Color(0xFF20A875);
@@ -130,6 +132,16 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(

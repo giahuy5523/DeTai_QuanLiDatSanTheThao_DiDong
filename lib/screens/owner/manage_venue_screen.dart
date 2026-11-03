@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../screens/owner/venue_bookings_screen.dart';
 import '../../screens/owner/venue_update_screen.dart';
 import '../../data/mock_store.dart';
+import '../../data/account_service.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 
@@ -111,8 +112,20 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              MockStore.logout();
+            onPressed: () async {
+              try {
+                await AccountService.logout();
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Không thể đăng xuất. Vui lòng thử lại.'),
+                    ),
+                  );
+                }
+                return;
+              }
+              if (!context.mounted) return;
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 AppRoutes.login,

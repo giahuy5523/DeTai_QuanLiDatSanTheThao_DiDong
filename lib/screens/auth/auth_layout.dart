@@ -44,7 +44,7 @@ class AuthLayout extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         ),
@@ -140,19 +140,7 @@ class AuthField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: authMuted, fontSize: 13),
-          prefixIcon: ExcludeSemantics(
-            child: Center(
-              widthFactor: 1,
-              child: Text(
-                icon == Icons.phone_outlined
-                    ? '☎'
-                    : icon == Icons.mail_outline
-                    ? '✉'
-                    : '♙',
-                style: const TextStyle(fontSize: 18, color: authMuted),
-              ),
-            ),
-          ),
+          prefixIcon: Icon(icon, size: 20, color: authMuted),
           suffixIcon: suffix,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 15,
