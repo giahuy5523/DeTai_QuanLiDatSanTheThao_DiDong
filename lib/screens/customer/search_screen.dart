@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
+import '../../models/service.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/venue_image.dart';
@@ -56,6 +58,74 @@ class _SearchScreenState extends State<SearchScreen> {
   DateTime? _date; // Lọc theo lịch trống (TimeSlots)
   int? _hour; // Giờ bắt đầu mong muốn
   _SortOption _sort = _SortOption.none;
+  List<Venue> _databaseVenues = const [];
+  List<Map<String, Object?>> _databaseSports = const [];
+  final Map<String, List<VenueService>> _databaseServices = {};
+  final Map<String, List<Map<String, Object?>>> _databaseSlots = {};
+  bool _hasDatabaseSnapshot = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadVenues();
+  }
+
+  Future<void> _reloadVenues() async {
+    if (!VenueRepository.isInitialized) return;
+    try {
+      final venues = await VenueRepository.loadVenues(approvedOnly: true);
+      final sports = (await VenueRepository.loadSportTypes())
+          .map((row) => <String, Object?>{
+            'id': row['sportTypeId'],
+            'name': row['name'],
+            'description': row['description'],
+          })
+          .toList();
+      final services = <String, List<VenueService>>{};
+      final availabilityDate = _date ?? DateTime.now();
+      final serviceResults = await Future.wait(venues.map((venue) async =>
+          MapEntry(venue.id, await VenueRepository.loadServicesFor(venue.id))));
+      final slotResults = await Future.wait(venues.map((venue) async =>
+          MapEntry(venue.id, await VenueRepository.loadAvailableSlots(
+            venue.id,
+            availabilityDate,
+          ))));
+      services.addEntries(serviceResults);
+      if (!mounted) return;
+      setState(() {
+        _databaseVenues = venues;
+        _databaseSports = sports;
+        _databaseServices
+          ..clear()
+          ..addAll(services);
+        _databaseSlots
+          ..clear()
+          ..addEntries(slotResults);
+        _hasDatabaseSnapshot = true;
+      });
+    } catch (_) {
+      // Keep the startup snapshot available if refreshing from SQLite fails.
+    }
+  }
+
+  Future<void> _reloadAvailability(DateTime date) async {
+    if (!_hasDatabaseSnapshot) return;
+    try {
+      final results = await Future.wait(_databaseVenues.map((venue) async =>
+          MapEntry(venue.id, await VenueRepository.loadAvailableSlots(
+            venue.id,
+            date,
+          ))));
+      if (!mounted) return;
+      setState(() {
+        _databaseSlots
+          ..clear()
+          ..addEntries(results);
+      });
+    } catch (_) {
+      // Retain the last availability snapshot if a query fails.
+    }
+  }
 
   @override
   void dispose() {
@@ -90,6 +160,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _hour = null;
       _sort = _SortOption.none;
     });
+    _reloadAvailability(DateTime.now());
   }
 
   List<Venue> _filterVenues() {
@@ -97,8 +168,13 @@ class _SearchScreenState extends State<SearchScreen> {
     final checkAvailability = _date != null || _hour != null;
     final date = _date ?? DateTime.now();
 
-    final list = MockStore.approvedVenues.where((v) {
-      final services = MockStore.servicesFor(v.id);
+    final candidates = _hasDatabaseSnapshot
+        ? _databaseVenues
+        : MockStore.approvedVenues;
+    final list = candidates.where((v) {
+      final services = _hasDatabaseSnapshot
+          ? (_databaseServices[v.id] ?? const <VenueService>[])
+          : MockStore.servicesFor(v.id);
 
       // Từ khóa: tên sân, địa chỉ, quận/huyện, thành phố, tên dịch vụ
       if (query.isNotEmpty) {
@@ -124,7 +200,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
       // Lịch trống: dựa trên TimeSlots (sinh từ bookings chưa huỷ)
       if (checkAvailability) {
-        final slots = MockStore.timeSlotsFor(v.id, date);
+        final slots = _hasDatabaseSnapshot
+            ? (_databaseSlots[v.id] ?? const <Map<String, Object?>>[])
+            : MockStore.timeSlotsFor(v.id, date);
         final ok = slots.any(
           (s) =>
               s['status'] == 'available' &&
@@ -208,7 +286,10 @@ class _SearchScreenState extends State<SearchScreen> {
       lastDate: today.add(const Duration(days: 60)),
       helpText: 'Chọn ngày muốn đặt sân',
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null) {
+      setState(() => _date = picked);
+      await _reloadAvailability(picked);
+    }
   }
 
   Future<void> _pickHour() async {
@@ -264,7 +345,15 @@ class _SearchScreenState extends State<SearchScreen> {
     var range = _priceRange;
     var district = _district;
     var onlyServices = _onlyWithServices;
-    final districts = MockStore.districts;
+    final districts = (_hasDatabaseSnapshot
+            ? _databaseVenues
+            : MockStore.approvedVenues)
+        .map((venue) => venue.district)
+        .whereType<String>()
+        .where((district) => district.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
 
     final applied = await showModalBottomSheet<bool>(
       context: context,
@@ -447,7 +536,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSportChips() {
-    final sportTypes = MockStore.sportTypes;
+    final sportTypes = _hasDatabaseSnapshot
+        ? _databaseSports
+        : MockStore.sportTypes;
     return SizedBox(
       height: 52,
       child: ListView(
@@ -494,9 +585,7 @@ class _SearchScreenState extends State<SearchScreen> {
               selected: _date != null,
               showCheckmark: false,
               onPressed: _pickDate,
-              onDeleted: _date == null
-                  ? null
-                  : () => setState(() => _date = null),
+              onDeleted: _date == null ? null : () => _clearDate(),
             ),
           ),
           Padding(
@@ -527,6 +616,11 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
     );
+  }
+
+  void _clearDate() {
+    setState(() => _date = null);
+    _reloadAvailability(DateTime.now());
   }
 
   Widget _buildActiveFilters() {
@@ -610,12 +704,17 @@ class _SearchScreenState extends State<SearchScreen> {
         : _isSameDay(_date!, now.add(const Duration(days: 1)))
         ? 'ngày mai'
         : 'ngày ${_dateShort(_date!)}';
-    final free = MockStore.timeSlotsFor(v.id, date)
+    final slots = _hasDatabaseSnapshot
+        ? (_databaseSlots[v.id] ?? const <Map<String, Object?>>[])
+        : MockStore.timeSlotsFor(v.id, date);
+    final free = slots
         .where((s) => s['status'] == 'available')
         .map((s) => s['startTime'] as String)
         .toList();
-    final services = MockStore.servicesFor(v.id);
-    final images = MockStore.imageUrlsOf(v.id);
+    final services = _hasDatabaseSnapshot
+        ? (_databaseServices[v.id] ?? const <VenueService>[])
+        : MockStore.servicesFor(v.id);
+    final images = _hasDatabaseSnapshot ? v.imageUrls : MockStore.imageUrlsOf(v.id);
 
     return Container(
       padding: const EdgeInsets.all(10),

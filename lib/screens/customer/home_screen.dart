@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
@@ -16,17 +17,46 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String? _sport;
+  List<Venue> _databaseVenues = const [];
+  List<String> _databaseSports = const [];
+  bool _hasDatabaseSnapshot = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadVenues();
+  }
+
+  Future<void> _reloadVenues() async {
+    if (!VenueRepository.isInitialized) return;
+    try {
+      final venues = await VenueRepository.loadVenues();
+      final sports = (await VenueRepository.loadSportTypes())
+          .map((row) => row['name'] as String)
+          .toList();
+      if (mounted) {
+        setState(() {
+          _databaseVenues = venues;
+          _databaseSports = sports;
+          _hasDatabaseSnapshot = true;
+        });
+      }
+    } catch (_) {
+      // Keep the startup snapshot visible if a refresh cannot complete.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final venues = MockStore.venues
+    final source = _hasDatabaseSnapshot ? _databaseVenues : MockStore.venues;
+    final venues = source
         .where(
           (v) =>
               v.status == 'approved' &&
               (_sport == null || v.sportType == _sport),
         )
         .toList();
-    final allApproved = MockStore.venues
+    final allApproved = source
         .where((v) => v.status == 'approved')
         .toList();
 
@@ -58,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.only(top: 24),
               child: _SportFilterRow(
+                sports: _hasDatabaseSnapshot ? _databaseSports : null,
                 onSelected: (sport) => setState(() => _sport = sport),
               ),
             ),
@@ -257,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeaturedCard(BuildContext context, Venue venue) {
-    final images = MockStore.imageUrlsOf(venue.id);
+    final images = venue.imageUrls;
     return SizedBox(
       width: 218,
       child: Material(
@@ -399,8 +430,9 @@ class _SearchBar extends StatelessWidget {
 
 /// Row chip lọc môn thể thao nhanh
 class _SportFilterRow extends StatefulWidget {
-  const _SportFilterRow({required this.onSelected});
+  const _SportFilterRow({required this.onSelected, this.sports});
   final ValueChanged<String?> onSelected;
+  final List<String>? sports;
   @override
   State<_SportFilterRow> createState() => _SportFilterRowState();
 }
@@ -408,13 +440,29 @@ class _SportFilterRow extends StatefulWidget {
 class _SportFilterRowState extends State<_SportFilterRow> {
   int _selected = 0;
 
-  static const _sports = [
+  static const _defaultSports = [
     ('Tất cả', Icons.grid_view_rounded),
     ('Bóng đá', Icons.sports_soccer),
     ('Cầu lông', Icons.sports_tennis),
     ('Tennis', Icons.sports_tennis),
     ('Bóng rổ', Icons.sports_basketball),
   ];
+
+  List<(String, IconData)> get _sports => widget.sports == null
+      ? _defaultSports
+      : [
+          ('Tất cả', Icons.grid_view_rounded),
+          for (final sport in widget.sports!)
+            (sport, _sportIcon(sport)),
+        ];
+
+  IconData _sportIcon(String sport) => switch (sport) {
+    'Bóng đá' => Icons.sports_soccer,
+    'Cầu lông' => Icons.sports_tennis,
+    'Tennis' => Icons.sports_tennis,
+    'Bóng rổ' => Icons.sports_basketball,
+    _ => Icons.sports,
+  };
 
   @override
   Widget build(BuildContext context) {

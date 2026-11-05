@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_theme.dart';
 
@@ -49,8 +50,9 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   late final List<_VenueImage> _images;
   late String _sportType;
   bool _picking = false;
+  bool _saving = false;
 
-  late final List<String> _sports;
+  late List<String> _sports;
 
   @override
   void initState() {
@@ -68,6 +70,21 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
         : MockStore.imageUrlsOf(venue.id);
     _images = urls.map((s) => _VenueImage(source: s)).toList();
     _loadExistingBytes();
+    _loadSportTypes();
+  }
+
+  Future<void> _loadSportTypes() async {
+    if (!VenueRepository.isInitialized) return;
+    try {
+      final rows = await VenueRepository.loadSportTypes();
+      final sports = rows.map((row) => row['name'] as String).toList();
+      if (!sports.contains(widget.venue.sportType)) {
+        sports.add(widget.venue.sportType);
+      }
+      if (mounted) setState(() => _sports = sports);
+    } catch (_) {
+      // Keep the startup options if the database refresh fails.
+    }
   }
 
   @override
@@ -174,27 +191,44 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     setState(() => _images.insert(0, _images.removeAt(index)));
   }
 
-  void _save() {
+  Future<void> _save() async {
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_images.length < _minImages) {
       _message('Vui lòng chọn tối thiểu $_minImages ảnh.');
       return;
     }
+    final sportTypeId = VenueRepository.isInitialized
+        ? await VenueRepository.sportTypeIdFor(_sportType)
+        : MockStore.sportTypeIdFor(_sportType);
     final updatedVenue = widget.venue.copyWith(
       name: _name.text.trim(),
       address: _address.text.trim(),
       sportType: _sportType,
-      sportTypeId: MockStore.sportTypeIdFor(_sportType),
+      sportTypeId: sportTypeId,
       pricePerHour: double.parse(_price.text.trim()),
       imageUrls: _images.map((img) => img.source).toList(),
     );
+    if (VenueRepository.isInitialized) {
+      setState(() => _saving = true);
+      try {
+        await VenueRepository.saveVenue(updatedVenue);
+      } catch (_) {
+        if (mounted) _message('Không thể lưu thay đổi vào cơ sở dữ liệu.');
+        return;
+      } finally {
+        if (mounted) setState(() => _saving = false);
+      }
+    }
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    if (!VenueRepository.isInitialized) {
     if (!MockStore.updateVenue(updatedVenue)) {
       _message('Không thể cập nhật thông tin sân.');
       return;
     }
     MockStore.setVenueImages(updatedVenue.id, updatedVenue.imageUrls);
+    }
     Navigator.pop(context, true);
     messenger.showSnackBar(
       SnackBar(
@@ -489,7 +523,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
             SizedBox(
               height: 56,
               child: ElevatedButton(
-                onPressed: _picking ? null : _save,
+                onPressed: _picking || _saving ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primary,
                   foregroundColor: Colors.white,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_theme.dart';
 
@@ -31,10 +32,42 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   final _price = TextEditingController();
   final List<XFile> _images = [];
   final List<Uint8List> _previews = [];
+  List<Map<String, Object?>> _sportTypes = const [];
   String? _sportType;
   String _fingerprint(Uint8List bytes) =>
       '${bytes.length}:${Object.hashAll(bytes)}';
   bool _picking = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sportTypes = MockStore.sportTypes
+        .map((sport) => <String, Object?>{
+              'id': sport['id'],
+              'name': sport['name'],
+            })
+        .toList();
+    _loadSportTypes();
+  }
+
+  Future<void> _loadSportTypes() async {
+    if (!VenueRepository.isInitialized) return;
+    try {
+      final rows = await VenueRepository.loadSportTypes();
+      if (!mounted) return;
+      setState(() {
+        _sportTypes = rows
+            .map((row) => <String, Object?>{
+                  'id': row['sportTypeId'],
+                  'name': row['name'],
+                })
+            .toList();
+      });
+    } catch (_) {
+      // Keep cached options if the database refresh fails.
+    }
+  }
 
   @override
   void dispose() {
@@ -214,22 +247,35 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     final sportType = _sportType!;
     final venueId = 'venue${DateTime.now().microsecondsSinceEpoch}';
     final imageUrls = _images.map((image) => image.path).toList();
-    MockStore.addVenue(
-      Venue(
+    final venue = Venue(
         id: venueId,
         ownerId: user.id,
         name: _name.text.trim(),
         address: _address.text.trim(),
         sportType: sportType,
-        sportTypeId: MockStore.sportTypeIdFor(sportType),
+        sportTypeId: _sportTypes
+            .cast<Map<String, Object?>>()
+            .firstWhere((sport) => sport['name'] == sportType)['id'] as int?,
         pricePerHour: double.parse(_price.text.trim()),
         imageUrls: imageUrls,
         latitude: 0,
         longitude: 0,
-      ),
-    );
-    MockStore.setVenueImages(venueId, imageUrls);
-    await _showSuccessDialog();
+      );
+    setState(() => _saving = true);
+    try {
+      if (VenueRepository.isInitialized) {
+        await VenueRepository.saveVenue(venue);
+      } else {
+        MockStore.addVenue(venue);
+        MockStore.setVenueImages(venueId, imageUrls);
+      }
+      await _showSuccessDialog();
+    } catch (_) {
+      if (mounted) _message('Không thể lưu sân vào cơ sở dữ liệu. Vui lòng thử lại.');
+      return;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
     if (!mounted) return;
     Navigator.pop(context, true);
   }
@@ -492,7 +538,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
                 style: TextStyle(color: _hintColor),
               ),
               items: [
-                for (final sport in MockStore.sportTypes)
+                for (final sport in _sportTypes)
                   DropdownMenuItem(
                     value: sport['name'] as String,
                     child: Text(sport['name'] as String),
@@ -543,7 +589,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
             SizedBox(
               height: 56,
               child: ElevatedButton(
-                onPressed: _picking ? null : _submit,
+                onPressed: _picking || _saving ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primary,
                   foregroundColor: Colors.white,

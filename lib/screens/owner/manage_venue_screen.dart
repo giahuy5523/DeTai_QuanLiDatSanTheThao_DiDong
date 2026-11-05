@@ -6,6 +6,7 @@ import '../../screens/owner/venue_bookings_screen.dart';
 import '../../screens/owner/venue_update_screen.dart';
 import '../../data/mock_store.dart';
 import '../../data/account_service.dart';
+import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 
@@ -70,12 +71,40 @@ class ManageVenueScreen extends StatefulWidget {
 
 class _ManageVenueScreenState extends State<ManageVenueScreen> {
   String _selectedFilter = 'all'; // 'all', 'approved', 'pending'
+  List<Venue> _databaseVenues = const [];
+  bool _hasDatabaseSnapshot = false;
+  int? _todayBookingsCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadFromDatabase();
+  }
+
+  Future<void> _reloadFromDatabase() async {
+    final ownerId = MockStore.currentUser?.id;
+    if (!VenueRepository.isInitialized || ownerId == null) return;
+    try {
+      final venues = await VenueRepository.loadVenues(ownerId: ownerId);
+      final count = await VenueRepository.todayBookingCountForOwner(ownerId);
+      if (!mounted) return;
+      setState(() {
+        _databaseVenues = venues;
+        _hasDatabaseSnapshot = true;
+        _todayBookingsCount = count;
+      });
+    } catch (_) {
+      // Retain the startup snapshot if the database refresh fails.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final allOwnVenues = MockStore.venues
-        .where((v) => v.ownerId == MockStore.currentUser?.id)
-        .toList();
+    final allOwnVenues = _hasDatabaseSnapshot
+        ? _databaseVenues
+        : MockStore.venues
+              .where((v) => v.ownerId == MockStore.currentUser?.id)
+              .toList();
 
     final totalVenues = allOwnVenues.length;
     final pendingVenues = allOwnVenues
@@ -84,12 +113,13 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
 
     // Tính số lịch hôm nay
     final today = DateTime.now();
-    final todayBookingsCount = MockStore.bookings.where((b) {
+    final mockTodayBookingsCount = MockStore.bookings.where((b) {
       if (!allOwnVenues.any((v) => v.id == b.venueId)) return false;
       return b.date.year == today.year &&
           b.date.month == today.month &&
           b.date.day == today.day;
     }).length;
+    final todayBookingsCount = _todayBookingsCount ?? mockTodayBookingsCount;
 
     final filteredVenues = allOwnVenues.where((venue) {
       if (_selectedFilter == 'approved') return venue.status == 'approved';
@@ -147,7 +177,8 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
           if (!mounted) return;
 
           if (result == true) {
-            setState(() {});
+            await _reloadFromDatabase();
+            if (mounted) setState(() {});
           }
         },
         icon: const Icon(Icons.add),
@@ -273,7 +304,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
           // Phần ảnh sân, huy hiệu trạng thái và số ảnh
           Builder(
             builder: (context) {
-              final images = MockStore.imageUrlsOf(venue.id);
+              final images = venue.imageUrls;
               return SizedBox(
                 height: 130,
                 width: double.infinity,
@@ -398,6 +429,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                             ),
                           );
                           if (mounted && result == true) {
+                            await _reloadFromDatabase();
                             setState(() {});
                           }
                         },

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../data/venue_repository.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/venue_image.dart';
 import '../../data/mock_store.dart';
@@ -96,6 +97,18 @@ class ApproveVenueScreen extends StatefulWidget {
 
 class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   static const double _imageHeight = 190;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVenues();
+  }
+
+  Future<void> _loadVenues() async {
+    if (!VenueRepository.isInitialized) return;
+    await VenueRepository.refreshCache();
+    if (mounted) setState(() {});
+  }
 
   List<Venue> get _pending =>
       MockStore.venues.where((venue) => venue.status == 'pending').toList();
@@ -501,11 +514,25 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
     if (confirmed == true) _updateStatus(venue, 'rejected');
   }
 
-  void _updateStatus(Venue venue, String status) {
+  Future<void> _updateStatus(Venue venue, String status) async {
+    if (!MockStore.venues.any((item) => item.id == venue.id)) return;
+
+    try {
+      if (VenueRepository.isInitialized) {
+        await VenueRepository.updateStatus(venue.id, status);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể lưu trạng thái sân.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
     final index = MockStore.venues.indexWhere((item) => item.id == venue.id);
-
     if (index < 0) return;
-
     MockStore.venues[index] = venue.copyWith(status: status);
 
     setState(() {});
