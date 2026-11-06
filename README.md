@@ -9,7 +9,7 @@
 - Trần Thanh Sơn
 
 ## Phạm vi giao diện hiện tại
-Project tập trung vào **Flutter/Dart và UI/UX**, dùng dữ liệu mock trong bộ nhớ để trình diễn luồng nghiệp vụ.
+Ứng dụng Flutter/Dart có giao diện Customer, Owner và Admin. Tài khoản, hồ sơ và phiên đăng nhập dùng SQLite; sân, booking, thanh toán mô phỏng và khuyến mãi vẫn dùng MockStore trong bộ nhớ.
 
 Các nhóm chức năng:
 
@@ -40,7 +40,7 @@ Các nhóm chức năng:
 - Thống kê lượt đặt sân toàn hệ thống
 
 ## Dữ liệu
-Đăng ký và đăng nhập dùng tài khoản giả trong `MockStore`. Tài khoản mới chỉ tồn tại trong phiên chạy; khởi động lại ứng dụng sẽ mất tài khoản vừa tạo. Vai trò được lấy từ tài khoản đăng nhập, không tự chọn ở màn Login.
+Khi chạy `lib/main.dart` trên Android, ứng dụng khởi tạo `accounts.db`, lưu tài khoản và hồ sơ vào SQLite, khôi phục phiên hợp lệ (tối đa 30 ngày). Đăng xuất xóa phiên khỏi database. Mật khẩu được băm PBKDF2-HMAC-SHA256 với salt riêng; không lưu mật khẩu thô vào database.
 
 Tài khoản demo (mật khẩu chung `123456`):
 - Khách hàng: `customer@gmail.com`
@@ -49,7 +49,9 @@ Tài khoản demo (mật khẩu chung `123456`):
 
 Đăng ký hỗ trợ Khách hàng và Chủ sân, kiểm tra email trùng, số điện thoại 10 chữ số bắt đầu bằng 0 và xác nhận mật khẩu. Chạy `flutter test` để kiểm tra các luồng tài khoản.
 
-Hiện tại sử dụng `MockStore` để mô phỏng dữ liệu và trạng thái trong phiên chạy ứng dụng. Firebase/SQLite chưa được tích hợp trong skeleton này vì giai đoạn đầu của môn học ưu tiên Flutter/Dart và giao diện.
+SQLite hiện chỉ áp dụng cho tài khoản. `AccountService` đồng bộ hồ sơ sang MockStore để giữ ID liên kết với dữ liệu sân và booking hiện có. Các nghiệp vụ còn lại chưa lưu bền vững. `assets/db/database.sql` là thiết kế database toàn hệ thống, không phải schema đang chạy cho tài khoản. Chi tiết: [tích hợp tài khoản SQLite](docs/huong_dan/Tich_hop_ho_so_SQLite.md).
+
+SĐT + mật khẩu, Google, Apple, sinh trắc học và quên mật khẩu chưa hỗ trợ trong bản SQLite. Thanh toán và hoàn tiền là mô phỏng.
 
 ## Chạy project
 Môi trường tối thiểu: Flutter 3.41, Dart 3.11 (do `image_picker`). Máy phát triển đã kiểm tra với Flutter 3.47.4 / Dart 3.13.3.
@@ -71,15 +73,15 @@ flutter pub get
 flutter run
 ```
 
-## Git nhanh
+## Kiểm tra và bàn giao
+
 ```bash
-git init
-git add .
-git commit -m "Complete Flutter UI skeleton"
-git branch -M main
-git remote add origin <URL_GITHUB_CUA_NHOM>
-git push -u origin main
+flutter analyze
+flutter test
+flutter test integration_test/account_sqlite_test.dart -d emulator-5554
+flutter build apk --debug
 ```
 
-## Lưu ý
-Thanh toán, Firebase, upload Storage, đồng bộ dữ liệu thật và backend chưa phải phần trọng tâm của skeleton này.
+Integration test tài khoản tạo database `account_integration_test.db` riêng và dọn sau khi chạy; không xóa `accounts.db`. Unit/widget test cũ giữ MockStore để kiểm tra nghiệp vụ, còn `account_repository_test.dart` dùng SQLite thật qua FFI.
+
+Mỗi thành viên làm branch riêng, tạo Pull Request để nhóm trưởng review. Không push trực tiếp vào main.

@@ -212,7 +212,7 @@ void main() {
     await tap(tester, find.widgetWithText(ElevatedButton, 'Lưu thay đổi'));
     expect(MockStore.currentUser, same(before));
     expect(
-      find.text('Không thể lưu ảnh đại diện. Vui lòng thử lại.'),
+      find.text('Không thể lưu thông tin. Vui lòng thử lại.'),
       findsOneWidget,
     );
   });

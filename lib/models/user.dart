@@ -8,7 +8,7 @@ class AppUser {
   final String password;
   final String role;
 
-  /// Application-owned local image; persist the path when SQLite is integrated.
+  /// Application-owned local image; AccountRepository persists this path.
   final String? avatarPath;
 
   AppUser({

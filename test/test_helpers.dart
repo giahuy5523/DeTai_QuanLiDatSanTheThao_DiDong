@@ -9,10 +9,25 @@ Future<void> start(WidgetTester tester) async {
 }
 
 Future<void> press(WidgetTester tester, String text) async {
-  final button = find.widgetWithText(
-    ElevatedButton,
-    text == 'Đăng nhập' || text == 'Tạo tài khoản' ? text.toUpperCase() : text,
+  final candidates = find.ancestor(
+    of: find.text(
+      text == 'Đăng nhập' || text == 'Tạo tài khoản'
+          ? text.toUpperCase()
+          : text,
+    ),
+    matching: find.byWidgetPredicate((widget) => widget is ButtonStyleButton),
   );
+  final button = find.byType(Dialog).evaluate().isNotEmpty
+      ? find.descendant(of: find.byType(Dialog).last, matching: candidates)
+      : candidates;
+  if (button.evaluate().isEmpty &&
+      find.byType(Scrollable).evaluate().isNotEmpty) {
+    await tester.scrollUntilVisible(
+      button,
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+  }
 
   expect(
     button,
@@ -21,9 +36,14 @@ Future<void> press(WidgetTester tester, String text) async {
   );
 
   await tester.ensureVisible(button);
+  await tester.pump(const Duration(seconds: 5));
   await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pumpAndSettle();
+  if (text == 'Gửi duyệt' && find.text('Xong').evaluate().isNotEmpty) {
+    await tester.tap(find.text('Xong'));
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/avatar_storage.dart';
 import '../../data/mock_store.dart';
+import '../../data/account_service.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/auth_validation.dart';
 
@@ -188,7 +189,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (newFile != null) await _storage.remove(newFile);
         return;
       }
-      final updated = MockStore.updateCurrentProfile(
+      final updated = await AccountService.updateProfile(
         userId: user.id,
         name: _name.text,
         phone: _phone.text,
@@ -199,6 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) _message('Phiên đăng nhập không còn hợp lệ.');
         return;
       }
+      if (!mounted) return;
       setState(() {
         _avatarPath = updated.avatarPath;
         _preview = null;
@@ -212,8 +214,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           /* Cleanup is best effort after a successful save. */
         }
       }
-    } catch (_) {
-      if (mounted) _message('Không thể lưu ảnh đại diện. Vui lòng thử lại.');
+    } catch (error) {
+      if (newFile != null) {
+        try {
+          await _storage.remove(newFile);
+        } catch (_) {}
+      }
+      if (mounted) {
+        _message(
+          error is ArgumentError
+              ? '${error.message}'
+              : 'Không thể lưu thông tin. Vui lòng thử lại.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -240,7 +253,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (!mounted || confirmed != true) return;
-    MockStore.logout();
+    try {
+      await AccountService.logout();
+    } catch (_) {
+      if (mounted) _message('Không thể đăng xuất. Vui lòng thử lại.');
+      return;
+    }
+    if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.login,
