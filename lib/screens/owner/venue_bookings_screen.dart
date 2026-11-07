@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
-import '../../models/booking.dart';
-import '../../models/user.dart';
+import '../../data/venue_repository.dart';
 import '../../utils/app_theme.dart';
 
 class VenueBookingsScreen extends StatefulWidget {
@@ -27,53 +26,82 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
 
   static const _stripDays = 14;
 
+  // Dữ liệu lịch đặt đọc từ SQLite.
+  List<VenueBookingEntry> _bookings = const [];
+  bool _isLoading = true;
+  bool _updating = false;
+  bool _initialDatePicked = false;
+  String? _error;
+
   late DateTime _selectedDate;
-  late final DateTime _stripStart;
+  late DateTime _stripStart;
   String? _statusFilter; // null = tất cả
 
   @override
   void initState() {
     super.initState();
     final today = _dateOnly(DateTime.now());
-
-    // Mặc định chọn ngày gần nhất (từ hôm nay trở đi) có lịch đặt.
-    final upcoming =
-        _venueBookings
-            .map((b) => _dateOnly(b.date))
-            .where((d) => !d.isBefore(today))
-            .toList()
-          ..sort();
-
-    _selectedDate = upcoming.isNotEmpty ? upcoming.first : today;
-    _stripStart = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day - 1,
-    );
+    _selectedDate = today;
+    _stripStart = DateTime(today.year, today.month, today.day - 1);
+    _loadBookings();
   }
 
-  // ---------------------------------------------------------------------------
   // Dữ liệu
-  // ---------------------------------------------------------------------------
-
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  List<Booking> get _venueBookings =>
-      MockStore.bookings.where((b) => b.venueId == widget.venueId).toList();
-
-  List<Booking> get _dayBookings =>
-      _venueBookings.where((b) => _sameDay(b.date, _selectedDate)).toList()
-        ..sort((a, b) => a.startTime.compareTo(b.startTime));
-
-  AppUser? _findUser(String userId) {
-    for (final user in MockStore.users) {
-      if (user.id == userId) return user;
+  Future<void> _loadBookings() async {
+    try {
+      final bookings = await VenueRepository.loadBookingsForVenue(
+        widget.venueId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _bookings = bookings;
+        _isLoading = false;
+        _error = null;
+        // Lần tải đầu: chọn ngày gần nhất (từ hôm nay trở đi) có lịch đặt.
+        if (!_initialDatePicked) {
+          _initialDatePicked = true;
+          final today = _dateOnly(DateTime.now());
+          final upcoming =
+              bookings
+                  .map((b) => _dateOnly(b.date))
+                  .where((d) => !d.isBefore(today))
+                  .toList()
+                ..sort();
+          if (upcoming.isNotEmpty) {
+            _selectedDate = upcoming.first;
+            _stripStart = DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day - 1,
+            );
+          }
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải lịch đặt. Vui lòng thử lại.';
+      });
     }
-    return null;
   }
+
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _loadBookings();
+  }
+
+  List<VenueBookingEntry> get _dayBookings =>
+      _bookings.where((b) => _sameDay(b.date, _selectedDate)).toList()
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
   String _weekdayLabel(DateTime d) =>
       d.weekday == DateTime.sunday ? 'CN' : 'T${d.weekday + 1}';
@@ -88,10 +116,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     return '$buf đ';
   }
 
-  // ---------------------------------------------------------------------------
   // Build
-  // ---------------------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
     final dayBookings = _dayBookings;
@@ -99,49 +124,71 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
         ? dayBookings
         : dayBookings.where((b) => b.status == _statusFilter).toList();
 
-    final title = 'Lịch đặt sân';
-
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
         backgroundColor: _primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: Text(
-          title,
-          style: const TextStyle(
+        title: const Text(
+          'Lịch đặt sân',
+          style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
       ),
-      body: Column(
-        children: [
-          _buildDateStrip(),
-          _buildFilterChips(dayBookings),
-          Expanded(
-            child: filtered.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, i) =>
-                        _buildBookingCard(context, filtered[i]),
-                  ),
-          ),
-        ],
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _buildError(_error!)
+          : Column(
+              children: [
+                _buildDateStrip(),
+                _buildFilterChips(dayBookings),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, i) =>
+                              _buildBookingCard(context, filtered[i]),
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _textGrey),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Dải chọn ngày
-  // ---------------------------------------------------------------------------
-
   Widget _buildDateStrip() {
     final itemWidth = (MediaQuery.of(context).size.width - 32 - 4 * 8) / 5;
-    final venueBookings = _venueBookings;
 
     return Container(
       color: _background,
@@ -159,7 +206,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             _stripStart.day + i,
           );
           final selected = _sameDay(day, _selectedDate);
-          final hasBooking = venueBookings.any((b) => _sameDay(b.date, day));
+          final hasBooking = _bookings.any((b) => _sameDay(b.date, day));
 
           return GestureDetector(
             onTap: () => setState(() {
@@ -222,11 +269,8 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Bộ lọc trạng thái
-  // ---------------------------------------------------------------------------
-
-  Widget _buildFilterChips(List<Booking> dayBookings) {
+  Widget _buildFilterChips(List<VenueBookingEntry> dayBookings) {
     int count(String status) =>
         dayBookings.where((b) => b.status == status).length;
 
@@ -272,10 +316,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Trạng thái rỗng
-  // ---------------------------------------------------------------------------
-
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -305,16 +346,13 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Thẻ lịch đặt
-  // ---------------------------------------------------------------------------
-
-  Widget _buildBookingCard(BuildContext context, Booking booking) {
-    final customer = _findUser(booking.userId);
-    final customerName = customer?.name ?? 'Khách không xác định';
-    final customerPhone = customer?.phone ?? 'Không có số điện thoại';
+  Widget _buildBookingCard(BuildContext context, VenueBookingEntry booking) {
+    final customerName = booking.customerName ?? 'Khách không xác định';
+    final customerPhone = booking.customerPhone ?? 'Không có số điện thoại';
 
     return Container(
+      key: ValueKey(booking.id),
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -483,7 +521,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     );
   }
 
-  List<Widget> _buildActions(Booking booking) {
+  List<Widget> _buildActions(VenueBookingEntry booking) {
     if (booking.status == 'pending') {
       return [
         const SizedBox(height: 16),
@@ -558,12 +596,13 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: color.withValues(alpha: 0.4),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        onPressed: onPressed,
+        onPressed: _updating ? null : onPressed,
         child: Text(
           label,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
@@ -572,12 +611,9 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Cập nhật trạng thái
-  // ---------------------------------------------------------------------------
-
   Future<void> _confirmAndUpdate(
-    Booking booking,
+    VenueBookingEntry booking,
     String newStatus, {
     required String title,
     required String message,
@@ -601,62 +637,88 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
       ),
     );
 
-    if (mounted && ok == true) _updateBookingStatus(booking, newStatus);
+    if (mounted && ok == true) await _updateBookingStatus(booking, newStatus);
   }
 
-  void _updateBookingStatus(Booking booking, String newStatus) {
-    final index = MockStore.bookings.indexWhere(
-      (item) => item.id == booking.id,
-    );
-
-    if (index == -1) return;
-    final current = MockStore.bookings[index];
-    final ownsVenue =
-        MockStore.currentUser?.role == 'owner' &&
-        MockStore.venues.any(
-          (venue) =>
-              venue.id == current.venueId &&
-              venue.ownerId == MockStore.currentUser?.id,
-        );
-    if (!ownsVenue) return;
-    if (newStatus == 'cancelled') {
-      if (!MockStore.cancelBooking(current.id)) return;
-      current.cancelReason = 'Chủ sân hủy lịch đặt';
-    } else if ((current.status == 'pending' && newStatus == 'confirmed') ||
-        (current.status == 'confirmed' && newStatus == 'completed')) {
-      current.status = newStatus;
-    } else {
+  Future<void> _updateBookingStatus(
+    VenueBookingEntry booking,
+    String newStatus,
+  ) async {
+    if (_updating) return;
+    final user = MockStore.currentUser;
+    if (user == null || user.role != 'owner') {
+      _showSnack('Chỉ chủ sân được cập nhật lịch đặt.', success: false);
       return;
     }
 
-    setState(() {});
+    setState(() => _updating = true);
+    var updated = false;
+    try {
+      // Kiểm tra quyền sở hữu sân và trạng thái hợp lệ được làm ngay trong SQL.
+      updated = await VenueRepository.updateBookingStatus(
+        bookingId: booking.id,
+        ownerId: user.id,
+        newStatus: newStatus,
+        cancelReason: newStatus == 'cancelled' ? 'Chủ sân hủy lịch đặt' : null,
+      );
+    } catch (_) {
+      if (mounted) {
+        _showSnack(
+          'Không thể cập nhật lịch đặt. Vui lòng thử lại.',
+          success: false,
+        );
+      }
+    }
 
-    final messages = {
+    if (!mounted) return;
+    setState(() => _updating = false);
+    if (!updated) {
+      // Có thể trạng thái đã đổi ở nơi khác: tải lại để hiển thị đúng.
+      await _loadBookings();
+      if (mounted) {
+        _showSnack(
+          'Không thể cập nhật lịch đặt này. Vui lòng kiểm tra lại.',
+          success: false,
+        );
+      }
+      return;
+    }
+
+    await _loadBookings();
+    if (!mounted) return;
+
+    const messages = {
       'cancelled': 'Đã hủy lịch đặt sân.',
       'confirmed': 'Đã xác nhận lịch đặt sân.',
       'completed': 'Đã đánh dấu lịch đặt là hoàn thành.',
     };
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: newStatus == 'cancelled'
-            ? AppTheme.error
-            : AppTheme.success,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: Row(
-          children: [
-            Icon(
-              newStatus == 'cancelled'
-                  ? Icons.cancel_outlined
-                  : Icons.check_circle_outline,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(messages[newStatus] ?? 'Đã cập nhật.')),
-          ],
-        ),
-      ),
+    _showSnack(
+      messages[newStatus] ?? 'Đã cập nhật.',
+      success: newStatus != 'cancelled',
     );
+  }
+
+  void _showSnack(String message, {required bool success}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: success ? AppTheme.success : AppTheme.error,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          content: Row(
+            children: [
+              Icon(
+                success ? Icons.check_circle_outline : Icons.cancel_outlined,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        ),
+      );
   }
 }

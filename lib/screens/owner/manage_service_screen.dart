@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
 import '../../models/service.dart';
 
 const _kGreen = Color(0xFF118C5F);
@@ -65,12 +65,48 @@ class ManageServiceScreen extends StatefulWidget {
 }
 
 class _ManageServiceScreenState extends State<ManageServiceScreen> {
-  List<VenueService> get _services =>
-      MockStore.servicesByVenue[widget.venueId] ?? [];
+  // Toàn bộ dữ liệu đến từ SQLite (bảng venues, venue_services).
+  List<VenueService> _services = const [];
+  String? _venueName;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServices();
+  }
+
+  Future<void> _loadServices() async {
+    try {
+      final services = await VenueRepository.loadServicesFor(widget.venueId);
+      final venueName = await VenueRepository.venueNameFor(widget.venueId);
+      if (!mounted) return;
+      setState(() {
+        _services = services;
+        _venueName = venueName;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải danh sách dịch vụ. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _loadServices();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final venue = MockStore.venueById(widget.venueId);
     final services = _services;
 
     return Scaffold(
@@ -86,13 +122,13 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
           fontWeight: FontWeight.w700,
         ),
         title: Text(
-          venue == null
+          _venueName == null
               ? 'Quản lý dịch vụ kèm theo'
-              : 'Dịch vụ - ${venue.name}',
+              : 'Dịch vụ - $_venueName',
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _editService(),
+        onPressed: _isLoading || _error != null ? null : () => _editService(),
         backgroundColor: _kGreen,
         foregroundColor: Colors.white,
         elevation: 2,
@@ -103,29 +139,61 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      body: services.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _buildError(_error!)
+          : services.isEmpty
           ? _buildEmpty()
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-              itemCount: services.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 0),
-                    child: Text(
-                      '${services.length} dịch vụ',
-                      style: const TextStyle(
-                        color: _kGreenDark,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+          : RefreshIndicator(
+              onRefresh: _loadServices,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                itemCount: services.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, i) {
+                  if (i == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 0),
+                      child: Text(
+                        '${services.length} dịch vụ',
+                        style: const TextStyle(
+                          color: _kGreenDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  );
-                }
-                return _buildServiceCard(services[i - 1]);
-              },
+                    );
+                  }
+                  return _buildServiceCard(services[i - 1]);
+                },
+              ),
             ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _kMuted),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -172,6 +240,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
 
   Widget _buildServiceCard(VenueService service) {
     return Container(
+      key: ValueKey(service.id),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -467,34 +536,25 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       priceText.replaceAll('.', '').replaceAll(',', ''),
     );
 
-    setState(() {
-      final list = MockStore.servicesByVenue[widget.venueId] ??= [];
-      final normalizedUnit = unit; // đã validate không rỗng trong dialog
+    final saved = VenueService(
+      id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
+      venueId: widget.venueId,
+      name: name,
+      price: price,
+      unit: unit,
+    );
 
-      if (service == null) {
-        list.add(
-          VenueService(
-            id: 's${DateTime.now().microsecondsSinceEpoch}',
-            venueId: widget.venueId,
-            name: name,
-            price: price,
-            unit: normalizedUnit,
-          ),
-        );
-      } else {
-        final index = list.indexWhere((item) => item.id == service.id);
-        if (index >= 0) {
-          list[index] = VenueService(
-            id: service.id,
-            venueId: widget.venueId,
-            name: name,
-            price: price,
-            unit: normalizedUnit,
-          );
-        }
+    try {
+      await VenueRepository.saveService(saved);
+      await _loadServices();
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể lưu dịch vụ. Vui lòng thử lại.', success: false);
       }
-    });
+      return;
+    }
 
+    if (!mounted) return;
     _showSnack(
       service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
       success: true,
@@ -540,12 +600,25 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    setState(() {
-      MockStore.servicesByVenue[widget.venueId]?.removeWhere(
-        (item) => item.id == service.id,
-      );
-    });
+    try {
+      final deleted = await VenueRepository.deleteService(service.id);
+      if (!mounted) return;
+      if (!deleted) {
+        _showSnack(
+          '"${service.name}" đã được dùng trong lịch đặt nên không thể xóa.',
+          success: false,
+        );
+        return;
+      }
+      await _loadServices();
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể xóa dịch vụ. Vui lòng thử lại.', success: false);
+      }
+      return;
+    }
 
+    if (!mounted) return;
     _showSnack('Đã xóa "${service.name}".', success: false);
   }
 

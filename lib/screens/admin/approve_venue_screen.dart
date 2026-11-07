@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import '../../data/venue_repository.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/venue_image.dart';
-import '../../data/mock_store.dart';
-import '../../models/user.dart';
 import '../../models/venue.dart';
 import 'admin_drawer.dart';
 
-/// Carousel ảnh sân: vuốt ngang để xem, góc trên phải hiện "1 / 3 ảnh".
+// Carousel ảnh sân: vuốt ngang để xem, góc trên phải hiện "1 / 3 ảnh".
 class _VenueImageCarousel extends StatefulWidget {
   const _VenueImageCarousel({
     super.key,
@@ -98,6 +96,13 @@ class ApproveVenueScreen extends StatefulWidget {
 class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   static const double _imageHeight = 190;
 
+  // Dữ liệu đọc từ SQLite: sân chờ duyệt (đã kèm ảnh) và thông tin chủ sân.
+  List<Venue> _pending = const [];
+  Map<String, VenueOwnerInfo> _owners = const {};
+  bool _isLoading = true;
+  bool _updating = false;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
@@ -105,13 +110,35 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
   }
 
   Future<void> _loadVenues() async {
-    if (!VenueRepository.isInitialized) return;
-    await VenueRepository.refreshCache();
-    if (mounted) setState(() {});
+    try {
+      final venues = await VenueRepository.loadVenues();
+      final pending = venues.where((v) => v.status == 'pending').toList();
+      final owners = await VenueRepository.loadOwnerContacts(
+        pending.map((v) => v.ownerId),
+      );
+      if (!mounted) return;
+      setState(() {
+        _pending = pending;
+        _owners = owners;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải danh sách sân chờ duyệt. Vui lòng thử lại.';
+      });
+    }
   }
 
-  List<Venue> get _pending =>
-      MockStore.venues.where((venue) => venue.status == 'pending').toList();
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _loadVenues();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,23 +155,50 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
         backgroundColor: primaryGreen,
         foregroundColor: Colors.white,
       ),
-      drawer: AdminDrawer(
-        selectedIndex: 1,
-        pendingVenueCount: MockStore.venues
-            .where((v) => v.status == 'pending')
-            .length,
-      ),
-      body: pending.isEmpty
+      drawer: AdminDrawer(selectedIndex: 1, pendingVenueCount: pending.length),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _buildError(_error!)
+          : pending.isEmpty
           ? _buildEmptyState()
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              itemCount: pending.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 14),
-              itemBuilder: (context, index) {
-                if (index == 0) return _buildSummaryHeader(pending.length);
-                return _buildVenueCard(pending[index - 1]);
-              },
+          : RefreshIndicator(
+              onRefresh: _loadVenues,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: pending.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 14),
+                itemBuilder: (context, index) {
+                  if (index == 0) return _buildSummaryHeader(pending.length);
+                  return _buildVenueCard(pending[index - 1]);
+                },
+              ),
             ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -227,12 +281,16 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
 
   // Card từng sân
   Widget _buildVenueCard(Venue venue) {
-    final owner = MockStore.users.cast<AppUser?>().firstWhere(
-      (user) => user?.id == venue.ownerId,
-      orElse: () => null,
-    );
+    final owner = _owners[venue.ownerId];
+    // district/city có thể null nên chỉ ghép các phần có giá trị.
+    final location = [
+      venue.address,
+      venue.district,
+      venue.city,
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
 
     return Card(
+      key: ValueKey(venue.id),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,7 +310,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _infoRow('${venue.address}, ${venue.district}, ${venue.city}'),
+                _infoRow(location),
                 if (owner != null) ...[
                   const SizedBox(height: 16),
                   _buildOwnerSection(owner),
@@ -295,7 +353,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
           left: 12,
           child: _badge(
             label: 'Chờ duyệt',
-            background: Color(0xFFF59E0B),
+            background: const Color(0xFFF59E0B),
             foreground: Colors.black,
           ),
         ),
@@ -343,7 +401,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
     );
   }
 
-  Widget _buildOwnerSection(AppUser owner) {
+  Widget _buildOwnerSection(VenueOwnerInfo owner) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -410,7 +468,7 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            onPressed: () => _confirmReject(venue),
+            onPressed: _updating ? null : () => _confirmReject(venue),
             child: const Text('Từ chối'),
           ),
         ),
@@ -423,7 +481,9 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            onPressed: () => _updateStatus(venue, 'approved'),
+            onPressed: _updating
+                ? null
+                : () => _updateStatus(venue, 'approved'),
             child: const Text('Duyệt'),
           ),
         ),
@@ -431,9 +491,9 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
     );
   }
 
-  // Ảnh sân
+  // Ảnh sân (lấy từ venue.imageUrls đã đọc từ bảng venue_images)
   Widget _buildVenueImage(Venue venue) {
-    final images = MockStore.imageUrlsOf(venue.id);
+    final images = venue.imageUrls;
     if (images.isEmpty) {
       return _imagePlaceholder();
     }
@@ -511,57 +571,56 @@ class _ApproveVenueScreenState extends State<ApproveVenueScreen> {
       ),
     );
 
-    if (confirmed == true) _updateStatus(venue, 'rejected');
+    if (mounted && confirmed == true) await _updateStatus(venue, 'rejected');
   }
 
   Future<void> _updateStatus(Venue venue, String status) async {
-    if (!MockStore.venues.any((item) => item.id == venue.id)) return;
+    if (_updating) return;
+    setState(() => _updating = true);
 
     try {
-      if (VenueRepository.isInitialized) {
-        await VenueRepository.updateStatus(venue.id, status);
-      }
+      // updateStatus ghi vào SQLite rồi tự làm mới cache.
+      await VenueRepository.updateStatus(venue.id, status);
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không thể lưu trạng thái sân.')),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _updating = false);
+      _showSnack('Không thể lưu trạng thái sân.', success: false);
       return;
     }
     if (!mounted) return;
+    setState(() => _updating = false);
 
-    final index = MockStore.venues.indexWhere((item) => item.id == venue.id);
-    if (index < 0) return;
-    MockStore.venues[index] = venue.copyWith(status: status);
-
-    setState(() {});
+    // Tải lại danh sách để sân vừa xử lý biến mất khỏi mục chờ duyệt.
+    await _loadVenues();
+    if (!mounted) return;
 
     final approved = status == 'approved';
+    _showSnack(
+      approved
+          ? 'Đã duyệt sân "${venue.name}".'
+          : 'Đã từ chối sân "${venue.name}".',
+      success: approved,
+    );
+  }
 
+  void _showSnack(String message, {required bool success}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: approved ? AppTheme.success : AppTheme.error,
+          backgroundColor: success ? AppTheme.success : AppTheme.error,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
           content: Row(
             children: [
               Icon(
-                approved ? Icons.check_circle_outline : Icons.cancel_outlined,
+                success ? Icons.check_circle_outline : Icons.cancel_outlined,
                 color: Colors.white,
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  approved
-                      ? 'Đã duyệt sân "${venue.name}".'
-                      : 'Đã từ chối sân "${venue.name}".',
-                ),
-              ),
+              Expanded(child: Text(message)),
             ],
           ),
         ),

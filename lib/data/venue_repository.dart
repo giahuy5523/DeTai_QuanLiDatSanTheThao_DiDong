@@ -54,22 +54,26 @@ class VenueRepository {
     for (final row in imageRows) {
       (images[row['venueId'] as String] ??= []).add(row['imageUrl'] as String);
     }
-    return rows.map((row) => Venue(
-      id: row['id'] as String,
-      ownerId: row['ownerId'] as String,
-      sportTypeId: row['sportTypeId'] as int?,
-      sportType: row['sportType'] as String,
-      name: row['name'] as String,
-      address: row['address'] as String,
-      district: row['district'] as String?,
-      city: row['city'] as String?,
-      pricePerHour: (row['pricePerHour'] as num).toDouble(),
-      imageUrls: images[row['id']] ?? const [],
-      latitude: (row['latitude'] as num).toDouble(),
-      longitude: (row['longitude'] as num).toDouble(),
-      status: row['status'] as String,
-      rating: (row['rating'] as num).toDouble(),
-    )).toList();
+    return rows
+        .map(
+          (row) => Venue(
+            id: row['id'] as String,
+            ownerId: row['ownerId'] as String,
+            sportTypeId: row['sportTypeId'] as int?,
+            sportType: row['sportType'] as String,
+            name: row['name'] as String,
+            address: row['address'] as String,
+            district: row['district'] as String?,
+            city: row['city'] as String?,
+            pricePerHour: (row['pricePerHour'] as num).toDouble(),
+            imageUrls: images[row['id']] ?? const [],
+            latitude: (row['latitude'] as num).toDouble(),
+            longitude: (row['longitude'] as num).toDouble(),
+            status: row['status'] as String,
+            rating: (row['rating'] as num).toDouble(),
+          ),
+        )
+        .toList();
   }
 
   static Future<List<Map<String, Object?>>> loadSportTypes() async =>
@@ -93,13 +97,68 @@ class VenueRepository {
       whereArgs: [venueId],
       orderBy: 'name COLLATE NOCASE',
     );
-    return rows.map((row) => VenueService(
-      id: row['id'] as String,
-      venueId: row['venueId'] as String,
-      name: row['name'] as String,
-      price: (row['price'] as num).toDouble(),
-      unit: row['unit'] as String,
-    )).toList();
+    return rows
+        .map(
+          (row) => VenueService(
+            id: row['id'] as String,
+            venueId: row['venueId'] as String,
+            name: row['name'] as String,
+            price: (row['price'] as num).toDouble(),
+            unit: row['unit'] as String,
+          ),
+        )
+        .toList();
+  }
+
+  /// Tên sân theo id, null nếu không tìm thấy.
+  static Future<String?> venueNameFor(String venueId) async {
+    final rows = await (await _db).query(
+      'venues',
+      columns: ['name'],
+      where: 'id = ?',
+      whereArgs: [venueId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['name'] as String;
+  }
+
+  /// Thêm mới hoặc cập nhật một dịch vụ của sân, rồi làm mới cache.
+  static Future<void> saveService(VenueService service) async {
+    final db = await _db;
+    final values = <String, Object?>{
+      'venueId': service.venueId,
+      'name': service.name,
+      'price': service.price,
+      'unit': service.unit,
+    };
+    final count = await db.update(
+      'venue_services',
+      values,
+      where: 'id = ?',
+      whereArgs: [service.id],
+    );
+    if (count == 0) {
+      await db.insert('venue_services', {'id': service.id, ...values});
+    }
+    await refreshCache();
+  }
+
+  /// Xóa dịch vụ. Trả về false (và không xóa) nếu dịch vụ đã được dùng trong
+  /// một lịch đặt, vì booking_services tham chiếu venue_services(id).
+  static Future<bool> deleteService(String serviceId) async {
+    final db = await _db;
+    final used =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM booking_services WHERE serviceId = ?',
+            [serviceId],
+          ),
+        ) ??
+        0;
+    if (used > 0) return false;
+    await db.delete('venue_services', where: 'id = ?', whereArgs: [serviceId]);
+    await refreshCache();
+    return true;
   }
 
   static Future<void> refreshCache() async {
@@ -120,7 +179,10 @@ class VenueRepository {
     }
 
     final sports = await loadSportTypes();
-    final services = await db.query('venue_services', orderBy: 'name COLLATE NOCASE');
+    final services = await db.query(
+      'venue_services',
+      orderBy: 'name COLLATE NOCASE',
+    );
     MockStore.venues
       ..clear()
       ..addAll(venues);
@@ -129,21 +191,27 @@ class VenueRepository {
       ..addAll(cachedImages);
     MockStore.sportTypes
       ..clear()
-      ..addAll(sports.map((row) => {
-        'id': row['sportTypeId'],
-        'name': row['name'],
-        'description': row['description'],
-      }));
+      ..addAll(
+        sports.map(
+          (row) => {
+            'id': row['sportTypeId'],
+            'name': row['name'],
+            'description': row['description'],
+          },
+        ),
+      );
     MockStore.servicesByVenue.clear();
     for (final row in services) {
       final venueId = row['venueId'] as String;
-      (MockStore.servicesByVenue[venueId] ??= []).add(VenueService(
-        id: row['id'] as String,
-        venueId: venueId,
-        name: row['name'] as String,
-        price: (row['price'] as num).toDouble(),
-        unit: row['unit'] as String,
-      ));
+      (MockStore.servicesByVenue[venueId] ??= []).add(
+        VenueService(
+          id: row['id'] as String,
+          venueId: venueId,
+          name: row['name'] as String,
+          price: (row['price'] as num).toDouble(),
+          unit: row['unit'] as String,
+        ),
+      );
     }
   }
 
@@ -154,14 +222,10 @@ class VenueRepository {
     );
     await db.transaction((txn) async {
       if (venue.sportTypeId != null) {
-        await txn.insert(
-          'sport_types',
-          {
-            'sportTypeId': venue.sportTypeId,
-            'name': venue.sportType,
-          },
-          conflictAlgorithm: ConflictAlgorithm.ignore,
-        );
+        await txn.insert('sport_types', {
+          'sportTypeId': venue.sportTypeId,
+          'name': venue.sportType,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
       final values = <String, Object?>{
         'ownerId': venue.ownerId,
@@ -178,15 +242,27 @@ class VenueRepository {
         'rating': venue.rating,
       };
       final found = await txn.query(
-        'venues', columns: ['id'], where: 'id = ?', whereArgs: [venue.id],
+        'venues',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [venue.id],
       );
       if (found.isEmpty) {
         await txn.insert('venues', {'id': venue.id, ...values});
       } else {
-        await txn.update('venues', values, where: 'id = ?', whereArgs: [venue.id]);
+        await txn.update(
+          'venues',
+          values,
+          where: 'id = ?',
+          whereArgs: [venue.id],
+        );
       }
 
-      await txn.delete('venue_images', where: 'venueId = ?', whereArgs: [venue.id]);
+      await txn.delete(
+        'venue_images',
+        where: 'venueId = ?',
+        whereArgs: [venue.id],
+      );
       for (var index = 0; index < imageUrls.length; index++) {
         await txn.insert('venue_images', {
           'id': 'img_${venue.id}_$index',
@@ -208,7 +284,10 @@ class VenueRepository {
   static Future<void> updateStatus(String venueId, String status) async {
     final db = await _db;
     final count = await db.update(
-      'venues', {'status': status}, where: 'id = ?', whereArgs: [venueId],
+      'venues',
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [venueId],
     );
     if (count == 0) throw StateError('Không tìm thấy sân cần cập nhật.');
     await refreshCache();
@@ -219,12 +298,159 @@ class VenueRepository {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day).toIso8601String();
     final end = DateTime(now.year, now.month, now.day + 1).toIso8601String();
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT COUNT(*) AS total
       FROM bookings b JOIN venues v ON v.id = b.venueId
       WHERE v.ownerId = ? AND b.date >= ? AND b.date < ?
-    ''', [ownerId, start, end]);
+    ''',
+      [ownerId, start, end],
+    );
     return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  /// Tất cả lịch đặt của một sân, kèm thông tin khách, sắp theo ngày và giờ.
+  static Future<List<VenueBookingEntry>> loadBookingsForVenue(
+    String venueId,
+  ) async {
+    final rows = await (await _db).rawQuery(
+      '''
+      SELECT b.id, b.date, b.startTime, b.endTime, b.totalPrice, b.status,
+             b.promotionCode,
+             u.full_name AS customerName, u.phone AS customerPhone
+      FROM bookings b
+      LEFT JOIN Users u ON u.user_id = b.userId
+      WHERE b.venueId = ?
+      ORDER BY b.date, b.startTime
+    ''',
+      [venueId],
+    );
+    return rows
+        .map(
+          (row) => VenueBookingEntry(
+            id: row['id'] as String,
+            date: DateTime.parse(row['date'] as String),
+            startTime: row['startTime'] as String,
+            endTime: row['endTime'] as String,
+            totalPrice: (row['totalPrice'] as num).toDouble(),
+            status: row['status'] as String,
+            promotionCode: row['promotionCode'] as String?,
+            customerName: row['customerName'] as String?,
+            customerPhone: row['customerPhone'] as String?,
+          ),
+        )
+        .toList();
+  }
+
+  // Chủ sân đổi trạng thái lịch đặt. Chỉ cho phép khi sân thuộc về [ownerId]
+  // và trạng thái hiện tại hợp lệ:
+  //   pending -> confirmed | cancelled
+  //   confirmed -> completed | cancelled
+  // Trả về false nếu không có dòng nào được cập nhật.
+  static Future<bool> updateBookingStatus({
+    required String bookingId,
+    required String ownerId,
+    required String newStatus,
+    String? cancelReason,
+  }) async {
+    const allowedFrom = <String, List<String>>{
+      'confirmed': ['pending'],
+      'completed': ['confirmed'],
+      'cancelled': ['pending', 'confirmed'],
+    };
+    final from = allowedFrom[newStatus];
+    if (from == null) return false;
+
+    final db = await _db;
+    final values = <String, Object?>{'status': newStatus};
+    if (newStatus == 'cancelled') {
+      values['cancelReason'] = cancelReason ?? 'Chủ sân hủy lịch đặt';
+      values['cancelledAt'] = DateTime.now().toIso8601String();
+    }
+    final count = await db.update(
+      'bookings',
+      values,
+      where:
+          'id = ? '
+          'AND status IN (${List.filled(from.length, '?').join(',')}) '
+          'AND venueId IN (SELECT id FROM venues WHERE ownerId = ?)',
+      whereArgs: [bookingId, ...from, ownerId],
+    );
+    if (count == 0) return false;
+
+    // Đồng bộ bản sao trong bộ nhớ cho các màn hình khác còn đọc MockStore.
+    final index = MockStore.bookings.indexWhere((b) => b.id == bookingId);
+    if (index >= 0) {
+      final cached = MockStore.bookings[index];
+      cached.status = newStatus;
+      if (newStatus == 'cancelled') {
+        cached.cancelReason = values['cancelReason'] as String?;
+      }
+    }
+    return true;
+  }
+
+  // Tên, số điện thoại và email của các chủ sân, theo id người dùng.
+  // Id không tồn tại trong bảng Users sẽ không có trong kết quả.
+  static Future<Map<String, VenueOwnerInfo>> loadOwnerContacts(
+    Iterable<String> ownerIds,
+  ) async {
+    final ids = ownerIds.toSet().toList();
+    if (ids.isEmpty) return const {};
+    final rows = await (await _db).query(
+      'Users',
+      columns: ['user_id', 'full_name', 'phone', 'email'],
+      where: 'user_id IN (${List.filled(ids.length, '?').join(',')})',
+      whereArgs: ids,
+    );
+    return {
+      for (final row in rows)
+        row['user_id'] as String: VenueOwnerInfo(
+          id: row['user_id'] as String,
+          name: row['full_name'] as String,
+          phone: row['phone'] as String,
+          email: row['email'] as String,
+        ),
+    };
+  }
+
+  // Tính số liệu thống kê bằng SQL (COUNT / SUM), không tải toàn bộ bản ghi.
+  static Future<SystemStatistics> loadSystemStatistics() async {
+    final db = await _db;
+
+    final bookingRows = await db.rawQuery('''
+      SELECT status,
+             COUNT(*) AS total,
+             COALESCE(SUM(totalPrice), 0) AS amount
+      FROM bookings
+      GROUP BY status
+    ''');
+    final venueRows = await db.rawQuery('''
+      SELECT status, COUNT(*) AS total
+      FROM venues
+      GROUP BY status
+    ''');
+
+    final bookingsByStatus = <String, int>{};
+    var revenue = 0.0;
+    for (final row in bookingRows) {
+      final status = row['status'] as String;
+      bookingsByStatus[status] = (row['total'] as num).toInt();
+      if (status == 'confirmed' || status == 'completed') {
+        revenue += (row['amount'] as num).toDouble();
+      }
+    }
+
+    final venuesByStatus = <String, int>{
+      for (final row in venueRows)
+        row['status'] as String: (row['total'] as num).toInt(),
+    };
+
+    return SystemStatistics(
+      bookingsByStatus: bookingsByStatus,
+      venuesByStatus: venuesByStatus,
+      revenue: revenue,
+    );
   }
 
   static Future<List<Map<String, Object?>>> loadAvailableSlots(
@@ -239,25 +465,36 @@ class VenueRepository {
       whereArgs: [venueId],
       limit: 1,
     );
-    if (venues.isEmpty || venues.single['status'] != 'approved') return const [];
+    if (venues.isEmpty || venues.single['status'] != 'approved') {
+      return const [];
+    }
     final hoursRows = await db.query(
       'venue_hours',
       where: 'venueId = ?',
       whereArgs: [venueId],
       limit: 1,
     );
-    final openHour = hoursRows.isEmpty ? 6 : hoursRows.single['openHour'] as int;
-    final closeHour = hoursRows.isEmpty ? 22 : hoursRows.single['closeHour'] as int;
+    final openHour = hoursRows.isEmpty
+        ? 6
+        : hoursRows.single['openHour'] as int;
+    final closeHour = hoursRows.isEmpty
+        ? 22
+        : hoursRows.single['closeHour'] as int;
     final dayStart = DateTime(date.year, date.month, date.day);
     final dayEnd = dayStart.add(const Duration(days: 1));
     final bookings = await db.query(
       'bookings',
       columns: ['startTime', 'endTime'],
       where: "venueId = ? AND status != 'cancelled' AND date >= ? AND date < ?",
-      whereArgs: [venueId, dayStart.toIso8601String(), dayEnd.toIso8601String()],
+      whereArgs: [
+        venueId,
+        dayStart.toIso8601String(),
+        dayEnd.toIso8601String(),
+      ],
     );
     final now = DateTime.now();
-    final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
     final slots = <Map<String, Object?>>[];
     for (var hour = openHour; hour < closeHour; hour++) {
       final start = hour * 60;
@@ -288,4 +525,66 @@ class VenueRepository {
     if (hour == null || minute == null) return -1;
     return hour * 60 + minute;
   }
+}
+
+// Nó là dữ liệu gọn cho màn "Lịch đặt sân" của chủ sân,
+// đã gộp sẵn tên và số điện thoại khách.
+class VenueBookingEntry {
+  const VenueBookingEntry({
+    required this.id,
+    required this.date,
+    required this.startTime,
+    required this.endTime,
+    required this.totalPrice,
+    required this.status,
+    this.promotionCode,
+    this.customerName,
+    this.customerPhone,
+  });
+
+  final String id;
+  final DateTime date;
+  final String startTime;
+  final String endTime;
+  final double totalPrice;
+  final String status;
+  final String? promotionCode;
+  final String? customerName;
+  final String? customerPhone;
+}
+
+// Thông tin liên hệ của chủ sân, dùng cho màn Admin duyệt sân.
+class VenueOwnerInfo {
+  const VenueOwnerInfo({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.email,
+  });
+
+  final String id;
+  final String name;
+  final String phone;
+  final String email;
+}
+
+// Số liệu tổng hợp toàn hệ thống cho màn thống kê của Admin.
+class SystemStatistics {
+  const SystemStatistics({
+    required this.bookingsByStatus,
+    required this.venuesByStatus,
+    required this.revenue,
+  });
+
+  final Map<String, int> bookingsByStatus;
+  final Map<String, int> venuesByStatus;
+
+  /// Tổng tiền các lịch đặt đã xác nhận hoặc hoàn thành.
+  final double revenue;
+
+  int get totalBookings =>
+      bookingsByStatus.values.fold<int>(0, (sum, count) => sum + count);
+
+  int bookings(String status) => bookingsByStatus[status] ?? 0;
+  int venues(String status) => venuesByStatus[status] ?? 0;
 }

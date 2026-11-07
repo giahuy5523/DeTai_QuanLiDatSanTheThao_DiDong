@@ -7,7 +7,7 @@ import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_theme.dart';
 
-// ---- Bảng màu & hằng số của màn hình ----
+// Bảng màu & hằng số của màn hình
 const _primary = Color(0xFF0F8B5F);
 const _primaryDark = Color(0xFF065F46);
 const _primarySoft = Color(0xFFA8EBCB);
@@ -32,8 +32,13 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   final _price = TextEditingController();
   final List<XFile> _images = [];
   final List<Uint8List> _previews = [];
+
+  // Loại thể thao được đọc từ bảng sport_types trong SQLite.
   List<Map<String, Object?>> _sportTypes = const [];
+  bool _loadingSports = true;
+  String? _sportError;
   String? _sportType;
+
   String _fingerprint(Uint8List bytes) =>
       '${bytes.length}:${Object.hashAll(bytes)}';
   bool _picking = false;
@@ -42,31 +47,45 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   @override
   void initState() {
     super.initState();
-    _sportTypes = MockStore.sportTypes
-        .map((sport) => <String, Object?>{
-              'id': sport['id'],
-              'name': sport['name'],
-            })
-        .toList();
     _loadSportTypes();
   }
 
+  // Đọc danh sách loại thể thao từ SQLite.
   Future<void> _loadSportTypes() async {
-    if (!VenueRepository.isInitialized) return;
     try {
       final rows = await VenueRepository.loadSportTypes();
       if (!mounted) return;
       setState(() {
         _sportTypes = rows
-            .map((row) => <String, Object?>{
-                  'id': row['sportTypeId'],
-                  'name': row['name'],
-                })
+            .map(
+              (row) => <String, Object?>{
+                'id': row['sportTypeId'],
+                'name': row['name'],
+              },
+            )
             .toList();
+        _loadingSports = false;
+        _sportError = null;
+        if (_sportType != null &&
+            !_sportTypes.any((sport) => sport['name'] == _sportType)) {
+          _sportType = null;
+        }
       });
     } catch (_) {
-      // Keep cached options if the database refresh fails.
+      if (!mounted) return;
+      setState(() {
+        _loadingSports = false;
+        _sportError = 'Không thể tải danh sách loại thể thao.';
+      });
     }
+  }
+
+  void _retryLoadSportTypes() {
+    setState(() {
+      _loadingSports = true;
+      _sportError = null;
+    });
+    _loadSportTypes();
   }
 
   @override
@@ -81,7 +100,6 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        // SnackBar(content: Text(text))
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: AppTheme.error,
@@ -90,7 +108,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
           ),
           content: Row(
             children: [
-              Icon(Icons.cancel_outlined, color: Colors.white),
+              const Icon(Icons.cancel_outlined, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(child: Text(text)),
             ],
@@ -160,7 +178,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     });
   }
 
-  /// Đưa ảnh được chọn lên đầu danh sách để làm ảnh bìa.
+  // Đưa ảnh được chọn lên đầu danh sách để làm ảnh bìa.
   void _makeCover(int index) {
     if (index == 0) return;
     setState(() {
@@ -233,6 +251,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   }
 
   Future<void> _submit() async {
+    if (_saving) return;
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_images.length < _minImages) {
@@ -244,38 +263,40 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
       _message('Chỉ chủ sân được đăng ký sân mới.');
       return;
     }
+
     final sportType = _sportType!;
-    final venueId = 'venue${DateTime.now().microsecondsSinceEpoch}';
-    final imageUrls = _images.map((image) => image.path).toList();
+    final sportTypeId =
+        _sportTypes.firstWhere((sport) => sport['name'] == sportType)['id']
+            as int?;
+
     final venue = Venue(
-        id: venueId,
-        ownerId: user.id,
-        name: _name.text.trim(),
-        address: _address.text.trim(),
-        sportType: sportType,
-        sportTypeId: _sportTypes
-            .cast<Map<String, Object?>>()
-            .firstWhere((sport) => sport['name'] == sportType)['id'] as int?,
-        pricePerHour: double.parse(_price.text.trim()),
-        imageUrls: imageUrls,
-        latitude: 0,
-        longitude: 0,
-      );
+      id: 'venue${DateTime.now().microsecondsSinceEpoch}',
+      ownerId: user.id,
+      name: _name.text.trim(),
+      address: _address.text.trim(),
+      sportType: sportType,
+      sportTypeId: sportTypeId,
+      pricePerHour: double.parse(_price.text.trim()),
+      // Đường dẫn ảnh tạm; VenueRepository.saveVenue sẽ copy vào thư mục app.
+      imageUrls: _images.map((image) => image.path).toList(),
+      latitude: 0,
+      longitude: 0,
+    );
+
     setState(() => _saving = true);
     try {
-      if (VenueRepository.isInitialized) {
-        await VenueRepository.saveVenue(venue);
-      } else {
-        MockStore.addVenue(venue);
-        MockStore.setVenueImages(venueId, imageUrls);
-      }
-      await _showSuccessDialog();
+      await VenueRepository.saveVenue(venue);
     } catch (_) {
-      if (mounted) _message('Không thể lưu sân vào cơ sở dữ liệu. Vui lòng thử lại.');
+      if (mounted) {
+        _message('Không thể lưu sân vào cơ sở dữ liệu. Vui lòng thử lại.');
+        setState(() => _saving = false);
+      }
       return;
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
+
+    if (!mounted) return;
+    setState(() => _saving = false);
+    await _showSuccessDialog();
     if (!mounted) return;
     Navigator.pop(context, true);
   }
@@ -283,7 +304,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'Không được để trống' : null;
 
-  // ---- Style cho các ô nhập ----
+  // Style cho các ô nhập
   InputDecoration _decoration({
     required String label,
     required String hint,
@@ -318,7 +339,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     );
   }
 
-  // ---- Khu vực ảnh ----
+  // Khu vực ảnh
   Widget _buildCover() {
     final hasCover = _previews.isNotEmpty;
     return AspectRatio(
@@ -411,7 +432,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
               button: true,
               label: 'Xóa ảnh ${index + 1}',
               child: GestureDetector(
-                onTap: _picking ? null : () => _removeImage(index),
+                onTap: _picking || _saving ? null : () => _removeImage(index),
                 child: Container(
                   width: 22,
                   height: 22,
@@ -476,6 +497,61 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     );
   }
 
+  // Ô chọn loại thể thao (dữ liệu từ SQLite)
+  Widget _buildSportTypeField() {
+    if (_sportError != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(_fieldRadius),
+          border: Border.all(color: Colors.red.shade400),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _sportError!,
+                style: TextStyle(color: Colors.red.shade700),
+              ),
+            ),
+            TextButton(
+              onPressed: _retryLoadSportTypes,
+              child: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: _sportType,
+      isExpanded: true,
+      borderRadius: BorderRadius.circular(_fieldRadius),
+      icon: const Icon(Icons.arrow_drop_down, color: _hintColor),
+      decoration: _decoration(
+        label: 'Loại thể thao',
+        hint: _loadingSports ? 'Đang tải...' : 'Chọn loại thể thao',
+      ),
+      hint: Text(
+        _loadingSports ? 'Đang tải...' : 'Chọn loại thể thao',
+        style: const TextStyle(color: _hintColor),
+      ),
+      items: [
+        for (final sport in _sportTypes)
+          DropdownMenuItem(
+            value: sport['name'] as String,
+            child: Text(sport['name'] as String),
+          ),
+      ],
+      validator: (value) =>
+          value == null ? 'Vui lòng chọn loại thể thao' : null,
+      onChanged: _loadingSports || _sportTypes.isEmpty
+          ? null
+          : (value) => setState(() => _sportType = value),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -524,30 +600,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
               validator: _required,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _sportType,
-              isExpanded: true,
-              borderRadius: BorderRadius.circular(_fieldRadius),
-              icon: const Icon(Icons.arrow_drop_down, color: _hintColor),
-              decoration: _decoration(
-                label: 'Loại thể thao',
-                hint: 'Chọn loại thể thao',
-              ),
-              hint: const Text(
-                'Chọn loại thể thao',
-                style: TextStyle(color: _hintColor),
-              ),
-              items: [
-                for (final sport in _sportTypes)
-                  DropdownMenuItem(
-                    value: sport['name'] as String,
-                    child: Text(sport['name'] as String),
-                  ),
-              ],
-              validator: (value) =>
-                  value == null ? 'Vui lòng chọn loại thể thao' : null,
-              onChanged: (value) => setState(() => _sportType = value),
-            ),
+            _buildSportTypeField(),
             const SizedBox(height: 12),
             TextFormField(
               controller: _price,
@@ -603,7 +656,16 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                child: const Text('Gửi duyệt'),
+                child: _saving
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Gửi duyệt'),
               ),
             ),
           ],
@@ -613,7 +675,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   }
 }
 
-/// Nhãn nhỏ bo tròn (vd. "Ảnh bìa") đặt chồng lên ảnh.
+// Nhãn nhỏ bo tròn (vd. "Ảnh bìa") đặt chồng lên ảnh.
 class _Badge extends StatelessWidget {
   const _Badge({required this.label});
   final String label;
@@ -638,7 +700,7 @@ class _Badge extends StatelessWidget {
   }
 }
 
-/// Ô viền nét đứt màu xanh, chạm được (dùng cho ảnh bìa và nút thêm ảnh).
+// Ô viền nét đứt màu xanh, chạm được (dùng cho ảnh bìa và nút thêm ảnh).
 class _DashedBox extends StatelessWidget {
   const _DashedBox({required this.child, required this.radius, this.onTap});
   final Widget child;

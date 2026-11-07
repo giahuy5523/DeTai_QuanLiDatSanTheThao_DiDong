@@ -4,12 +4,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../data/mock_store.dart';
 import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_theme.dart';
 
-// ---- Bảng màu & hằng số (giống màn Đăng ký sân) ----
+// Bảng màu & hằng số
 const _primary = Color(0xFF128C5E);
 const _primarySoft = Color(0xFFA8EBCB);
 const _background = Color(0xFFF4F6FA);
@@ -18,7 +17,7 @@ const _fieldRadius = 14.0;
 const _maxImages = 8;
 const _minImages = 3;
 
-/// Một ảnh của sân: có thể là ảnh cũ (đường dẫn/URL đã lưu) hoặc ảnh mới chọn.
+// Một ảnh của sân: có thể là ảnh cũ (đường dẫn/URL đã lưu) hoặc ảnh mới chọn.
 class _VenueImage {
   _VenueImage({required this.source, this.bytes});
   final String source; // đường dẫn file, URL hoặc asset
@@ -52,6 +51,8 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   bool _picking = false;
   bool _saving = false;
 
+  // Danh sách loại thể thao đọc từ SQLite. Ban đầu chỉ có loại hiện tại của
+  // sân để dropdown luôn có giá trị hợp lệ trong lúc chờ tải.
   late List<String> _sports;
 
   @override
@@ -62,19 +63,15 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     _address = TextEditingController(text: venue.address);
     _price = TextEditingController(text: venue.pricePerHour.toStringAsFixed(0));
     _sportType = venue.sportType;
-    _sports = [for (final s in MockStore.sportTypes) s['name'] as String];
-    if (!_sports.contains(_sportType)) _sports.add(_sportType);
-    // Sân mẫu để imageUrls rỗng, ảnh thật nằm trong MockStore.venueImages.
-    final urls = venue.imageUrls.isNotEmpty
-        ? venue.imageUrls
-        : MockStore.imageUrlsOf(venue.id);
-    _images = urls.map((s) => _VenueImage(source: s)).toList();
+    _sports = [venue.sportType];
+    // Venue truyền vào được đọc từ SQLite nên imageUrls đã có đủ ảnh.
+    _images = venue.imageUrls.map((s) => _VenueImage(source: s)).toList();
     _loadExistingBytes();
     _loadSportTypes();
   }
 
+  // Đọc danh sách loại thể thao từ bảng sport_types.
   Future<void> _loadSportTypes() async {
-    if (!VenueRepository.isInitialized) return;
     try {
       final rows = await VenueRepository.loadSportTypes();
       final sports = rows.map((row) => row['name'] as String).toList();
@@ -83,7 +80,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
       }
       if (mounted) setState(() => _sports = sports);
     } catch (_) {
-      // Keep the startup options if the database refresh fails.
+      // Giữ lại loại thể thao hiện tại nếu không đọc được từ DB.
     }
   }
 
@@ -95,7 +92,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     super.dispose();
   }
 
-  /// Đọc nội dung ảnh cũ (file cục bộ) để có thể chống trùng với ảnh mới chọn.
+  // Đọc nội dung ảnh cũ (file cục bộ) để có thể chống trùng với ảnh mới chọn.
   Future<void> _loadExistingBytes() async {
     for (final img in List.of(_images)) {
       if (_isRemote(img.source)) continue;
@@ -122,7 +119,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
           ),
           content: Row(
             children: [
-              Icon(Icons.cancel_outlined, color: Colors.white),
+              const Icon(Icons.cancel_outlined, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(child: Text(text)),
             ],
@@ -185,60 +182,55 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
 
   void _removeImage(int index) => setState(() => _images.removeAt(index));
 
-  /// Đưa ảnh được chọn lên đầu danh sách để làm ảnh bìa.
+  // Đưa ảnh được chọn lên đầu danh sách để làm ảnh bìa.
   void _makeCover(int index) {
     if (index == 0) return;
     setState(() => _images.insert(0, _images.removeAt(index)));
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_images.length < _minImages) {
       _message('Vui lòng chọn tối thiểu $_minImages ảnh.');
       return;
     }
-    final sportTypeId = VenueRepository.isInitialized
-        ? await VenueRepository.sportTypeIdFor(_sportType)
-        : MockStore.sportTypeIdFor(_sportType);
-    final updatedVenue = widget.venue.copyWith(
-      name: _name.text.trim(),
-      address: _address.text.trim(),
-      sportType: _sportType,
-      sportTypeId: sportTypeId,
-      pricePerHour: double.parse(_price.text.trim()),
-      imageUrls: _images.map((img) => img.source).toList(),
-    );
-    if (VenueRepository.isInitialized) {
-      setState(() => _saving = true);
-      try {
-        await VenueRepository.saveVenue(updatedVenue);
-      } catch (_) {
-        if (mounted) _message('Không thể lưu thay đổi vào cơ sở dữ liệu.');
-        return;
-      } finally {
-        if (mounted) setState(() => _saving = false);
+
+    setState(() => _saving = true);
+    try {
+      final sportTypeId = await VenueRepository.sportTypeIdFor(_sportType);
+      final updatedVenue = widget.venue.copyWith(
+        name: _name.text.trim(),
+        address: _address.text.trim(),
+        sportType: _sportType,
+        sportTypeId: sportTypeId,
+        pricePerHour: double.parse(_price.text.trim()),
+        imageUrls: _images.map((img) => img.source).toList(),
+      );
+      // saveVenue copy ảnh mới vào thư mục app, ghi DB rồi làm mới cache.
+      await VenueRepository.saveVenue(updatedVenue);
+    } catch (_) {
+      if (mounted) {
+        _message('Không thể lưu thay đổi vào cơ sở dữ liệu. Vui lòng thử lại.');
+        setState(() => _saving = false);
       }
-    }
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    if (!VenueRepository.isInitialized) {
-    if (!MockStore.updateVenue(updatedVenue)) {
-      _message('Không thể cập nhật thông tin sân.');
       return;
     }
-    MockStore.setVenueImages(updatedVenue.id, updatedVenue.imageUrls);
-    }
+
+    if (!mounted) return;
+    setState(() => _saving = false);
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context, true);
     messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppTheme.success,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: Row(
+        content: const Row(
           children: [
             Icon(Icons.check_circle_outline, color: Colors.white),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(child: Text('Đã cập nhật thông tin sân.')),
           ],
         ),
@@ -249,7 +241,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'Không được để trống' : null;
 
-  // ---- Style cho các ô nhập ----
+  // Style cho các ô nhập
   InputDecoration _decoration({
     required String label,
     required String hint,
@@ -282,7 +274,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     );
   }
 
-  // ---- Hiển thị ảnh (bytes / URL / file / asset) ----
+  // Hiển thị ảnh (bytes / URL / file / asset)
   Widget _imageView(_VenueImage img) {
     Widget error(BuildContext _, Object _, StackTrace? _) =>
         const Center(child: Text('Ảnh lỗi'));
@@ -373,7 +365,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
               button: true,
               label: 'Xóa ảnh ${index + 1}',
               child: GestureDetector(
-                onTap: _picking ? null : () => _removeImage(index),
+                onTap: _picking || _saving ? null : () => _removeImage(index),
                 child: Container(
                   width: 22,
                   height: 22,
@@ -537,7 +529,16 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                child: const Text('Lưu thay đổi'),
+                child: _saving
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Lưu thay đổi'),
               ),
             ),
           ],
@@ -547,7 +548,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   }
 }
 
-/// Nhãn nhỏ bo tròn (vd. "Ảnh bìa") đặt chồng lên ảnh.
+// Nhãn nhỏ bo tròn (vd. "Ảnh bìa") đặt chồng lên ảnh.
 class _Badge extends StatelessWidget {
   const _Badge({required this.label});
   final String label;
@@ -572,7 +573,7 @@ class _Badge extends StatelessWidget {
   }
 }
 
-/// Ô viền nét đứt màu xanh, chạm được (dùng cho ảnh bìa và nút thêm ảnh).
+// Ô viền nét đứt màu xanh, chạm được (dùng cho ảnh bìa và nút thêm ảnh).
 class _DashedBox extends StatelessWidget {
   const _DashedBox({required this.child, required this.radius, this.onTap});
   final Widget child;

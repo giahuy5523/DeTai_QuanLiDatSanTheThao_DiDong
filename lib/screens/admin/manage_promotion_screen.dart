@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../data/mock_store.dart';
+import '../../data/promotion_repository.dart';
+import '../../data/venue_repository.dart';
 import '../../models/promotion.dart';
 import '../../utils/app_theme.dart';
 import 'admin_drawer.dart';
 
-/// Màn hình Quản lý Khuyến mãi dành cho Quản trị viên (Admin).
-/// Hỗ trợ Xem danh sách, Lọc, Thêm mới, Chỉnh sửa, Bật/Tắt nhanh,
-/// Sao chép mã và Xóa mã khuyến mãi.
+// Màn hình Quản lý Khuyến mãi dành cho Quản trị viên (Admin).
+// Hỗ trợ Xem danh sách, Lọc, Thêm mới, Chỉnh sửa, Bật/Tắt nhanh,
+// Sao chép mã và Xóa mã khuyến mãi. Dữ liệu lưu trong SQLite.
 class ManagePromotionScreen extends StatefulWidget {
   const ManagePromotionScreen({super.key});
 
@@ -23,6 +24,52 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
   static const Color _cardBg = Colors.white;
   static const Color _pageBg = Color(0xFFF5F7FA);
   static const Color _danger = Color(0xFFEF4444);
+
+  // Dữ liệu đọc từ SQLite.
+  List<Promotion> _promotions = const [];
+  int _pendingVenueCount = 0;
+  bool _isLoading = true;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final promotions = await PromotionRepository.loadAll();
+      // Số sân chờ duyệt chỉ để hiển thị trên drawer: lỗi ở đây không chặn màn.
+      var pending = _pendingVenueCount;
+      try {
+        final venues = await VenueRepository.loadVenues();
+        pending = venues.where((v) => v.status == 'pending').length;
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _promotions = promotions;
+        _pendingVenueCount = pending;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải danh sách khuyến mãi. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _load();
+  }
 
   // ───────────────────────── Helpers ─────────────────────────
 
@@ -90,13 +137,17 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     );
   }
 
-  void _showSnack(String message, {Color? color}) {
+  void _showSnack(
+    String message, {
+    Color? color,
+    IconData icon = Icons.check_circle_outline,
+  }) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.check_circle_outline, color: Colors.white),
+            Icon(icon, color: Colors.white),
             const SizedBox(width: 10),
             Expanded(child: Text(message)),
           ],
@@ -108,10 +159,14 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     );
   }
 
+  void _showError(String message) =>
+      _showSnack(message, color: AppTheme.error, icon: Icons.cancel_outlined);
+
   // ───────────────────────── Thêm / Sửa ─────────────────────────
 
   Future<void> _openPromotionSheet({Promotion? promotion}) async {
     final isEditing = promotion != null;
+    final editingId = promotion?.id;
     final codeController = TextEditingController(text: promotion?.code ?? '');
     final discountController = TextEditingController(
       text: promotion != null
@@ -121,6 +176,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     DateTime selectedDate =
         promotion?.expiryDate ?? DateTime.now().add(const Duration(days: 30));
     bool isActive = promotion?.isActive ?? true;
+    bool saving = false;
     String? errorMessage;
     ModalRoute<void>? sheetRoute;
 
@@ -136,6 +192,79 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
               if (errorMessage != null) {
                 setModalState(() => errorMessage = null);
               }
+            }
+
+            Future<void> submit() async {
+              final normalizedCode = codeController.text.trim().toUpperCase();
+              final discountVal = double.tryParse(
+                discountController.text.trim(),
+              );
+
+              if (normalizedCode.isEmpty) {
+                setModalState(() {
+                  errorMessage = 'Vui lòng nhập mã khuyến mãi.';
+                });
+                return;
+              }
+
+              if (discountVal == null ||
+                  !discountVal.isFinite ||
+                  discountVal <= 0 ||
+                  discountVal > 100) {
+                setModalState(() {
+                  errorMessage =
+                      'Mức giảm giá phải nằm trong khoảng từ 1% đến 100%.';
+                });
+                return;
+              }
+
+              setModalState(() => saving = true);
+              try {
+                // Kiểm tra trùng mã trong SQLite (không phân biệt hoa thường).
+                final isDuplicate = await PromotionRepository.codeExists(
+                  normalizedCode,
+                  excludeId: editingId,
+                );
+                if (isDuplicate) {
+                  if (!modalContext.mounted) return;
+                  setModalState(() {
+                    saving = false;
+                    errorMessage =
+                        'Mã "$normalizedCode" đã tồn tại trong hệ thống.';
+                  });
+                  return;
+                }
+
+                await PromotionRepository.save(
+                  Promotion(
+                    id:
+                        editingId ??
+                        'p${DateTime.now().microsecondsSinceEpoch}',
+                    code: normalizedCode,
+                    discountPercent: discountVal,
+                    expiryDate: selectedDate,
+                    isActive: isActive,
+                    usedCount: promotion?.usedCount ?? 0,
+                  ),
+                );
+              } catch (_) {
+                if (!modalContext.mounted) return;
+                setModalState(() {
+                  saving = false;
+                  errorMessage = 'Không thể lưu khuyến mãi. Vui lòng thử lại.';
+                });
+                return;
+              }
+
+              if (!modalContext.mounted) return;
+              Navigator.pop(modalContext);
+              await _load();
+              if (!mounted) return;
+              _showSnack(
+                isEditing
+                    ? 'Đã cập nhật mã "$normalizedCode"'
+                    : 'Đã tạo mới mã "$normalizedCode"',
+              );
             }
 
             return Container(
@@ -453,7 +582,9 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                           flex: 4,
                           child: ElevatedButton(
                             style: _filledButtonStyle(_danger),
-                            onPressed: () => Navigator.pop(modalContext),
+                            onPressed: saving
+                                ? null
+                                : () => Navigator.pop(modalContext),
                             child: const Text('Hủy'),
                           ),
                         ),
@@ -462,83 +593,21 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                           flex: 6,
                           child: ElevatedButton(
                             style: _filledButtonStyle(AppTheme.primary),
-                            onPressed: () {
-                              final normalizedCode = codeController.text
-                                  .trim()
-                                  .toUpperCase();
-                              final discountVal = double.tryParse(
-                                discountController.text.trim(),
-                              );
-
-                              if (normalizedCode.isEmpty) {
-                                setModalState(() {
-                                  errorMessage = 'Vui lòng nhập mã khuyến mãi.';
-                                });
-                                return;
-                              }
-
-                              if (discountVal == null ||
-                                  !discountVal.isFinite ||
-                                  discountVal <= 0 ||
-                                  discountVal > 100) {
-                                setModalState(() {
-                                  errorMessage =
-                                      'Mức giảm giá phải nằm trong khoảng từ 1% đến 100%.';
-                                });
-                                return;
-                              }
-
-                              final isDuplicate = MockStore.promotions.any(
-                                (p) =>
-                                    p.code.toUpperCase() == normalizedCode &&
-                                    (!isEditing || p.id != promotion.id),
-                              );
-                              if (isDuplicate) {
-                                setModalState(() {
-                                  errorMessage =
-                                      'Mã "$normalizedCode" đã tồn tại trong hệ thống.';
-                                });
-                                return;
-                              }
-
-                              setState(() {
-                                if (isEditing) {
-                                  final idx = MockStore.promotions.indexWhere(
-                                    (p) => p.id == promotion.id,
-                                  );
-                                  if (idx >= 0) {
-                                    MockStore.promotions[idx] = Promotion(
-                                      id: promotion.id,
-                                      code: normalizedCode,
-                                      discountPercent: discountVal,
-                                      expiryDate: selectedDate,
-                                      isActive: isActive,
-                                      usedCount: promotion.usedCount,
-                                    );
-                                  }
-                                } else {
-                                  MockStore.promotions.add(
-                                    Promotion(
-                                      id: 'p${DateTime.now().millisecondsSinceEpoch}',
-                                      code: normalizedCode,
-                                      discountPercent: discountVal,
-                                      expiryDate: selectedDate,
-                                      isActive: isActive,
+                            onPressed: saving ? null : submit,
+                            child: saving
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
                                     ),
-                                  );
-                                }
-                              });
-
-                              Navigator.pop(modalContext);
-                              _showSnack(
-                                isEditing
-                                    ? 'Đã cập nhật mã "$normalizedCode"'
-                                    : 'Đã tạo mới mã "$normalizedCode"',
-                              );
-                            },
-                            child: Text(
-                              isEditing ? 'Lưu thay đổi' : 'Tạo khuyến mãi',
-                            ),
+                                  )
+                                : Text(
+                                    isEditing
+                                        ? 'Lưu thay đổi'
+                                        : 'Tạo khuyến mãi',
+                                  ),
                           ),
                         ),
                       ],
@@ -561,6 +630,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     return ElevatedButton.styleFrom(
       backgroundColor: color,
       foregroundColor: Colors.white,
+      disabledBackgroundColor: color.withValues(alpha: 0.4),
       elevation: 0,
       minimumSize: Size(0, height),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -637,31 +707,43 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
       ),
     );
 
-    if (confirmed == true) {
-      setState(() {
-        MockStore.promotions.removeWhere((p) => p.id == promotion.id);
-      });
+    if (confirmed != true || !mounted || _busy) return;
+
+    setState(() => _busy = true);
+    try {
+      await PromotionRepository.delete(promotion.id);
+    } catch (_) {
       if (!mounted) return;
-      _showSnack(
-        'Đã xóa thành công mã "${promotion.code}"',
-        color: AppTheme.error,
-      );
+      setState(() => _busy = false);
+      _showError('Không thể xóa mã "${promotion.code}". Vui lòng thử lại.');
+      return;
     }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await _load();
+    if (!mounted) return;
+    _showSnack(
+      'Đã xóa thành công mã "${promotion.code}"',
+      color: AppTheme.error,
+    );
   }
 
-  void _toggleActive(Promotion p, bool value) {
-    final idx = MockStore.promotions.indexWhere((e) => e.id == p.id);
-    if (idx < 0) return;
-    setState(() {
-      MockStore.promotions[idx] = Promotion(
-        id: p.id,
-        code: p.code,
-        discountPercent: p.discountPercent,
-        expiryDate: p.expiryDate,
-        isActive: value,
-        usedCount: p.usedCount,
-      );
-    });
+  Future<void> _toggleActive(Promotion p, bool value) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await PromotionRepository.setActive(p.id, value);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _showError('Không thể cập nhật mã "${p.code}". Vui lòng thử lại.');
+      await _load();
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await _load();
+    if (!mounted) return;
     _showSnack(
       value ? 'Đã kích hoạt mã "${p.code}"' : 'Đã tạm dừng mã "${p.code}"',
     );
@@ -671,16 +753,14 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final all = MockStore.promotions;
+    final all = _promotions;
     final now = DateTime.now();
     final activeCount = all.where((p) => p.isValidAt(now)).length;
 
     return Scaffold(
       drawer: AdminDrawer(
         selectedIndex: 2,
-        pendingVenueCount: MockStore.venues
-            .where((v) => v.status == 'pending')
-            .length,
+        pendingVenueCount: _pendingVenueCount,
       ),
       backgroundColor: _pageBg,
       appBar: AppBar(
@@ -700,7 +780,9 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
         actions: [if (Navigator.canPop(context)) const BackButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openPromotionSheet(),
+        onPressed: _isLoading || _error != null
+            ? null
+            : () => _openPromotionSheet(),
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 2,
@@ -711,50 +793,82 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
-      body: all.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _buildError(_error!)
+          : all.isEmpty
           ? _buildEmptyState()
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-              children: [
-                _buildOverviewHeader(total: all.length, active: activeCount),
-                const SizedBox(height: 20),
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                children: [
+                  _buildOverviewHeader(total: all.length, active: activeCount),
+                  const SizedBox(height: 20),
 
-                // Tiêu đề danh sách
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Danh sách mã giảm giá',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
+                  // Tiêu đề danh sách
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Danh sách mã giảm giá',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        '${all.length} mã',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textSecondary,
+                        Text(
+                          '${all.length} mã',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                ...all.map(
-                  (p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildAdminPromoCard(p),
+                  ...all.map(
+                    (p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildAdminPromoCard(p),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -868,7 +982,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     }
 
     return Container(
-      key: ValueKey('promo-${p.code}'),
+      key: ValueKey('promo-${p.id}'),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _cardBg,
@@ -999,7 +1113,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                         activeThumbColor: Colors.white,
                         activeTrackColor: AppTheme.primary,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        onChanged: (v) => _toggleActive(p, v),
+                        onChanged: _busy ? null : (v) => _toggleActive(p, v),
                       ),
                     ),
                   ],
@@ -1012,7 +1126,9 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                     Expanded(
                       child: ElevatedButton(
                         style: _filledButtonStyle(AppTheme.primary, height: 44),
-                        onPressed: () => _openPromotionSheet(promotion: p),
+                        onPressed: _busy
+                            ? null
+                            : () => _openPromotionSheet(promotion: p),
                         child: const Text('Chỉnh sửa'),
                       ),
                     ),
@@ -1020,7 +1136,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                     Expanded(
                       child: ElevatedButton(
                         style: _filledButtonStyle(_danger, height: 44),
-                        onPressed: () => _confirmDelete(p),
+                        onPressed: _busy ? null : () => _confirmDelete(p),
                         child: const Text('Xóa'),
                       ),
                     ),
