@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart';
 import '../../models/promotion.dart';
 import '../../utils/app_theme.dart';
 import 'admin_drawer.dart';
@@ -462,7 +463,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                           flex: 6,
                           child: ElevatedButton(
                             style: _filledButtonStyle(AppTheme.primary),
-                            onPressed: () {
+                            onPressed: () async {
                               final normalizedCode = codeController.text
                                   .trim()
                                   .toUpperCase();
@@ -501,34 +502,38 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                                 return;
                               }
 
-                              setState(() {
-                                if (isEditing) {
-                                  final idx = MockStore.promotions.indexWhere(
-                                    (p) => p.id == promotion.id,
-                                  );
-                                  if (idx >= 0) {
-                                    MockStore.promotions[idx] = Promotion(
-                                      id: promotion.id,
-                                      code: normalizedCode,
-                                      discountPercent: discountVal,
-                                      expiryDate: selectedDate,
-                                      isActive: isActive,
-                                      usedCount: promotion.usedCount,
-                                    );
-                                  }
-                                } else {
-                                  MockStore.promotions.add(
-                                    Promotion(
-                                      id: 'p${DateTime.now().millisecondsSinceEpoch}',
-                                      code: normalizedCode,
-                                      discountPercent: discountVal,
-                                      expiryDate: selectedDate,
-                                      isActive: isActive,
-                                    ),
-                                  );
-                                }
-                              });
+                              bool success = false;
+                              if (isEditing) {
+                                final updatedPromo = Promotion(
+                                  id: promotion.id,
+                                  code: normalizedCode,
+                                  discountPercent: discountVal,
+                                  expiryDate: selectedDate,
+                                  isActive: isActive,
+                                  usedCount: promotion.usedCount,
+                                  usageHistory: promotion.usageHistory,
+                                );
+                                success = await BookingRepository.updatePromotion(updatedPromo);
+                              } else {
+                                final newPromo = Promotion(
+                                  id: 'p${DateTime.now().millisecondsSinceEpoch}',
+                                  code: normalizedCode,
+                                  discountPercent: discountVal,
+                                  expiryDate: selectedDate,
+                                  isActive: isActive,
+                                );
+                                success = await BookingRepository.createPromotion(newPromo);
+                              }
 
+                              if (!success) {
+                                setModalState(() {
+                                  errorMessage = 'Không thể lưu mã khuyến mãi. Vui lòng kiểm tra lại.';
+                                });
+                                return;
+                              }
+
+                              setState(() {});
+                              if (!mounted || !modalContext.mounted) return;
                               Navigator.pop(modalContext);
                               _showSnack(
                                 isEditing
@@ -638,9 +643,16 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     );
 
     if (confirmed == true) {
-      setState(() {
-        MockStore.promotions.removeWhere((p) => p.id == promotion.id);
-      });
+      final success = await BookingRepository.deletePromotion(promotion.id);
+      if (!success) {
+        if (!mounted) return;
+        _showSnack(
+          'Không thể xóa mã "${promotion.code}".',
+          color: AppTheme.error,
+        );
+        return;
+      }
+      setState(() {});
       if (!mounted) return;
       _showSnack(
         'Đã xóa thành công mã "${promotion.code}"',
@@ -649,19 +661,17 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     }
   }
 
-  void _toggleActive(Promotion p, bool value) {
-    final idx = MockStore.promotions.indexWhere((e) => e.id == p.id);
-    if (idx < 0) return;
-    setState(() {
-      MockStore.promotions[idx] = Promotion(
-        id: p.id,
-        code: p.code,
-        discountPercent: p.discountPercent,
-        expiryDate: p.expiryDate,
-        isActive: value,
-        usedCount: p.usedCount,
+  Future<void> _toggleActive(Promotion p, bool value) async {
+    final success = await BookingRepository.togglePromotionActive(p.id, value);
+    if (!success) {
+      if (!mounted) return;
+      _showSnack(
+        'Không thể cập nhật trạng thái mã "${p.code}"',
+        color: AppTheme.error,
       );
-    });
+      return;
+    }
+    setState(() {});
     _showSnack(
       value ? 'Đã kích hoạt mã "${p.code}"' : 'Đã tạm dừng mã "${p.code}"',
     );

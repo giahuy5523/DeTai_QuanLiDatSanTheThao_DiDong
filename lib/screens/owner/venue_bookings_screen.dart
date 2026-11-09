@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart';
 import '../../models/booking.dart';
 import '../../models/user.dart';
 import '../../utils/app_theme.dart';
@@ -315,6 +316,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     final customerPhone = customer?.phone ?? 'Không có số điện thoại';
 
     return Container(
+      key: ValueKey('owner-booking-${booking.id}'),
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -604,31 +606,27 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     if (mounted && ok == true) _updateBookingStatus(booking, newStatus);
   }
 
-  void _updateBookingStatus(Booking booking, String newStatus) {
-    final index = MockStore.bookings.indexWhere(
-      (item) => item.id == booking.id,
-    );
+  Future<void> _updateBookingStatus(Booking booking, String newStatus) async {
+    final ownerId = MockStore.currentUser?.id;
+    if (ownerId == null || MockStore.currentUser?.role != 'owner') return;
 
-    if (index == -1) return;
-    final current = MockStore.bookings[index];
-    final ownsVenue =
-        MockStore.currentUser?.role == 'owner' &&
-        MockStore.venues.any(
-          (venue) =>
-              venue.id == current.venueId &&
-              venue.ownerId == MockStore.currentUser?.id,
-        );
-    if (!ownsVenue) return;
+    bool success = false;
     if (newStatus == 'cancelled') {
-      if (!MockStore.cancelBooking(current.id)) return;
-      current.cancelReason = 'Chủ sân hủy lịch đặt';
-    } else if ((current.status == 'pending' && newStatus == 'confirmed') ||
-        (current.status == 'confirmed' && newStatus == 'completed')) {
-      current.status = newStatus;
-    } else {
-      return;
+      success = await BookingRepository.cancelBooking(
+        booking.id,
+        cancelReason: 'Chủ sân hủy lịch đặt',
+      );
+    } else if (newStatus == 'confirmed' || newStatus == 'completed') {
+      success = await BookingRepository.updateBookingStatusByOwner(
+        bookingId: booking.id,
+        newStatus: newStatus,
+        ownerId: ownerId,
+      );
     }
 
+    if (!success) return;
+
+    if (!mounted) return;
     setState(() {});
 
     final messages = {

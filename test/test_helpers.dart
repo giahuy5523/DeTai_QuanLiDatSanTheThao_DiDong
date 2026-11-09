@@ -35,9 +35,21 @@ Future<void> press(WidgetTester tester, String text) async {
     reason: 'Không tìm thấy ElevatedButton có text "$text".',
   );
 
-  await tester.ensureVisible(button);
-  await tester.pump(const Duration(seconds: 5));
+  // Close the IME before calculating the final tap position. On a real
+  // Android device the keyboard changes the available viewport and can cover
+  // a button that was visible before the keyboard animation completed.
+  // Dismiss any previous SnackBar that may cover the target button.
+  final messenger = ScaffoldMessenger.maybeOf(tester.element(button));
+  messenger?.hideCurrentSnackBar();
   await tester.pumpAndSettle();
+
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+
+  // Keep hit-test warnings enabled: a missed tap is a test failure, not a
+  // condition to suppress.
   await tester.tap(button);
   await tester.pumpAndSettle();
   if (text == 'Gửi duyệt' && find.text('Xong').evaluate().isNotEmpty) {
@@ -61,14 +73,44 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 
 Future<void> chooseFutureDate(WidgetTester tester) async {
   await tapVisible(tester, find.text('Nhấn để chọn ngày khác'));
-  await tester.tap(find.byIcon(Icons.edit_outlined));
-  await tester.pumpAndSettle();
-  final dialog = tester.element(find.byType(DatePickerDialog));
-  final target = DateTime.now().add(const Duration(days: 7));
-  await tester.enterText(
-    find.byType(TextFormField),
-    MaterialLocalizations.of(dialog).formatCompactDate(target),
+
+  final dialogFinder = find.byType(DatePickerDialog);
+  expect(dialogFinder, findsOneWidget);
+
+  final editButton = find.descendant(
+    of: dialogFinder,
+    matching: find.byIcon(Icons.edit_outlined),
   );
-  await tester.tap(find.text('OK'));
+  expect(editButton, findsOneWidget);
+
+  await tester.tap(editButton);
+  await tester.pumpAndSettle();
+
+  final dateField = find.descendant(
+    of: dialogFinder,
+    matching: find.byType(TextFormField),
+  );
+  expect(dateField, findsOneWidget);
+
+  final dialogContext = tester.element(dialogFinder);
+  final target = DateTime.now().add(const Duration(days: 7));
+
+  await tester.enterText(
+    dateField,
+    MaterialLocalizations.of(dialogContext).formatCompactDate(target),
+  );
+  await tester.pumpAndSettle();
+
+  final okButton = find.descendant(
+    of: dialogFinder,
+    matching: find.widgetWithText(TextButton, 'OK'),
+  );
+  expect(okButton, findsOneWidget);
+
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(okButton);
+  await tester.pumpAndSettle();
+  await tester.tap(okButton);
   await tester.pumpAndSettle();
 }

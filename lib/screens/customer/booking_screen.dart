@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart' as data_repo;
+import '../../models/booking.dart';
 import '../../models/promotion.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
@@ -26,6 +28,81 @@ class _BookingScreenState extends State<BookingScreen> {
   String? _promoMessage;
   double _discount = 0;
   String? _appliedPromoCode;
+
+  List<Booking> _bookedBookings = [];
+  bool _isLoadingAvailability = true;
+  bool _availabilityLoadFailed = false;
+  String? _availabilityKey;
+  int _availabilityRequestId = 0;
+
+  String _availabilityKeyFor(Venue venue) {
+    return '${venue.id}_${_date.year}-${_date.month}-${_date.day}';
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final venue = args is Venue
+        ? args
+        : (MockStore.venues.isNotEmpty
+              ? MockStore.venues.first
+              : Venue.mockList().first);
+
+    final nextKey = _availabilityKeyFor(venue);
+    if (_availabilityKey != nextKey) {
+      _availabilityKey = nextKey;
+      _isLoadingAvailability = true;
+      _availabilityLoadFailed = false;
+      _loadBookedBookings(venue);
+    }
+  }
+
+  Future<void> _loadBookedBookings(Venue venue) async {
+    final requestId = ++_availabilityRequestId;
+
+    try {
+      final bookings = await data_repo.BookingRepository.getBookingsForVenue(
+        venue.id,
+      );
+
+      if (!mounted || requestId != _availabilityRequestId) return;
+
+      setState(() {
+        _bookedBookings = bookings
+            .where(
+              (booking) =>
+                  booking.status != 'cancelled' &&
+                  booking.date.year == _date.year &&
+                  booking.date.month == _date.month &&
+                  booking.date.day == _date.day,
+            )
+            .toList();
+        _isLoadingAvailability = false;
+        _availabilityLoadFailed = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _availabilityRequestId) return;
+
+      setState(() {
+        _bookedBookings = [];
+        _isLoadingAvailability = false;
+        _availabilityLoadFailed = true;
+      });
+    }
+  }
+
+  bool _hasBookedOverlap(String startTime, String endTime) {
+    final start = _timeToMinutes(startTime);
+    final end = _timeToMinutes(endTime);
+
+    return _bookedBookings.any((booking) {
+      final bookedStart = _timeToMinutes(booking.startTime);
+      final bookedEnd = _timeToMinutes(booking.endTime);
+      return start < bookedEnd && end > bookedStart;
+    });
+  }
 
   List<String> _timesFor(Venue venue, {bool includeClosing = false}) {
     final hours = MockStore.hoursOf(venue.id);
@@ -80,33 +157,37 @@ class _BookingScreenState extends State<BookingScreen> {
     return (end - start) / 60;
   }
 
-  bool _isSlotBooked(Venue venue, String time) {
-    final nextHour = _timeToMinutes(time) ~/ 60 + 1;
-    return !MockStore.isRangeAvailable(
-      venue.id,
-      _date,
-      time,
-      '${nextHour.toString().padLeft(2, '0')}:00',
+  Future<bool> _isTimeRangeAvailable(
+    Venue venue,
+    String startTime,
+    String endTime,
+  ) {
+    return data_repo.BookingRepository.isRangeAvailable(
+      venueId: venue.id,
+      date: _date,
+      startTime: startTime,
+      endTime: endTime,
     );
   }
 
-  bool _isTimeRangeAvailable(Venue venue, String startTime, String endTime) {
-    return MockStore.isRangeAvailable(venue.id, _date, startTime, endTime);
-  }
+  Future<void> _selectStartTime(Venue venue, String time) async {
+    final nextHour = _timeToMinutes(time) ~/ 60 + 1;
+    final endTime = '${nextHour.toString().padLeft(2, '0')}:00';
+    final available = await _isTimeRangeAvailable(venue, time, endTime);
 
-  void _selectStartTime(Venue venue, String time) {
-    if (_isSlotBooked(venue, time)) {
+    if (!mounted) return;
+    if (!available) {
       _showMessage('Khung giờ $time đã được đặt.');
       return;
     }
 
     setState(() {
       _startTime = time;
-      _endTime = null; // Reset giờ kết thúc khi chọn lại giờ bắt đầu
+      _endTime = null;
     });
   }
 
-  void _selectEndTime(Venue venue, String time) {
+  Future<void> _selectEndTime(Venue venue, String time) async {
     if (_startTime == null) {
       _showMessage('Vui lòng chọn giờ bắt đầu trước.');
       return;
@@ -117,12 +198,58 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
-    if (!_isTimeRangeAvailable(venue, _startTime!, time)) {
+    final available = await _isTimeRangeAvailable(venue, _startTime!, time);
+    if (!mounted) return;
+    if (!available) {
       _showMessage('Khoảng thời gian bạn chọn có khung giờ đã được đặt.');
       return;
     }
 
     setState(() => _endTime = time);
+  }
+
+  Future<void> _continueToConfirmation({
+    required BuildContext context,
+    required Venue venue,
+    required double serviceTotal,
+    required double courtTotal,
+    required double subtotal,
+    required double discountAmount,
+    required double total,
+  }) async {
+    if (_startTime == null || _endTime == null) return;
+
+    final available = await _isTimeRangeAvailable(
+      venue,
+      _startTime!,
+      _endTime!,
+    );
+    if (!context.mounted) return;
+    if (!available) {
+      setState(() => _endTime = null);
+      _showMessage('Khung giờ vừa chọn không còn khả dụng. Vui lòng chọn lại.');
+      return;
+    }
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.bookingConfirmation,
+      arguments: {
+        'venue': venue,
+        'date': _date,
+        'startTime': _startTime,
+        'endTime': _endTime,
+        'serviceIds': _selectedServices.keys.toList(),
+        'serviceQuantities': Map<String, int>.from(_selectedServices),
+        'courtPrice': courtTotal,
+        'serviceTotal': serviceTotal,
+        'discount': _discount,
+        'discountAmount': discountAmount,
+        'subtotal': subtotal,
+        'total': total,
+        'promoCode': _appliedPromoCode,
+      },
+    );
   }
 
   void _showMessage(String message) {
@@ -136,6 +263,12 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _pickDate(BuildContext context) async {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final venue = args is Venue
+        ? args
+        : (MockStore.venues.isNotEmpty
+              ? MockStore.venues.first
+              : Venue.mockList().first);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -150,9 +283,15 @@ class _BookingScreenState extends State<BookingScreen> {
 
     setState(() {
       _date = DateTime(picked.year, picked.month, picked.day);
-      _startTime = null; // Reset khung giờ khi thay đổi ngày đặt
+      _startTime = null;
       _endTime = null;
+      _bookedBookings = [];
+      _isLoadingAvailability = true;
+      _availabilityLoadFailed = false;
+      _availabilityKey = _availabilityKeyFor(venue);
     });
+
+    _loadBookedBookings(venue);
   }
 
   void _applyPromo() {
@@ -258,8 +397,7 @@ class _BookingScreenState extends State<BookingScreen> {
         venue.status == 'approved' &&
         _startTime != null &&
         _endTime != null &&
-        _durationHours > 0 &&
-        _isTimeRangeAvailable(venue, _startTime!, _endTime!);
+        _durationHours > 0;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -529,6 +667,22 @@ class _BookingScreenState extends State<BookingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_isLoadingAvailability)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Đang tải lịch đặt sân...',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+              )
+            else if (_availabilityLoadFailed)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Không tải được lịch đặt sân. Vui lòng thử tải lại màn hình.',
+                  style: TextStyle(fontSize: 12, color: Colors.red),
+                ),
+              ),
             const Text(
               'Bước 1: Chọn giờ bắt đầu',
               style: TextStyle(
@@ -543,7 +697,14 @@ class _BookingScreenState extends State<BookingScreen> {
               runSpacing: 8,
               children: _timesFor(venue).map((time) {
                 final isSelected = _startTime == time;
-                final isBooked = _isSlotBooked(venue, time);
+                final endMinutes = _timeToMinutes(time) + 60;
+                final endTime =
+                    '${(endMinutes ~/ 60).toString().padLeft(2, '0')}:'
+                    '${(endMinutes % 60).toString().padLeft(2, '0')}';
+                final isBooked =
+                    _isLoadingAvailability ||
+                    _availabilityLoadFailed ||
+                    _hasBookedOverlap(time, endTime);
 
                 return _buildTimeChip(
                   key: ValueKey('start_$time'),
@@ -584,11 +745,10 @@ class _BookingScreenState extends State<BookingScreen> {
                     )
                     .map((time) {
                       final isSelected = _endTime == time;
-                      final isUnavailable = !_isTimeRangeAvailable(
-                        venue,
-                        _startTime!,
-                        time,
-                      );
+                      final isUnavailable =
+                          _isLoadingAvailability ||
+                          _availabilityLoadFailed ||
+                          _hasBookedOverlap(_startTime!, time);
 
                       return _buildTimeChip(
                         key: ValueKey('end_$time'),
@@ -729,10 +889,10 @@ class _BookingScreenState extends State<BookingScreen> {
     final asset = normalized.contains('nước')
         ? 'assets/services/water.jpg'
         : normalized.contains('vợt')
-            ? 'assets/services/racket.jpg'
-            : normalized.contains('giày')
-                ? 'assets/services/shoes.jpg'
-                : null;
+        ? 'assets/services/racket.jpg'
+        : normalized.contains('giày')
+        ? 'assets/services/shoes.jpg'
+        : null;
     if (asset == null) {
       return _missingServiceImage('Chưa có ảnh cho dịch vụ: $serviceName');
     }
@@ -1057,37 +1217,28 @@ class _BookingScreenState extends State<BookingScreen> {
               flex: 6,
               child: ElevatedButton(
                 onPressed: canContinue
-                    ? () => Navigator.pushNamed(
-                        context,
-                        AppRoutes.bookingConfirmation,
-                        arguments: {
-                          'venue': venue,
-                          'date': _date,
-                          'startTime': _startTime,
-                          'endTime': _endTime,
-                          'serviceIds': _selectedServices.keys.toList(),
-                          'courtPrice': courtTotal,
-                          'serviceTotal': serviceTotal,
-                          'discount': _discount,
-                          'discountAmount': discountAmount,
-                          'subtotal': subtotal,
-                          'total': total,
-                          'promoCode': _appliedPromoCode,
-                        },
+                    ? () => _continueToConfirmation(
+                        context: context,
+                        venue: venue,
+                        serviceTotal: serviceTotal,
+                        courtTotal: courtTotal,
+                        subtotal: subtotal,
+                        discountAmount: discountAmount,
+                        total: total,
                       )
                     : null,
                 child: Text(
                   canContinue
                       ? 'Tiếp tục'
                       : venue.status != 'approved'
-                          ? (venue.status == 'pending'
-                              ? 'Sân đang chờ duyệt'
-                              : 'Sân chưa thể đặt')
-                          : _startTime == null
-                              ? 'Chọn giờ bắt đầu'
-                              : _endTime == null
-                                  ? 'Chọn giờ kết thúc'
-                                  : 'Khung giờ không khả dụng',
+                      ? (venue.status == 'pending'
+                            ? 'Sân đang chờ duyệt'
+                            : 'Sân chưa thể đặt')
+                      : _startTime == null
+                      ? 'Chọn giờ bắt đầu'
+                      : _endTime == null
+                      ? 'Chọn giờ kết thúc'
+                      : 'Khung giờ không khả dụng',
                 ),
               ),
             ),

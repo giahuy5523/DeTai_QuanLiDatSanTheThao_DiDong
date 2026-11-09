@@ -411,6 +411,7 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
       await press(tester, 'Tiếp tục');
       await press(tester, 'Chọn phương thức thanh toán');
+      expect(find.text('Tiền thuê sân'), findsOneWidget);
 
       await tapVisible(tester, find.text('Ví MoMo'));
       await tester.pumpAndSettle();

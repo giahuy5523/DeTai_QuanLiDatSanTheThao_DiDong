@@ -97,9 +97,21 @@ void main() {
       await start(tester);
       await registerForm(tester, email: ' NEW@GMAIL.COM ');
       if (role == 'owner') {
-        await tester.ensureVisible(find.text('Chủ sân'));
+        final ownerButton = find.widgetWithText(TextButton, 'Chủ sân');
+
+        FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Chủ sân').last);
+
+        await tester.ensureVisible(ownerButton);
+        await tester.pumpAndSettle();
+
+        expect(ownerButton, findsOneWidget);
+        expect(tester.getRect(ownerButton).overlaps(
+          Offset.zero & tester.view.physicalSize /
+              tester.view.devicePixelRatio,
+        ), isTrue);
+
+        await tester.tap(ownerButton);
         await tester.pumpAndSettle();
       }
       await press(tester, 'Tạo tài khoản');
@@ -193,19 +205,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Login and registration fit a small mobile screen', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(360, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await start(tester);
-    await registerForm(tester);
-    await press(tester, 'Tạo tài khoản');
-    expect(find.byType(LoginScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Login and registration fit a small mobile screen',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await start(tester);
+      await registerForm(tester);
+      await press(tester, 'Tạo tài khoản');
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+    tags: ['viewport'],
+  );
 
   testWidgets(
     'Empty registration is rejected and admin registration is unavailable',
