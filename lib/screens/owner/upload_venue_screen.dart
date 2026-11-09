@@ -7,13 +7,7 @@ import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_theme.dart';
 
-// Bảng màu & hằng số của màn hình
-const _primary = Color(0xFF0F8B5F);
-const _primaryDark = Color(0xFF065F46);
-const _primarySoft = Color(0xFFA8EBCB);
-const _background = Color(0xFFF5F7FA);
-const _hintColor = Color(0xFF6B7385);
-const _fieldRadius = 14.0;
+// Hằng số riêng của màn hình (màu sắc & kiểu dáng lấy từ AppTheme)
 const _maxImages = 8;
 const _minImages = 3;
 
@@ -192,7 +186,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 8),
         content: Column(
@@ -201,17 +195,21 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
             Container(
               width: 68,
               height: 68,
-              decoration: BoxDecoration(
-                color: _primary.withValues(alpha: 0.12),
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryLight,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_circle, color: _primary, size: 42),
+              child: const Icon(
+                Icons.check_circle,
+                color: AppTheme.primary,
+                size: 42,
+              ),
             ),
             const SizedBox(height: 16),
             const Text(
               'Đã gửi duyệt',
               style: TextStyle(
-                color: _primaryDark,
+                color: AppTheme.primaryDark,
                 fontSize: 19,
                 fontWeight: FontWeight.w700,
               ),
@@ -220,29 +218,19 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
             const Text(
               'Sân của bạn sẽ hiển thị sau khi Admin duyệt.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _hintColor, height: 1.4),
+              style: TextStyle(color: AppTheme.textSecondary, height: 1.4),
             ),
           ],
         ),
         actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
         actions: [
+          // Kiểu nút lấy từ elevatedButtonTheme trong AppTheme.
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Xong',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
+              child: const Text('Xong'),
             ),
           ),
         ],
@@ -304,38 +292,20 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'Không được để trống' : null;
 
-  // Style cho các ô nhập
+  // Viền, màu nền, màu chữ... của ô nhập đã nằm trong inputDecorationTheme
+  // của AppTheme, ở đây chỉ khai báo phần riêng của từng ô.
   InputDecoration _decoration({
     required String label,
     required String hint,
     String? suffixText,
     Widget? prefixIcon,
   }) {
-    OutlineInputBorder border(Color color, [double width = 1]) =>
-        OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_fieldRadius),
-          borderSide: BorderSide(color: color, width: width),
-        );
     return InputDecoration(
       labelText: label,
       hintText: hint,
       suffixText: suffixText,
       prefixIcon: prefixIcon,
       floatingLabelBehavior: FloatingLabelBehavior.always,
-      labelStyle: const TextStyle(color: _hintColor),
-      floatingLabelStyle: const TextStyle(
-        color: _hintColor,
-        fontWeight: FontWeight.w500,
-      ),
-      hintStyle: const TextStyle(color: _hintColor),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      enabledBorder: border(_primarySoft),
-      focusedBorder: border(_primary, 1.6),
-      errorBorder: border(Colors.red.shade400),
-      focusedErrorBorder: border(Colors.red.shade400, 1.6),
-      border: border(_primarySoft),
     );
   }
 
@@ -377,12 +347,12 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
                     : const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.add, color: _primary, size: 20),
+                          Icon(Icons.add, color: AppTheme.primary, size: 20),
                           SizedBox(width: 6),
                           Text(
                             'Thêm ảnh bìa',
                             style: TextStyle(
-                              color: _primary,
+                              color: AppTheme.primary,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
@@ -409,7 +379,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isCover ? _primary : Colors.transparent,
+                    color: isCover ? AppTheme.primary : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -437,13 +407,17 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
                   width: 22,
                   height: 22,
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.cardColor,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(color: Colors.black26, blurRadius: 3),
                     ],
                   ),
-                  child: const Icon(Icons.close, size: 14),
+                  child: const Icon(
+                    Icons.close,
+                    size: 14,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
               ),
             ),
@@ -475,7 +449,11 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
                       radius: 14,
                       onTap: _picking ? null : _pickImages,
                       child: const Center(
-                        child: Icon(Icons.add, color: _primary, size: 26),
+                        child: Icon(
+                          Icons.add,
+                          color: AppTheme.primary,
+                          size: 26,
+                        ),
                       ),
                     ),
                   );
@@ -489,7 +467,9 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
         Text(
           '${_images.length} / $_maxImages ảnh',
           style: TextStyle(
-            color: _images.length >= _minImages ? _primary : _hintColor,
+            color: _images.length >= _minImages
+                ? AppTheme.primary
+                : AppTheme.textSecondary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -503,16 +483,16 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_fieldRadius),
-          border: Border.all(color: Colors.red.shade400),
+          color: AppTheme.cardColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.error),
         ),
         child: Row(
           children: [
             Expanded(
               child: Text(
                 _sportError!,
-                style: TextStyle(color: Colors.red.shade700),
+                style: const TextStyle(color: AppTheme.error),
               ),
             ),
             TextButton(
@@ -527,15 +507,15 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     return DropdownButtonFormField<String>(
       initialValue: _sportType,
       isExpanded: true,
-      borderRadius: BorderRadius.circular(_fieldRadius),
-      icon: const Icon(Icons.arrow_drop_down, color: _hintColor),
+      borderRadius: BorderRadius.circular(12),
+      icon: const Icon(Icons.arrow_drop_down, color: AppTheme.textSecondary),
       decoration: _decoration(
         label: 'Loại thể thao',
         hint: _loadingSports ? 'Đang tải...' : 'Chọn loại thể thao',
       ),
       hint: Text(
         _loadingSports ? 'Đang tải...' : 'Chọn loại thể thao',
-        style: const TextStyle(color: _hintColor),
+        style: const TextStyle(color: AppTheme.textSecondary),
       ),
       items: [
         for (final sport in _sportTypes)
@@ -554,19 +534,14 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Nền Scaffold, AppBar và các nút lấy từ AppTheme.lightTheme.
     return Scaffold(
-      backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: _primary,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
-        elevation: 0,
         title: const Text(
           'Đăng ký sân mới',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-          ),
+          style: TextStyle(color: Colors.white),
         ),
       ),
       body: Form(
@@ -582,7 +557,7 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
               padding: EdgeInsets.only(top: 2, bottom: 14),
               child: Text(
                 'Cần tối thiểu $_minImages ảnh. Chạm vào ảnh nhỏ để đặt làm ảnh bìa.',
-                style: TextStyle(color: _hintColor, fontSize: 12.5),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5),
               ),
             ),
             TextFormField(
@@ -622,17 +597,24 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.primaryLight,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.info_outline, color: _primaryDark, size: 20),
+                  Icon(
+                    Icons.info_outline,
+                    color: AppTheme.primaryDark,
+                    size: 20,
+                  ),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Sân sẽ được Admin duyệt trước khi hiển thị',
-                      style: TextStyle(color: _primaryDark, fontSize: 14.5),
+                      style: TextStyle(
+                        color: AppTheme.primaryDark,
+                        fontSize: 14.5,
+                      ),
                     ),
                   ),
                 ],
@@ -644,17 +626,10 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
               child: ElevatedButton(
                 onPressed: _picking || _saving ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: _primary.withValues(alpha: 0.4),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  disabledBackgroundColor: AppTheme.primary.withValues(
+                    alpha: 0.4,
                   ),
-                  textStyle: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  disabledForegroundColor: Colors.white,
                 ),
                 child: _saving
                     ? const SizedBox(
@@ -685,7 +660,7 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _primary,
+        color: AppTheme.primary,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -712,7 +687,7 @@ class _DashedBox extends StatelessWidget {
     return CustomPaint(
       foregroundPainter: _DashedRRectPainter(radius: radius),
       child: Material(
-        color: Colors.white,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(radius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(onTap: onTap, child: child),
@@ -728,7 +703,7 @@ class _DashedRRectPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = _primary
+      ..color = AppTheme.primary
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6;
     final rrect = RRect.fromRectAndRadius(

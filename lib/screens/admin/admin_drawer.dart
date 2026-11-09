@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
 import '../../data/account_service.dart';
+import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 
 class AdminDrawer extends StatelessWidget {
@@ -17,16 +17,6 @@ class AdminDrawer extends StatelessWidget {
     this.onReturn,
     this.pendingVenueCount = 0,
   });
-
-  static const _bg = Color(0xFFF5F7FA);
-  static const _primary = Color(0xFF0F8B5F);
-  static const _primaryDark = Color(0xFF065F46);
-  static const _selectedBg = Color(0xFFA7F3D0);
-  static const _textDark = Color(0xFF10241C);
-  static const _textMuted = Color(0xFF64748B);
-  static const _divider = Color(0xFFB7F0D8);
-  static const _badge = Color(0xFFFFB547);
-  static const _danger = Color(0xFFEF4444);
 
   Future<void> _goTo(BuildContext context, String route) async {
     Navigator.pop(context);
@@ -59,7 +49,7 @@ class AdminDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: _bg,
+      backgroundColor: AppTheme.background,
       elevation: 0,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
@@ -108,7 +98,7 @@ class AdminDrawer extends StatelessWidget {
               child: _DrawerItem(
                 label: 'Đăng xuất',
                 icon: Icons.logout,
-                color: _danger,
+                color: AppTheme.error,
                 onTap: () => _logout(context),
               ),
             ),
@@ -117,7 +107,7 @@ class AdminDrawer extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(28, 0, 24, 20),
               child: Text(
                 'Phiên bản 1.0.0',
-                style: TextStyle(fontSize: 12, color: _textMuted),
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               ),
             ),
           ],
@@ -134,7 +124,7 @@ class AdminDrawer extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 36,
-            backgroundColor: _primary,
+            backgroundColor: AppTheme.primary,
             child: Text(
               'QT',
               style: TextStyle(
@@ -150,13 +140,13 @@ class AdminDrawer extends StatelessWidget {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: _textDark,
+              color: AppTheme.textPrimary,
             ),
           ),
           SizedBox(height: 6),
           Text(
             'Quản trị hệ thống',
-            style: TextStyle(fontSize: 14, color: _textMuted),
+            style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -171,7 +161,7 @@ class _SoftDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 26),
-      child: Divider(height: 1, thickness: 1, color: AdminDrawer._divider),
+      child: Divider(height: 1, thickness: 1, color: AppTheme.border),
     );
   }
 }
@@ -196,7 +186,7 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color fg =
-        color ?? (selected ? AdminDrawer._primaryDark : AdminDrawer._textDark);
+        color ?? (selected ? AppTheme.primaryDark : AppTheme.textPrimary);
     final FontWeight weight = (selected || color != null)
         ? FontWeight.w800
         : FontWeight.w500;
@@ -204,7 +194,7 @@ class _DrawerItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Material(
-        color: selected ? AdminDrawer._selectedBg : Colors.transparent,
+        color: selected ? AppTheme.primaryLight : Colors.transparent,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -233,7 +223,7 @@ class _DrawerItem extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AdminDrawer._badge,
+                      color: AppTheme.accent,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -242,7 +232,7 @@ class _DrawerItem extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: AdminDrawer._textDark,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                   ),

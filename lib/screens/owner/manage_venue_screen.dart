@@ -8,6 +8,7 @@ import '../../data/mock_store.dart';
 import '../../data/account_service.dart';
 import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
+import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 
 // Hiển thị ảnh sân từ asset, URL hoặc file chọn từ máy.
@@ -70,8 +71,6 @@ class ManageVenueScreen extends StatefulWidget {
 }
 
 class _ManageVenueScreenState extends State<ManageVenueScreen> {
-  static const _primaryGreen = Color(0xFF0F8B5F);
-
   String _selectedFilter = 'all'; // 'all', 'approved', 'pending'
 
   // Toàn bộ dữ liệu hiển thị đều đến từ SQLite.
@@ -187,7 +186,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        backgroundColor: _primaryGreen,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         title: const Text(
           'Quản lý sân và lịch đặt',
@@ -202,7 +201,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: _primaryGreen,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         onPressed: _openUploadVenue,
         icon: const Icon(Icons.add),
@@ -328,7 +327,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: _primaryGreen,
+      selectedColor: AppTheme.primary,
       showCheckmark: false,
       labelStyle: TextStyle(
         color: isSelected ? Colors.white : Colors.grey.shade800,
@@ -338,7 +337,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: isSelected ? _primaryGreen : Colors.grey.shade300,
+          color: isSelected ? AppTheme.primary : Colors.grey.shade300,
         ),
       ),
       onSelected: (_) => setState(() => _selectedFilter = value),
@@ -349,7 +348,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
     return Expanded(
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: _primaryGreen,
+          backgroundColor: AppTheme.primary,
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
@@ -421,7 +420,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: isApproved
-                          ? _primaryGreen
+                          ? AppTheme.primary
                           : const Color(0xFFFFB547),
                       borderRadius: BorderRadius.circular(20),
                     ),
@@ -478,7 +477,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                 Text(
                   '${venue.sportType} • ${venue.pricePerHour.toStringAsFixed(0)} đ/giờ',
                   style: const TextStyle(
-                    color: _primaryGreen,
+                    color: AppTheme.primary,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),

@@ -17,14 +17,6 @@ class ManagePromotionScreen extends StatefulWidget {
 }
 
 class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
-  // Màu bổ sung theo thiết kế mới
-  static const Color _mint = Color(0xFFA7F3D0);
-  static const Color _mintText = Color(0xFF065F46);
-  static const Color _fieldTint = Color(0xFFF0F7F4);
-  static const Color _cardBg = Colors.white;
-  static const Color _pageBg = Color(0xFFF5F7FA);
-  static const Color _danger = Color(0xFFEF4444);
-
   // Dữ liệu đọc từ SQLite.
   List<Promotion> _promotions = const [];
   int _pendingVenueCount = 0;
@@ -84,22 +76,8 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
   }
 
   InputDecoration _fieldDecoration({required String hint, String? suffix}) {
-    OutlineInputBorder border(Color c, double w) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: c, width: w),
-    );
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-      suffixText: suffix,
-      isDense: true,
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: border(_mint, 1.2),
-      enabledBorder: border(_mint, 1.2),
-      focusedBorder: border(AppTheme.primary, 1.8),
-    );
+    // Viền, màu nền, padding lấy từ AppTheme.lightTheme.inputDecorationTheme.
+    return InputDecoration(hintText: hint, suffixText: suffix, isDense: true);
   }
 
   Widget _fieldLabel(String text) => Padding(
@@ -124,13 +102,13 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
       selected: selected,
       showCheckmark: false,
       onSelected: (_) => onTap(),
-      selectedColor: _mint,
-      backgroundColor: Colors.white,
-      side: BorderSide(color: selected ? AppTheme.primary : _mint),
+      selectedColor: AppTheme.primaryLight,
+      backgroundColor: AppTheme.cardColor,
+      side: BorderSide(color: selected ? AppTheme.primary : AppTheme.border),
       labelStyle: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
-        color: selected ? _mintText : AppTheme.textSecondary,
+        color: selected ? AppTheme.primaryDark : AppTheme.textSecondary,
       ),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
@@ -183,6 +161,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         sheetRoute = ModalRoute.of<void>(ctx);
@@ -268,6 +247,11 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
             }
 
             return Container(
+              // Giới hạn chiều cao: nội dung dài hơn thì cuộn bên trong,
+              // không kéo sheet phủ kín màn hình.
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(modalContext).size.height * 0.9,
+              ),
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
@@ -275,7 +259,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                 bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
               ),
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.cardColor,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: SingleChildScrollView(
@@ -289,7 +273,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                         width: 44,
                         height: 5,
                         decoration: BoxDecoration(
-                          color: _mint,
+                          color: AppTheme.primaryLight,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -304,7 +288,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: _fieldTint,
+                            color: AppTheme.primaryLight,
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Icon(
@@ -351,17 +335,17 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: _danger.withValues(alpha: 0.08),
+                          color: AppTheme.error.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _danger.withValues(alpha: 0.3),
+                            color: AppTheme.error.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.error_outline_rounded,
-                              color: _danger,
+                              color: AppTheme.error,
                               size: 18,
                             ),
                             const SizedBox(width: 8),
@@ -369,7 +353,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                               child: Text(
                                 errorMessage!,
                                 style: const TextStyle(
-                                  color: _danger,
+                                  color: AppTheme.error,
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -476,7 +460,10 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _mint, width: 1.2),
+                          border: Border.all(
+                            color: AppTheme.border,
+                            width: 1.2,
+                          ),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -540,9 +527,9 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _fieldTint,
+                        color: AppTheme.primaryLight,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _mint, width: 1.2),
+                        border: Border.all(color: AppTheme.border, width: 1.2),
                       ),
                       child: Material(
                         color: Colors.transparent,
@@ -581,7 +568,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                         Expanded(
                           flex: 4,
                           child: ElevatedButton(
-                            style: _filledButtonStyle(_danger),
+                            style: _filledButtonStyle(AppTheme.error),
                             onPressed: saving
                                 ? null
                                 : () => Navigator.pop(modalContext),
@@ -645,19 +632,19 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _danger.withValues(alpha: 0.1),
+                color: AppTheme.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.delete_outline_rounded,
-                color: _danger,
+                color: AppTheme.error,
                 size: 22,
               ),
             ),
@@ -681,7 +668,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                 text: '"${promotion.code}"',
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
-                  color: _danger,
+                  color: AppTheme.error,
                 ),
               ),
               const TextSpan(
@@ -694,12 +681,12 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
         actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         actions: [
           ElevatedButton(
-            style: _filledButtonStyle(Colors.grey.shade500, height: 42),
+            style: _filledButtonStyle(AppTheme.textSecondary, height: 42),
             onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Hủy'),
           ),
           ElevatedButton(
-            style: _filledButtonStyle(_danger, height: 42),
+            style: _filledButtonStyle(AppTheme.error, height: 42),
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text('Xác nhận xóa'),
           ),
@@ -762,20 +749,13 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
         selectedIndex: 2,
         pendingVenueCount: _pendingVenueCount,
       ),
-      backgroundColor: _pageBg,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
           'Quản lý khuyến mãi',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-          ),
+          style: TextStyle(color: Colors.white),
         ),
         actions: [if (Navigator.canPop(context)) const BackButton()],
       ),
@@ -985,10 +965,10 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
       key: ValueKey('promo-${p.id}'),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardBg,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isEffective ? const Color(0xFFE8ECF2) : Colors.grey.shade300,
+          color: isEffective ? AppTheme.border : AppTheme.border,
         ),
         boxShadow: [
           BoxShadow(
@@ -1006,7 +986,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: isEffective ? _mint : const Color(0xFFE5E7EB),
+              color: isEffective ? AppTheme.primaryLight : AppTheme.border,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Center(
@@ -1015,7 +995,9 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
-                  color: isEffective ? _mintText : AppTheme.textSecondary,
+                  color: isEffective
+                      ? AppTheme.primaryDark
+                      : AppTheme.textSecondary,
                 ),
               ),
             ),
@@ -1068,7 +1050,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                   'Hết hạn: ${_formatDate(p.expiryDate)}  •  $remainText',
                   style: TextStyle(
                     fontSize: 13,
-                    color: isExpired ? _danger : AppTheme.textSecondary,
+                    color: isExpired ? AppTheme.error : AppTheme.textSecondary,
                     fontWeight: isExpired ? FontWeight.w700 : FontWeight.w400,
                   ),
                 ),
@@ -1135,7 +1117,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
-                        style: _filledButtonStyle(_danger, height: 44),
+                        style: _filledButtonStyle(AppTheme.error, height: 44),
                         onPressed: _busy ? null : () => _confirmDelete(p),
                         child: const Text('Xóa'),
                       ),
@@ -1158,16 +1140,16 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
 
     if (!isActive) {
       text = 'Tạm dừng';
-      bgColor = Colors.grey.shade200;
+      bgColor = AppTheme.border;
       textColor = AppTheme.textSecondary;
     } else if (isExpired) {
       text = 'Đã hết hạn';
-      bgColor = const Color(0xFFFEE2E2);
-      textColor = _danger;
+      bgColor = AppTheme.error.withValues(alpha: 0.12);
+      textColor = AppTheme.error;
     } else {
       text = 'Đang kích hoạt';
-      bgColor = _mint;
-      textColor = _mintText;
+      bgColor = AppTheme.primaryLight;
+      textColor = AppTheme.primaryDark;
     }
 
     return Container(
@@ -1198,13 +1180,13 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
             Container(
               padding: const EdgeInsets.all(22),
               decoration: const BoxDecoration(
-                color: _mint,
+                color: AppTheme.primaryLight,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.local_offer_outlined,
                 size: 54,
-                color: _mintText,
+                color: AppTheme.primaryDark,
               ),
             ),
             const SizedBox(height: 18),

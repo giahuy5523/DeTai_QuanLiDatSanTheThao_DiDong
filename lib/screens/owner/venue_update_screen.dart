@@ -8,11 +8,7 @@ import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_theme.dart';
 
-// Bảng màu & hằng số
-const _primary = Color(0xFF128C5E);
-const _primarySoft = Color(0xFFA8EBCB);
-const _background = Color(0xFFF4F6FA);
-const _hintColor = Color(0xFF6B7385);
+// Hằng số riêng của màn hình
 const _fieldRadius = 14.0;
 const _maxImages = 8;
 const _minImages = 3;
@@ -241,36 +237,16 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'Không được để trống' : null;
 
-  // Style cho các ô nhập
   InputDecoration _decoration({
     required String label,
     required String hint,
     String? suffixText,
   }) {
-    OutlineInputBorder border(Color color, [double width = 1]) =>
-        OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_fieldRadius),
-          borderSide: BorderSide(color: color, width: width),
-        );
     return InputDecoration(
       labelText: label,
       hintText: hint,
       suffixText: suffixText,
       floatingLabelBehavior: FloatingLabelBehavior.always,
-      labelStyle: const TextStyle(color: _hintColor),
-      floatingLabelStyle: const TextStyle(
-        color: _hintColor,
-        fontWeight: FontWeight.w500,
-      ),
-      hintStyle: const TextStyle(color: _hintColor),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      enabledBorder: border(_primarySoft),
-      focusedBorder: border(_primary, 1.6),
-      errorBorder: border(Colors.red.shade400),
-      focusedErrorBorder: border(Colors.red.shade400, 1.6),
-      border: border(_primarySoft),
     );
   }
 
@@ -315,12 +291,12 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add, color: _primary, size: 20),
+                    Icon(Icons.add, color: AppTheme.primary, size: 20),
                     SizedBox(width: 6),
                     Text(
                       'Thêm ảnh bìa',
                       style: TextStyle(
-                        color: _primary,
+                        color: AppTheme.primary,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
@@ -347,7 +323,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isCover ? _primary : Colors.transparent,
+                    color: isCover ? AppTheme.primary : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -370,13 +346,17 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
                   width: 22,
                   height: 22,
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.cardColor,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(color: Colors.black26, blurRadius: 3),
                     ],
                   ),
-                  child: const Icon(Icons.close, size: 14),
+                  child: const Icon(
+                    Icons.close,
+                    size: 14,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
               ),
             ),
@@ -407,7 +387,11 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
                       radius: 14,
                       onTap: _picking ? null : _pickImages,
                       child: const Center(
-                        child: Icon(Icons.add, color: _primary, size: 26),
+                        child: Icon(
+                          Icons.add,
+                          color: AppTheme.primary,
+                          size: 26,
+                        ),
                       ),
                     ),
                   );
@@ -421,7 +405,9 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
         Text(
           '${_images.length} / $_maxImages ảnh',
           style: TextStyle(
-            color: _images.length >= _minImages ? _primary : _hintColor,
+            color: _images.length >= _minImages
+                ? AppTheme.primary
+                : AppTheme.textSecondary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -432,18 +418,12 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: _primary,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
-        elevation: 0,
         title: const Text(
           'Cập nhật thông tin sân',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-            color: Colors.white,
-          ),
+          style: TextStyle(color: Colors.white),
         ),
       ),
       body: Form(
@@ -459,7 +439,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
               padding: EdgeInsets.only(top: 2, bottom: 14),
               child: Text(
                 'Cần tối thiểu $_minImages ảnh. Chạm vào ảnh nhỏ để đặt làm ảnh bìa.',
-                style: TextStyle(color: _hintColor, fontSize: 12.5),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5),
               ),
             ),
             TextFormField(
@@ -481,7 +461,10 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
               initialValue: _sportType,
               isExpanded: true,
               borderRadius: BorderRadius.circular(_fieldRadius),
-              icon: const Icon(Icons.arrow_drop_down, color: _hintColor),
+              icon: const Icon(
+                Icons.arrow_drop_down,
+                color: AppTheme.textSecondary,
+              ),
               decoration: _decoration(
                 label: 'Loại thể thao',
                 hint: 'Chọn loại thể thao',
@@ -517,16 +500,8 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
               child: ElevatedButton(
                 onPressed: _picking || _saving ? null : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: _primary.withValues(alpha: 0.4),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
+                  disabledBackgroundColor: AppTheme.primary.withValues(
+                    alpha: 0.4,
                   ),
                 ),
                 child: _saving
@@ -558,7 +533,7 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _primary,
+        color: AppTheme.primary,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -585,7 +560,7 @@ class _DashedBox extends StatelessWidget {
     return CustomPaint(
       foregroundPainter: _DashedRRectPainter(radius: radius),
       child: Material(
-        color: Colors.white,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(radius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(onTap: onTap, child: child),
@@ -601,7 +576,7 @@ class _DashedRRectPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = _primary
+      ..color = AppTheme.primary
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6;
     final rrect = RRect.fromRectAndRadius(

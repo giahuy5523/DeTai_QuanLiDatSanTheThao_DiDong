@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/venue_repository.dart';
 import '../../models/system_statistics.dart';
+import '../../utils/app_theme.dart';
 import 'admin_drawer.dart';
 
 class StatisticsScreen extends StatefulWidget {
@@ -11,14 +12,6 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  static const Color _green = Color(0xFF118C5F);
-  static const Color _mint = Color(0xFFA7F3D0);
-  static const Color _background = Color(0xFFF5F7FA);
-  static const Color _ink = Color(0xFF12261F);
-  static const Color _muted = Color(0xFF64748B);
-  static const Color _red = Color(0xFFEF4444);
-  static const Color _amber = Color(0xFFF59E0B);
-
   // Số liệu tổng hợp từ SQLite.
   SystemStatistics? _stats;
   bool _isLoading = true;
@@ -71,9 +64,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final stats = _stats;
 
     return Scaffold(
-      backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: _green,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -109,7 +101,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _muted),
+              style: const TextStyle(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -137,12 +129,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              color: _ink,
+              color: AppTheme.textPrimary,
             ),
           ),
         ),
         const SizedBox(height: 14),
-        _revenueCard('Doanh thu mô phỏng', _formatVnd(stats.revenue)),
+        _revenueCard('Doanh thu', _formatVnd(stats.revenue)),
         const SizedBox(height: 12),
         IntrinsicHeight(
           child: Row(
@@ -164,7 +156,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         Container(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardColor,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -175,7 +167,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _ink,
+                  color: AppTheme.textPrimary,
                 ),
               ),
               const SizedBox(height: 14),
@@ -195,7 +187,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
       decoration: BoxDecoration(
-        color: _green,
+        color: AppTheme.primary,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -203,7 +195,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(color: Color(0xFFB7F0D8), fontSize: 13),
+            style: const TextStyle(color: AppTheme.primaryLight, fontSize: 13),
           ),
           const SizedBox(height: 14),
           FittedBox(
@@ -227,7 +219,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       key: ValueKey('metric-$title'),
       padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -238,7 +230,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             child: Text(
               value,
               style: const TextStyle(
-                color: _green,
+                color: AppTheme.primary,
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
               ),
@@ -247,7 +239,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(color: _muted, fontSize: 14, height: 1.25),
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 14,
+              height: 1.25,
+            ),
           ),
         ],
       ),
@@ -262,10 +258,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       'cancelled': 'Đã hủy',
     };
     final colors = <String, Color>{
-      'pending': _amber,
-      'confirmed': _green,
-      'completed': _green,
-      'cancelled': _red,
+      'pending': AppTheme.warning,
+      'confirmed': AppTheme.primary,
+      'completed': AppTheme.primary,
+      'cancelled': AppTheme.error,
     };
     final progress = total == 0 ? 0.0 : count / total;
 
@@ -279,13 +275,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               Expanded(
                 child: Text(
                   labels[status] ?? status,
-                  style: const TextStyle(color: _ink, fontSize: 14),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                  ),
                 ),
               ),
               Text(
                 '$count',
                 style: const TextStyle(
-                  color: _ink,
+                  color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -297,9 +296,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 8,
-              backgroundColor: _mint,
+              backgroundColor: AppTheme.primaryLight,
               valueColor: AlwaysStoppedAnimation<Color>(
-                colors[status] ?? _green,
+                colors[status] ?? AppTheme.primary,
               ),
             ),
           ),

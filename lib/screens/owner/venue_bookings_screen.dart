@@ -14,16 +14,8 @@ class VenueBookingsScreen extends StatefulWidget {
 }
 
 class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
-  // ---- Màu sắc ----
-  static const _primaryGreen = Color(0xFF0F8B5F);
-  static const _darkGreen = Color(0xFF065F46);
-  static const _background = Color(0xFFF5F7FA);
-  static const _blue = Color(0xFF3B82F6);
-  static const _orange = Color(0xFFFFB13B);
-  static const _red = Color(0xFFEF4444);
-  static const _textDark = Color(0xFF111827);
-  static const _textGrey = Color(0xFF6B7280);
-  static const _avatarBg = Color(0xFFB7F0D8);
+  // Màu "đã xác nhận"
+  static const _confirmedBlue = Color(0xFF3B82F6);
 
   static const _stripDays = 14;
 
@@ -126,9 +118,9 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
         : dayBookings.where((b) => b.status == _statusFilter).toList();
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: _primaryGreen,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
@@ -173,10 +165,11 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _textGrey),
+              style: const TextStyle(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
               onPressed: _retry,
               icon: const Icon(Icons.refresh),
               label: const Text('Thử lại'),
@@ -192,7 +185,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     final itemWidth = (MediaQuery.of(context).size.width - 32 - 4 * 8) / 5;
 
     return Container(
-      color: _background,
+      color: AppTheme.background,
       padding: const EdgeInsets.only(top: 12, bottom: 12),
       height: 100,
       child: ListView.separated(
@@ -218,12 +211,12 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
               duration: const Duration(milliseconds: 180),
               width: itemWidth,
               decoration: BoxDecoration(
-                color: selected ? _primaryGreen : Colors.white,
+                color: selected ? AppTheme.primary : AppTheme.cardColor,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: selected
                     ? [
                         BoxShadow(
-                          color: _primaryGreen.withValues(alpha: 0.3),
+                          color: AppTheme.primary.withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -237,7 +230,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                     _weekdayLabel(day),
                     style: TextStyle(
                       fontSize: 13,
-                      color: selected ? Colors.white : _textGrey,
+                      color: selected ? Colors.white : AppTheme.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -246,7 +239,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: selected ? Colors.white : _textDark,
+                      color: selected ? Colors.white : AppTheme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -257,7 +250,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: hasBooking
-                          ? (selected ? Colors.white : _primaryGreen)
+                          ? (selected ? Colors.white : AppTheme.primary)
                           : Colors.transparent,
                     ),
                   ),
@@ -300,14 +293,15 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 18),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected ? _primaryGreen : Colors.white,
+                color: selected ? AppTheme.primary : AppTheme.cardColor,
                 borderRadius: BorderRadius.circular(20),
+                border: selected ? null : Border.all(color: AppTheme.border),
               ),
               child: Text(
                 f.value,
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : _textGrey,
+                  color: selected ? Colors.white : AppTheme.textSecondary,
                 ),
               ),
             ),
@@ -332,14 +326,14 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: _textDark,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               'Ngày ${_selectedDate.day}/${_selectedDate.month} chưa có khách đặt sân.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _textGrey),
+              style: const TextStyle(color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -357,7 +351,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -379,7 +373,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: _textDark,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
               ),
@@ -393,8 +387,12 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             children: [
               const CircleAvatar(
                 radius: 24,
-                backgroundColor: _avatarBg,
-                child: Icon(Icons.person, size: 28, color: _darkGreen),
+                backgroundColor: AppTheme.primaryLight,
+                child: Icon(
+                  Icons.person,
+                  size: 28,
+                  color: AppTheme.primaryDark,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -406,13 +404,13 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: _textDark,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       customerPhone,
-                      style: const TextStyle(color: _textGrey),
+                      style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                   ],
                 ),
@@ -425,14 +423,17 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
           Row(
             children: [
               const Expanded(
-                child: Text('Tổng tiền', style: TextStyle(color: _textGrey)),
+                child: Text(
+                  'Tổng tiền',
+                  style: TextStyle(color: AppTheme.textSecondary),
+                ),
               ),
               Text(
                 _formatMoney(booking.totalPrice),
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: _darkGreen,
+                  color: AppTheme.primaryDark,
                 ),
               ),
             ],
@@ -445,7 +446,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F7F0),
+                color: AppTheme.primaryLight,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -454,7 +455,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                   const Icon(
                     Icons.local_offer_outlined,
                     size: 14,
-                    color: _primaryGreen,
+                    color: AppTheme.primary,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -462,7 +463,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: _darkGreen,
+                      color: AppTheme.primaryDark,
                     ),
                   ),
                 ],
@@ -485,28 +486,28 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     switch (status) {
       case 'pending':
         label = 'Chờ xác nhận';
-        bg = _orange;
-        fg = _textDark;
+        bg = AppTheme.accent;
+        fg = AppTheme.textPrimary;
         break;
       case 'confirmed':
         label = 'Đã xác nhận';
-        bg = _blue;
+        bg = _confirmedBlue;
         fg = Colors.white;
         break;
       case 'completed':
         label = 'Đã hoàn thành';
-        bg = _primaryGreen;
+        bg = AppTheme.primary;
         fg = Colors.white;
         break;
       case 'cancelled':
         label = 'Đã hủy';
-        bg = const Color(0xFFE5E7EB);
-        fg = _textGrey;
+        bg = AppTheme.border;
+        fg = AppTheme.textSecondary;
         break;
       default:
         label = status;
-        bg = const Color(0xFFE5E7EB);
-        fg = _textGrey;
+        bg = AppTheme.border;
+        fg = AppTheme.textSecondary;
     }
 
     return Container(
@@ -531,7 +532,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             Expanded(
               child: _actionButton(
                 label: 'Từ chối',
-                color: _red,
+                color: AppTheme.error,
                 onPressed: () => _confirmAndUpdate(
                   booking,
                   'cancelled',
@@ -544,7 +545,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             Expanded(
               child: _actionButton(
                 label: 'Xác nhận',
-                color: _primaryGreen,
+                color: AppTheme.primary,
                 onPressed: () => _updateBookingStatus(booking, 'confirmed'),
               ),
             ),
@@ -561,7 +562,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             Expanded(
               child: _actionButton(
                 label: 'Hủy đặt',
-                color: _red,
+                color: AppTheme.error,
                 onPressed: () => _confirmAndUpdate(
                   booking,
                   'cancelled',
@@ -574,7 +575,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
             Expanded(
               child: _actionButton(
                 label: 'Hoàn thành',
-                color: _primaryGreen,
+                color: AppTheme.primary,
                 onPressed: () => _updateBookingStatus(booking, 'completed'),
               ),
             ),
@@ -596,18 +597,10 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          foregroundColor: Colors.white,
           disabledBackgroundColor: color.withValues(alpha: 0.4),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
         ),
         onPressed: _updating ? null : onPressed,
-        child: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-        ),
+        child: Text(label),
       ),
     );
   }
@@ -632,7 +625,10 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Đồng ý', style: TextStyle(color: _red)),
+            child: const Text(
+              'Đồng ý',
+              style: TextStyle(color: AppTheme.error),
+            ),
           ),
         ],
       ),
