@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/venue_repository.dart';
+import '../../models/system_statistics.dart';
 import 'admin_drawer.dart';
 
 class StatisticsScreen extends StatefulWidget {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
 import '../../data/venue_repository.dart';
+import '../../models/venue_booking_entry.dart';
 import '../../utils/app_theme.dart';
 
 class VenueBookingsScreen extends StatefulWidget {

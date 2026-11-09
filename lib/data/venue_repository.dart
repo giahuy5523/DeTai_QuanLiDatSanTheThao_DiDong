@@ -1,5 +1,7 @@
 import 'package:sqflite/sqflite.dart';
-
+import '../models/venue_booking_entry.dart';
+import '../models/venue_owner_info.dart';
+import '../models/system_statistics.dart';
 import '../models/service.dart';
 import '../models/venue.dart';
 import '../utils/database_helper.dart';
@@ -525,66 +527,4 @@ class VenueRepository {
     if (hour == null || minute == null) return -1;
     return hour * 60 + minute;
   }
-}
-
-// Nó là dữ liệu gọn cho màn "Lịch đặt sân" của chủ sân,
-// đã gộp sẵn tên và số điện thoại khách.
-class VenueBookingEntry {
-  const VenueBookingEntry({
-    required this.id,
-    required this.date,
-    required this.startTime,
-    required this.endTime,
-    required this.totalPrice,
-    required this.status,
-    this.promotionCode,
-    this.customerName,
-    this.customerPhone,
-  });
-
-  final String id;
-  final DateTime date;
-  final String startTime;
-  final String endTime;
-  final double totalPrice;
-  final String status;
-  final String? promotionCode;
-  final String? customerName;
-  final String? customerPhone;
-}
-
-// Thông tin liên hệ của chủ sân, dùng cho màn Admin duyệt sân.
-class VenueOwnerInfo {
-  const VenueOwnerInfo({
-    required this.id,
-    required this.name,
-    required this.phone,
-    required this.email,
-  });
-
-  final String id;
-  final String name;
-  final String phone;
-  final String email;
-}
-
-// Số liệu tổng hợp toàn hệ thống cho màn thống kê của Admin.
-class SystemStatistics {
-  const SystemStatistics({
-    required this.bookingsByStatus,
-    required this.venuesByStatus,
-    required this.revenue,
-  });
-
-  final Map<String, int> bookingsByStatus;
-  final Map<String, int> venuesByStatus;
-
-  /// Tổng tiền các lịch đặt đã xác nhận hoặc hoàn thành.
-  final double revenue;
-
-  int get totalBookings =>
-      bookingsByStatus.values.fold<int>(0, (sum, count) => sum + count);
-
-  int bookings(String status) => bookingsByStatus[status] ?? 0;
-  int venues(String status) => venuesByStatus[status] ?? 0;
 }

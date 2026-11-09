@@ -3,6 +3,7 @@ import '../../data/venue_repository.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/venue_image.dart';
 import '../../models/venue.dart';
+import '../../models/venue_owner_info.dart';
 import 'admin_drawer.dart';
 
 // Carousel ảnh sân: vuốt ngang để xem, góc trên phải hiện "1 / 3 ảnh".
