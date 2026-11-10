@@ -470,8 +470,13 @@ class _SearchScreenState extends State<SearchScreen> {
                 avatar: Icon(_sportIcon(st['id'] as int), size: 18),
                 label: Text(st['name'] as String),
                 selected: _sportTypeId == st['id'],
-                onSelected: (_) =>
-                    setState(() => _sportTypeId = st['id'] as int),
+                onSelected: (_) {
+                  // Selecting a sport filter should close the search IME.
+                  // Otherwise the reduced Scaffold height can leave too little
+                  // room for the fixed filter/header rows on a real device.
+                  FocusScope.of(context).unfocus();
+                  setState(() => _sportTypeId = st['id'] as int);
+                },
               ),
             ),
         ],
