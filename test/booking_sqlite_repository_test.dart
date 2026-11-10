@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -16,10 +17,18 @@ void main() {
   });
 
   late Database db;
+  late Directory tempDir;
+  late String dbPath;
 
   setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp(
+      'booking_sqlite_test_',
+    );
+    dbPath = '${tempDir.path}${Platform.pathSeparator}booking_test.db';
+    BookingRepository.setUseMockStoreForTesting(false);
+    BookingRepository.setDatabaseForTesting(null);
     db = await databaseFactory.openDatabase(
-      inMemoryDatabasePath,
+      dbPath,
       options: OpenDatabaseOptions(
         version: DatabaseHelper.databaseVersion,
         onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
@@ -169,7 +178,16 @@ void main() {
   });
 
   tearDown(() async {
-    await db.close();
+    try {
+      await db.close();
+    } finally {
+      BookingRepository.setDatabaseForTesting(null);
+      BookingRepository.setUseMockStoreForTesting(false);
+
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    }
   });
 
   group('BookingRepository SQLite Integration Tests', () {
@@ -492,7 +510,137 @@ void main() {
       expect(completeAgain, isFalse);
     });
 
-    test('10. Đánh dấu thông báo đã đọc', () async {
+    test(
+      '10. Khôi phục booking, payment và refund sau khi đóng mở lại SQLite',
+      () async {
+        final booking = Booking(
+          id: 'b_restart_flow',
+          venueId: 'v1',
+          userId: 'customer1',
+          date: DateTime.now(),
+          startTime: '15:00',
+          endTime: '16:00',
+          originalAmount: 100000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 100000.0,
+        );
+
+        Future<void> reopenDatabase() async {
+          await db.close();
+
+          BookingRepository.setDatabaseForTesting(null);
+
+          db = await databaseFactory.openDatabase(
+            dbPath,
+            options: OpenDatabaseOptions(
+              version: DatabaseHelper.databaseVersion,
+              onConfigure: (database) async {
+                await database.execute('PRAGMA foreign_keys = ON');
+              },
+            ),
+          );
+
+          BookingRepository.setDatabaseForTesting(db);
+
+          // Mô phỏng bộ nhớ ứng dụng bị mất sau khi đóng app.
+          MockStore.bookings.clear();
+          MockStore.payments.clear();
+          MockStore.notifications.clear();
+          MockStore.promotions.clear();
+
+          await BookingRepository.refreshCache();
+        }
+
+        // 1. Đặt sân và thanh toán online.
+        await BookingRepository.processBookingPayment(
+          booking: booking,
+          method: 'momo',
+        );
+
+        await reopenDatabase();
+
+        var restoredBooking =
+            await BookingRepository.getBookingById('b_restart_flow');
+
+        var restoredPayment =
+            await BookingRepository.getPaymentForBooking('b_restart_flow');
+
+        expect(restoredBooking, isNotNull);
+        expect(restoredPayment, isNotNull);
+        expect(restoredPayment?.method, equals('momo'));
+        expect(restoredPayment?.amount, equals(100000.0));
+
+        // 2. Hủy booking đã thanh toán.
+        final cancelResult =
+            await BookingRepository.cancelBooking('b_restart_flow');
+
+        expect(cancelResult, isTrue);
+
+        await reopenDatabase();
+
+        restoredBooking =
+            await BookingRepository.getBookingById('b_restart_flow');
+
+        restoredPayment =
+            await BookingRepository.getPaymentForBooking('b_restart_flow');
+
+        final cancelledRows = await db.query(
+          'bookings',
+          columns: ['status'],
+          where: 'id = ?',
+          whereArgs: ['b_restart_flow'],
+        );
+
+        expect(restoredBooking, isNotNull);
+        expect(cancelledRows, isNotEmpty);
+        expect(cancelledRows.first['status'], equals('cancelled'));
+        expect(restoredPayment?.refundStatus, equals('processing'));
+        expect(restoredPayment?.refundAmount, equals(100000.0));
+
+        var notifications =
+            await BookingRepository.getNotificationsForUser('customer1');
+
+        expect(
+          notifications.any(
+            (notification) =>
+                notification.type == AppNotificationType.refundProcessing,
+          ),
+          isTrue,
+        );
+
+        // 3. Hoàn tiền thành công.
+        final refundResult =
+            await BookingRepository.completeRefund('b_restart_flow');
+
+        expect(refundResult, isTrue);
+
+        await reopenDatabase();
+
+        restoredBooking =
+            await BookingRepository.getBookingById('b_restart_flow');
+
+        restoredPayment =
+            await BookingRepository.getPaymentForBooking('b_restart_flow');
+
+        notifications =
+            await BookingRepository.getNotificationsForUser('customer1');
+
+        expect(restoredBooking, isNotNull);
+        expect(restoredBooking?.paymentStatus, equals('refunded'));
+        expect(restoredPayment?.status, equals('refunded'));
+        expect(restoredPayment?.refundStatus, equals('succeeded'));
+
+        expect(
+          notifications.any(
+            (notification) =>
+                notification.type == AppNotificationType.refundSucceeded,
+          ),
+          isTrue,
+        );
+      },
+    );
+    test('11. Đánh dấu thông báo đã đọc', () async {
       final notif = AppNotification(
         id: 'n_sample_1',
         userId: 'customer1',

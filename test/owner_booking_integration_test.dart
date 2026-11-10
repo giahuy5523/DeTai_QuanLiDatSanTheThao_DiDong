@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/booking_repository.dart';
 import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/promotion.dart';
 import 'package:sportfield_booking/screens/owner/venue_bookings_screen.dart';
 import 'test_helpers.dart';
 
 void main() {
+  setUpAll(() {
+    BookingRepository.setUseMockStoreForTesting(true);
+  });
+
+  tearDownAll(() {
+    BookingRepository.setUseMockStoreForTesting(false);
+  });
   for (final action in ['Xác nhận', 'Hoàn thành', 'Hủy đặt']) {
     testWidgets(
       'Owner $action preserves booking details and payment consistency',

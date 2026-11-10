@@ -21,11 +21,7 @@ class AccountService {
     await AccountRepository.importLegacyAccountDatabase(appDatabase);
     await _seedBusinessData(appDatabase);
     await VenueRepository.initialize(appDatabase);
-    try {
-      await BookingRepository.refreshCache();
-    } catch (_) {
-      // Giữ an toàn để không crash bootstrap nếu refresh gặp sự cố ngoài ý muốn
-    }
+    await BookingRepository.refreshCache();
     await _refresh();
     MockStore.currentUser = await repository!.restoreSession();
   }

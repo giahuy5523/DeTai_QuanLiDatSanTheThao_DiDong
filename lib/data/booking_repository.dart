@@ -26,13 +26,9 @@ class BookingRepository {
   static Future<Database?> get _db async {
     if (_useMockStoreForTesting) return null;
     if (_database != null) return _database;
-    try {
-      _database = await DatabaseHelper().database;
-      return _database;
-    } catch (_) {
-      // Khi chạy trong môi trường test widget không khởi tạo FFI
-      return null;
-    }
+
+    _database = await DatabaseHelper().database;
+    return _database;
   }
 
   // --------------------------------------------------------------------------
@@ -1234,8 +1230,14 @@ class BookingRepository {
   // --------------------------------------------------------------------------
   /// Đọc dữ liệu từ SQLite vào biến tạm trước; chỉ ghi vào MockStore khi thành công hoàn toàn.
   static Future<void> refreshCache() async {
+    if (_useMockStoreForTesting) return;
+
     final db = await _db;
-    if (db == null) return;
+    if (db == null) {
+      throw StateError(
+        'SQLite chưa được khởi tạo, không thể khôi phục dữ liệu booking.',
+      );
+    }
 
     // 1. Đọc và mapping bookings kèm serviceItems
     final bookingRows = await db.query('bookings', orderBy: 'createdAt ASC');
