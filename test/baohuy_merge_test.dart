@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/data/booking_repository.dart';
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/app_notification.dart';
 import 'package:sportfield_booking/models/promotion.dart';
@@ -36,10 +37,12 @@ Future<void> openRoute(
 void main() {
   setUpAll(() {
     BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
   });
   final venues = List.of(MockStore.venues);
   final bookings = List.of(MockStore.bookings);

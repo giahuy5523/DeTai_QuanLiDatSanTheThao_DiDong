@@ -11,6 +11,12 @@ class VenueRepository {
   VenueRepository._();
 
   static Database? _database;
+  static bool _useMockStoreForTesting = false;
+
+  static void setUseMockStoreForTesting(bool value) {
+    _useMockStoreForTesting = value;
+  }
+
   static bool get isInitialized => _database != null;
 
   static Future<void> initialize(Database database) async {
@@ -54,22 +60,26 @@ class VenueRepository {
     for (final row in imageRows) {
       (images[row['venueId'] as String] ??= []).add(row['imageUrl'] as String);
     }
-    return rows.map((row) => Venue(
-      id: row['id'] as String,
-      ownerId: row['ownerId'] as String,
-      sportTypeId: row['sportTypeId'] as int?,
-      sportType: row['sportType'] as String,
-      name: row['name'] as String,
-      address: row['address'] as String,
-      district: row['district'] as String?,
-      city: row['city'] as String?,
-      pricePerHour: (row['pricePerHour'] as num).toDouble(),
-      imageUrls: images[row['id']] ?? const [],
-      latitude: (row['latitude'] as num).toDouble(),
-      longitude: (row['longitude'] as num).toDouble(),
-      status: row['status'] as String,
-      rating: (row['rating'] as num).toDouble(),
-    )).toList();
+    return rows
+        .map(
+          (row) => Venue(
+            id: row['id'] as String,
+            ownerId: row['ownerId'] as String,
+            sportTypeId: row['sportTypeId'] as int?,
+            sportType: row['sportType'] as String,
+            name: row['name'] as String,
+            address: row['address'] as String,
+            district: row['district'] as String?,
+            city: row['city'] as String?,
+            pricePerHour: (row['pricePerHour'] as num).toDouble(),
+            imageUrls: images[row['id']] ?? const [],
+            latitude: (row['latitude'] as num).toDouble(),
+            longitude: (row['longitude'] as num).toDouble(),
+            status: row['status'] as String,
+            rating: (row['rating'] as num).toDouble(),
+          ),
+        )
+        .toList();
   }
 
   static Future<List<Map<String, Object?>>> loadSportTypes() async =>
@@ -93,13 +103,110 @@ class VenueRepository {
       whereArgs: [venueId],
       orderBy: 'name COLLATE NOCASE',
     );
-    return rows.map((row) => VenueService(
-      id: row['id'] as String,
-      venueId: row['venueId'] as String,
-      name: row['name'] as String,
-      price: (row['price'] as num).toDouble(),
-      unit: row['unit'] as String,
-    )).toList();
+    return rows
+        .map(
+          (row) => VenueService(
+            id: row['id'] as String,
+            venueId: row['venueId'] as String,
+            name: row['name'] as String,
+            price: (row['price'] as num).toDouble(),
+            unit: row['unit'] as String,
+          ),
+        )
+        .toList();
+  }
+
+  static Future<void> saveService(VenueService service) async {
+    if (_useMockStoreForTesting) {
+      final services = MockStore.servicesByVenue[service.venueId] ??= [];
+      final index = services.indexWhere((item) => item.id == service.id);
+
+      if (index < 0) {
+        services.add(service);
+      } else {
+        services[index] = service;
+      }
+      return;
+    }
+    final db = await _db;
+
+    await db.transaction((txn) async {
+      final existing = await txn.query(
+        'venue_services',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [service.id],
+        limit: 1,
+      );
+
+      final values = <String, Object?>{
+        'venueId': service.venueId,
+        'name': service.name,
+        'price': service.price,
+        'unit': service.unit,
+      };
+
+      if (existing.isEmpty) {
+        await txn.insert('venue_services', {'id': service.id, ...values});
+      } else {
+        await txn.update(
+          'venue_services',
+          values,
+          where: 'id = ?',
+          whereArgs: [service.id],
+        );
+      }
+    });
+
+    await refreshCache();
+  }
+
+  static Future<void> deleteService(String serviceId) async {
+    if (_useMockStoreForTesting) {
+      List<VenueService>? matchingServices;
+      for (final services in MockStore.servicesByVenue.values) {
+        if (services.any((item) => item.id == serviceId)) {
+          matchingServices = services;
+          break;
+        }
+      }
+
+      if (matchingServices == null) {
+        throw StateError('Không tìm thấy dịch vụ cần xóa.');
+      }
+
+      matchingServices.removeWhere((item) => item.id == serviceId);
+      return;
+    }
+    final db = await _db;
+
+    await db.transaction((txn) async {
+      final references = await txn.query(
+        'booking_services',
+        columns: ['id'],
+        where: 'serviceId = ?',
+        whereArgs: [serviceId],
+        limit: 1,
+      );
+
+      if (references.isNotEmpty) {
+        throw StateError(
+          'Không thể xóa dịch vụ đã được sử dụng trong đơn đặt sân.',
+        );
+      }
+
+      final deleted = await txn.delete(
+        'venue_services',
+        where: 'id = ?',
+        whereArgs: [serviceId],
+      );
+
+      if (deleted == 0) {
+        throw StateError('Không tìm thấy dịch vụ cần xóa.');
+      }
+    });
+
+    await refreshCache();
   }
 
   static Future<void> refreshCache() async {
@@ -120,7 +227,10 @@ class VenueRepository {
     }
 
     final sports = await loadSportTypes();
-    final services = await db.query('venue_services', orderBy: 'name COLLATE NOCASE');
+    final services = await db.query(
+      'venue_services',
+      orderBy: 'name COLLATE NOCASE',
+    );
     MockStore.venues
       ..clear()
       ..addAll(venues);
@@ -129,21 +239,27 @@ class VenueRepository {
       ..addAll(cachedImages);
     MockStore.sportTypes
       ..clear()
-      ..addAll(sports.map((row) => {
-        'id': row['sportTypeId'],
-        'name': row['name'],
-        'description': row['description'],
-      }));
+      ..addAll(
+        sports.map(
+          (row) => {
+            'id': row['sportTypeId'],
+            'name': row['name'],
+            'description': row['description'],
+          },
+        ),
+      );
     MockStore.servicesByVenue.clear();
     for (final row in services) {
       final venueId = row['venueId'] as String;
-      (MockStore.servicesByVenue[venueId] ??= []).add(VenueService(
-        id: row['id'] as String,
-        venueId: venueId,
-        name: row['name'] as String,
-        price: (row['price'] as num).toDouble(),
-        unit: row['unit'] as String,
-      ));
+      (MockStore.servicesByVenue[venueId] ??= []).add(
+        VenueService(
+          id: row['id'] as String,
+          venueId: venueId,
+          name: row['name'] as String,
+          price: (row['price'] as num).toDouble(),
+          unit: row['unit'] as String,
+        ),
+      );
     }
   }
 
@@ -154,14 +270,10 @@ class VenueRepository {
     );
     await db.transaction((txn) async {
       if (venue.sportTypeId != null) {
-        await txn.insert(
-          'sport_types',
-          {
-            'sportTypeId': venue.sportTypeId,
-            'name': venue.sportType,
-          },
-          conflictAlgorithm: ConflictAlgorithm.ignore,
-        );
+        await txn.insert('sport_types', {
+          'sportTypeId': venue.sportTypeId,
+          'name': venue.sportType,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
       final values = <String, Object?>{
         'ownerId': venue.ownerId,
@@ -178,15 +290,27 @@ class VenueRepository {
         'rating': venue.rating,
       };
       final found = await txn.query(
-        'venues', columns: ['id'], where: 'id = ?', whereArgs: [venue.id],
+        'venues',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [venue.id],
       );
       if (found.isEmpty) {
         await txn.insert('venues', {'id': venue.id, ...values});
       } else {
-        await txn.update('venues', values, where: 'id = ?', whereArgs: [venue.id]);
+        await txn.update(
+          'venues',
+          values,
+          where: 'id = ?',
+          whereArgs: [venue.id],
+        );
       }
 
-      await txn.delete('venue_images', where: 'venueId = ?', whereArgs: [venue.id]);
+      await txn.delete(
+        'venue_images',
+        where: 'venueId = ?',
+        whereArgs: [venue.id],
+      );
       for (var index = 0; index < imageUrls.length; index++) {
         await txn.insert('venue_images', {
           'id': 'img_${venue.id}_$index',
@@ -208,7 +332,10 @@ class VenueRepository {
   static Future<void> updateStatus(String venueId, String status) async {
     final db = await _db;
     final count = await db.update(
-      'venues', {'status': status}, where: 'id = ?', whereArgs: [venueId],
+      'venues',
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [venueId],
     );
     if (count == 0) throw StateError('Không tìm thấy sân cần cập nhật.');
     await refreshCache();
@@ -219,11 +346,14 @@ class VenueRepository {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day).toIso8601String();
     final end = DateTime(now.year, now.month, now.day + 1).toIso8601String();
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT COUNT(*) AS total
       FROM bookings b JOIN venues v ON v.id = b.venueId
       WHERE v.ownerId = ? AND b.date >= ? AND b.date < ?
-    ''', [ownerId, start, end]);
+    ''',
+      [ownerId, start, end],
+    );
     return Sqflite.firstIntValue(rows) ?? 0;
   }
 
@@ -239,25 +369,36 @@ class VenueRepository {
       whereArgs: [venueId],
       limit: 1,
     );
-    if (venues.isEmpty || venues.single['status'] != 'approved') return const [];
+    if (venues.isEmpty || venues.single['status'] != 'approved') {
+      return const [];
+    }
     final hoursRows = await db.query(
       'venue_hours',
       where: 'venueId = ?',
       whereArgs: [venueId],
       limit: 1,
     );
-    final openHour = hoursRows.isEmpty ? 6 : hoursRows.single['openHour'] as int;
-    final closeHour = hoursRows.isEmpty ? 22 : hoursRows.single['closeHour'] as int;
+    final openHour = hoursRows.isEmpty
+        ? 6
+        : hoursRows.single['openHour'] as int;
+    final closeHour = hoursRows.isEmpty
+        ? 22
+        : hoursRows.single['closeHour'] as int;
     final dayStart = DateTime(date.year, date.month, date.day);
     final dayEnd = dayStart.add(const Duration(days: 1));
     final bookings = await db.query(
       'bookings',
       columns: ['startTime', 'endTime'],
       where: "venueId = ? AND status != 'cancelled' AND date >= ? AND date < ?",
-      whereArgs: [venueId, dayStart.toIso8601String(), dayEnd.toIso8601String()],
+      whereArgs: [
+        venueId,
+        dayStart.toIso8601String(),
+        dayEnd.toIso8601String(),
+      ],
     );
     final now = DateTime.now();
-    final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
     final slots = <Map<String, Object?>>[];
     for (var hour = openHour; hour < closeHour; hour++) {
       final start = hour * 60;

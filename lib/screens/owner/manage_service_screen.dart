@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
 import '../../models/service.dart';
 
 const _kGreen = Color(0xFF118C5F);
@@ -467,38 +468,30 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       priceText.replaceAll('.', '').replaceAll(',', ''),
     );
 
-    setState(() {
-      final list = MockStore.servicesByVenue[widget.venueId] ??= [];
-      final normalizedUnit = unit; // đã validate không rỗng trong dialog
-
-      if (service == null) {
-        list.add(
-          VenueService(
-            id: 's${DateTime.now().microsecondsSinceEpoch}',
-            venueId: widget.venueId,
-            name: name,
-            price: price,
-            unit: normalizedUnit,
-          ),
-        );
-      } else {
-        final index = list.indexWhere((item) => item.id == service.id);
-        if (index >= 0) {
-          list[index] = VenueService(
-            id: service.id,
-            venueId: widget.venueId,
-            name: name,
-            price: price,
-            unit: normalizedUnit,
-          );
-        }
-      }
-    });
-
-    _showSnack(
-      service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
-      success: true,
+    final updatedService = VenueService(
+      id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
+      venueId: widget.venueId,
+      name: name,
+      price: price,
+      unit: unit,
     );
+
+    try {
+      await VenueRepository.saveService(updatedService);
+
+      if (!mounted) return;
+
+      setState(() {});
+
+      _showSnack(
+        service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
+        success: true,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showSnack('Không thể lưu dịch vụ: $e', success: false);
+    }
   }
 
   Future<void> _deleteService(VenueService service) async {
@@ -540,13 +533,23 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    setState(() {
-      MockStore.servicesByVenue[widget.venueId]?.removeWhere(
-        (item) => item.id == service.id,
-      );
-    });
+    try {
+      await VenueRepository.deleteService(service.id);
 
-    _showSnack('Đã xóa "${service.name}".', success: false);
+      if (!mounted) return;
+
+      setState(() {});
+
+      _showSnack('Đã xóa "${service.name}".', success: true);
+    } on StateError catch (e) {
+      if (!mounted) return;
+
+      _showSnack(e.message.toString(), success: false);
+    } catch (e) {
+      if (!mounted) return;
+
+      _showSnack('Không thể xóa dịch vụ: $e', success: false);
+    }
   }
 
   /// success = true: nền xanh + icon check; false: nền đỏ + icon cancel.
