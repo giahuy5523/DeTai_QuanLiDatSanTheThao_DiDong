@@ -81,29 +81,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lịch sử đặt sân'),
-        actions: [
-          ValueListenableBuilder<int>(
-            valueListenable: MockStore.notificationRevision,
-            builder: (context, _, _) {
-              final unread = MockStore.unreadNotificationCount(
-                MockStore.currentUser?.id ?? '',
-              );
-              return IconButton(
-                tooltip: 'Thông báo',
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoutes.notifications),
-                icon: Badge(
-                  isLabelVisible: unread > 0,
-                  label: Text('$unread'),
-                  child: const Icon(Icons.notifications_none_rounded),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Lịch sử đặt sân')),
       body: FutureBuilder(
         future: _bookingsFuture,
         builder: (context, snapshot) {
@@ -130,6 +108,13 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   booking.status == 'pending' || booking.status == 'confirmed';
 
               return Card(
+                elevation: 2,
+                margin: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: AppTheme.border),
+                ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
                   onTap: () => Navigator.pushNamed(

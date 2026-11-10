@@ -45,6 +45,40 @@ class _HomeScreenState extends State<HomeScreen> {
                   else
                     _buildEmptyBanner(),
                   Positioned(
+                    top: 8,
+                    right: 18,
+                    child: SafeArea(
+                      bottom: false,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: MockStore.notificationRevision,
+                        builder: (context, _, _) {
+                          final unread = MockStore.unreadNotificationCount(
+                            MockStore.currentUser?.id ?? '',
+                          );
+                          return Material(
+                            color: Colors.black.withValues(alpha: 0.24),
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              tooltip: 'Thông báo',
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.notifications,
+                              ),
+                              icon: Badge(
+                                isLabelVisible: unread > 0,
+                                label: Text(unread > 99 ? '99+' : '$unread'),
+                                child: const Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  Positioned(
                     left: 20,
                     right: 20,
                     bottom: 0,

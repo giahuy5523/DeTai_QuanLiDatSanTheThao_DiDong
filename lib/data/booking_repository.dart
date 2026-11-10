@@ -1199,12 +1199,16 @@ class BookingRepository {
       MockStore.markNotificationRead(notificationId);
       return;
     }
-    await db.update(
+    final updated = await db.update(
       'app_notifications',
       {'isRead': 1},
-      where: 'id = ?',
+      where: 'id = ? AND isRead = 0',
       whereArgs: [notificationId],
     );
+    if (updated > 0) {
+      // Đồng bộ trạng thái đã đọc và badge trong MockStore.
+      MockStore.markNotificationRead(notificationId);
+    }
   }
 
   static Future<void> markAllNotificationsAsRead(String userId) async {
@@ -1213,12 +1217,16 @@ class BookingRepository {
       MockStore.markAllNotificationsRead(userId);
       return;
     }
-    await db.update(
+    final updated = await db.update(
       'app_notifications',
       {'isRead': 1},
-      where: 'userId = ?',
+      where: 'userId = ? AND isRead = 0',
       whereArgs: [userId],
     );
+    if (updated > 0) {
+      // Đồng bộ danh sách trong cache và notificationRevision.
+      MockStore.markAllNotificationsRead(userId);
+    }
   }
 
   // --------------------------------------------------------------------------
