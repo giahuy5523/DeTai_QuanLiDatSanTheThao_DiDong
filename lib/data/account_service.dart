@@ -14,11 +14,13 @@ class AccountService {
 
   static Future<void> initialize() async {
     final appDatabase = await DatabaseHelper().database;
+    // Import the former account database before demo seeding so real legacy
+    // users with IDs matching demo accounts are not shadowed by seed rows.
+    await AccountRepository.importLegacyAccountDatabase(appDatabase);
     repository = await AccountRepository.open(
       seed: List.of(MockStore.users),
       database: appDatabase,
     );
-    await AccountRepository.importLegacyAccountDatabase(appDatabase);
     await _seedBusinessData(appDatabase);
     await VenueRepository.initialize(appDatabase);
     await BookingRepository.refreshCache();

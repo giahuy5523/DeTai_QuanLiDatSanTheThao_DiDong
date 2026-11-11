@@ -181,89 +181,210 @@ class DatabaseHelper {
     );
   }
 
-  /// Version 1 used an incompatible, plain-text `users` table.
-  /// Giữ nguyên logic migration V2 gốc của Quốc Đạt.
+  /// Migrates the original schema while preserving every known V2 business
+  /// table, including dependent rows. Child tables are removed before parents
+  /// so PRAGMA foreign_keys can remain enabled throughout the migration.
   Future<void> _upgradeToV2(DatabaseExecutor txn) async {
-    final preserved = <String, List<Map<String, Object?>>>{};
-    for (final table in [
+    const businessTables = <String>[
       'sport_types',
       'venues',
       'venue_images',
       'venue_services',
       'promotions',
       'bookings',
+      'booking_services',
       'payments',
-    ]) {
-      try {
-        preserved[table] = await txn.query(table);
-      } on DatabaseException {
-        preserved[table] = [];
-      }
+      'time_slots',
+      'venue_hours',
+    ];
+
+    final preserved = <String, List<Map<String, Object?>>>{};
+    for (final table in businessTables) {
+      final exists = await txn.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND lower(name)=?",
+        [table.toLowerCase()],
+      );
+      preserved[table] = exists.isEmpty
+          ? <Map<String, Object?>>[]
+          : await txn.query(table);
     }
-    final existing = await txn.rawQuery(
+    final sessionExists = await txn.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND lower(name)='session'",
+    );
+    if (sessionExists.isNotEmpty) {
+      final sessionColumns = (await txn.rawQuery('PRAGMA table_info(Session)'))
+          .map((row) => row['name'] as String)
+          .toSet();
+      if (!sessionColumns.containsAll({'id', 'user_id', 'expires_at'})) {
+        throw StateError(
+          'Schema Session V1 không tương thích (cần id/user_id/expires_at); '
+          'migration đã được rollback để bảo toàn phiên đăng nhập cũ.',
+        );
+      }
+      preserved['Session'] = await txn.query('Session');
+    } else {
+      preserved['Session'] = <Map<String, Object?>>[];
+    }
+
+    // V1's plain-text account table used `users`, not the current Users schema.
+    final usersTable = await txn.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND lower(name)='users'",
     );
-    if (existing.isNotEmpty) {
-      await txn.execute('ALTER TABLE users RENAME TO legacy_users_v1');
+    if (usersTable.isNotEmpty) {
+      await txn.execute(
+        'ALTER TABLE "${usersTable.single['name']}" RENAME TO legacy_users_v1',
+      );
     }
-    for (final table in [
+
+    // Drop dependent tables first to prevent cascades from deleting rows.
+    const dropOrder = <String>[
+      'Session',
+      'booking_services',
+      'payments',
+      'time_slots',
+      'venue_hours',
       'venue_images',
       'venue_services',
-      'payments',
       'bookings',
       'venues',
       'promotions',
       'sport_types',
-    ]) {
+    ];
+    for (final table in dropOrder) {
       await txn.execute('DROP TABLE IF EXISTS $table');
     }
-    // Tạo cấu trúc cơ bản V2
+
     await _createSchemaV2(txn);
+
     await txn.execute('''CREATE TABLE IF NOT EXISTS legacy_account_import (
       user_id TEXT PRIMARY KEY, full_name TEXT NOT NULL, email TEXT NOT NULL,
       phone TEXT NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL,
       avatar_path TEXT
     )''');
+
     final legacy = await txn.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_users_v1'",
     );
     if (legacy.isNotEmpty) {
+      final columns = (await txn.rawQuery(
+        'PRAGMA table_info(legacy_users_v1)',
+      )).map((row) => row['name'] as String).toSet();
       final rows = await txn.query('legacy_users_v1');
-      for (final row in rows) {
-        await txn.insert('legacy_account_import', {
-          'user_id': row['id'],
-          'full_name': row['name'],
-          'email': row['email'],
-          'phone': row['phone'],
-          'password': row['password'],
-          'role': row['role'] ?? 'customer',
-          'avatar_path': row['avatarPath'],
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-        await txn.insert('Users', {
-          'user_id': row['id'],
-          'full_name': row['name'],
-          'email': row['email'],
-          'phone': row['phone'],
-          'password_hash': 'migration-pending',
-          'role': row['role'] ?? 'customer',
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+      if (columns.containsAll({'id', 'name', 'email', 'phone', 'password'})) {
+        // Original plain-text V1 accounts are converted by AccountRepository
+        // after the database schema upgrade, using PBKDF2 before login.
+        for (final row in rows) {
+          final id = row['id']?.toString();
+          final name = row['name']?.toString();
+          final email = row['email']?.toString();
+          final phone = row['phone']?.toString();
+          final password = row['password']?.toString();
+          if ([id, name, email, phone, password].any(
+            (value) => value == null || value.isEmpty,
+          )) {
+            throw StateError(
+              'Không thể migrate users V1: thiếu id/name/email/phone/password.',
+            );
+          }
+          final role = (row['role']?.toString() ?? 'customer')
+              .trim()
+              .toLowerCase();
+          if (!const {'customer', 'owner', 'admin'}.contains(role)) {
+            throw StateError(
+              'Role V1 không hợp lệ cho user_id=$id: "$role". '
+              'Migration đã được rollback; cần ánh xạ role theo nghiệp vụ.',
+            );
+          }
+          final avatar = row['avatarPath']?.toString();
+          await txn.insert('legacy_account_import', {
+            'user_id': id,
+            'full_name': name,
+            'email': email,
+            'phone': phone,
+            'password': password,
+            'role': role,
+            'avatar_path': avatar,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          await txn.insert('Users', {
+            'user_id': id,
+            'full_name': name,
+            'email': email,
+            'phone': phone,
+            'password_hash': 'migration-pending',
+            'role': role,
+            'avatar_path': avatar,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      } else if (columns.containsAll({
+        'user_id',
+        'full_name',
+        'email',
+        'phone',
+        'password_hash',
+        'role',
+      })) {
+        // Also tolerate a V1 database that already used the account schema.
+        for (final row in rows) {
+          final role = row['role']?.toString().trim().toLowerCase() ?? '';
+          if (!const {'customer', 'owner', 'admin'}.contains(role)) {
+            throw StateError(
+              'Role V1 không hợp lệ cho user_id=${row['user_id']}: "$role". '
+              'Migration đã được rollback; cần ánh xạ role theo nghiệp vụ.',
+            );
+          }
+          await txn.insert('Users', {
+            'user_id': row['user_id'],
+            'full_name': row['full_name'],
+            'email': row['email'],
+            'phone': row['phone'],
+            'password_hash': row['password_hash'],
+            'role': role,
+            'avatar_path': columns.contains('avatar_path')
+                ? row['avatar_path']
+                : null,
+            'is_active': columns.contains('is_active')
+                ? row['is_active']
+                : 1,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      } else {
+        throw StateError(
+          'Schema users V1 không nhận diện được; migration đã được rollback để bảo toàn dữ liệu.',
+        );
       }
       await txn.execute('DROP TABLE legacy_users_v1');
     }
-    for (final table in [
+
+    // Restore parents before children. If a required legacy value cannot be
+    // represented in V2, insertion fails and SQLite rolls the whole migration
+    // back instead of silently dropping the affected row.
+    const restoreOrder = <String>[
       'sport_types',
+      'Session',
       'venues',
       'venue_images',
       'venue_services',
       'promotions',
       'bookings',
+      'booking_services',
       'payments',
-    ]) {
-      for (final row in preserved[table]!) {
+      'time_slots',
+      'venue_hours',
+    ];
+    for (final table in restoreOrder) {
+      final rows = preserved[table]!;
+      if (rows.isEmpty) continue;
+      final info = await txn.rawQuery('PRAGMA table_info($table)');
+      final columns = info.map((row) => row['name'] as String).toSet();
+      for (final row in rows) {
+        final compatibleRow = Map<String, Object?>.fromEntries(
+          row.entries.where((entry) => columns.contains(entry.key)),
+        );
         await txn.insert(
           table,
-          row,
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          compatibleRow,
+          conflictAlgorithm: ConflictAlgorithm.abort,
         );
       }
     }

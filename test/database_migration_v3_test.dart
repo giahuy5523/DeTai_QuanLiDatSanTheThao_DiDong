@@ -267,6 +267,227 @@ void main() {
     );
 
     test(
+      'Nâng cấp V1 bảo toàn dịch vụ booking, lịch sân, giờ mở cửa và payment',
+      () async {
+        final dbName =
+            'test_migrate_v1_to_v3_${DateTime.now().microsecondsSinceEpoch}.db';
+        final path = p.join(await databaseFactory.getDatabasesPath(), dbName);
+
+        var db = await databaseFactory.openDatabase(
+          path,
+          options: OpenDatabaseOptions(
+            version: 1,
+            onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
+            onCreate: (db, version) async {
+              await db.execute('''CREATE TABLE users (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
+                phone TEXT NOT NULL, password TEXT NOT NULL, role TEXT,
+                avatarPath TEXT
+              )''');
+              await db.execute('''CREATE TABLE Session (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                user_id TEXT NOT NULL REFERENCES users(id),
+                expires_at INTEGER NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE sport_types (
+                sportTypeId INTEGER PRIMARY KEY, name TEXT NOT NULL,
+                description TEXT, icon TEXT
+              )''');
+              await db.execute('''CREATE TABLE venues (
+                id TEXT PRIMARY KEY, ownerId TEXT NOT NULL REFERENCES users(id),
+                sportTypeId INTEGER REFERENCES sport_types(sportTypeId),
+                sportType TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL,
+                district TEXT, city TEXT, pricePerHour REAL NOT NULL,
+                latitude REAL NOT NULL, longitude REAL NOT NULL,
+                status TEXT NOT NULL, rating REAL NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE venue_images (
+                id TEXT PRIMARY KEY, venueId TEXT NOT NULL REFERENCES venues(id),
+                imageUrl TEXT NOT NULL, isPrimary INTEGER NOT NULL,
+                sortOrder INTEGER NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE venue_services (
+                id TEXT PRIMARY KEY, venueId TEXT NOT NULL REFERENCES venues(id),
+                name TEXT NOT NULL, price REAL NOT NULL, unit TEXT NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE promotions (
+                id TEXT PRIMARY KEY, code TEXT NOT NULL, discountPercent REAL NOT NULL,
+                expiryDate TEXT NOT NULL, isActive INTEGER NOT NULL, usedCount INTEGER NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE bookings (
+                id TEXT PRIMARY KEY, venueId TEXT NOT NULL REFERENCES venues(id),
+                userId TEXT NOT NULL REFERENCES users(id), date TEXT NOT NULL,
+                startTime TEXT NOT NULL, endTime TEXT NOT NULL, totalPrice REAL NOT NULL,
+                originalAmount REAL NOT NULL, serviceAmount REAL NOT NULL,
+                discountAmount REAL NOT NULL, status TEXT NOT NULL,
+                paymentStatus TEXT NOT NULL, paymentId TEXT, promoId TEXT REFERENCES promotions(id),
+                promotionCode TEXT, note TEXT, cancelReason TEXT, cancelledAt TEXT,
+                createdAt TEXT NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE booking_services (
+                id TEXT PRIMARY KEY, bookingId TEXT NOT NULL REFERENCES bookings(id),
+                serviceId TEXT NOT NULL REFERENCES venue_services(id),
+                quantity INTEGER NOT NULL, unitPrice REAL NOT NULL, subtotal REAL NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE payments (
+                id TEXT PRIMARY KEY, bookingId TEXT NOT NULL REFERENCES bookings(id),
+                method TEXT NOT NULL, amount REAL NOT NULL, status TEXT NOT NULL,
+                transactionCode TEXT, paidAt TEXT, createdAt TEXT NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE time_slots (
+                id TEXT PRIMARY KEY, venueId TEXT NOT NULL REFERENCES venues(id),
+                slotDate TEXT NOT NULL, startTime TEXT NOT NULL, endTime TEXT NOT NULL,
+                price REAL NOT NULL, status TEXT NOT NULL
+              )''');
+              await db.execute('''CREATE TABLE venue_hours (
+                venueId TEXT PRIMARY KEY REFERENCES venues(id),
+                openHour INTEGER NOT NULL, closeHour INTEGER NOT NULL
+              )''');
+            },
+          ),
+        );
+
+        await db.insert('users', {
+          'id': 'owner1',
+          'name': 'Legacy Owner',
+          'email': 'owner@example.com',
+          'phone': '0900000001',
+          'password': 'legacy-password',
+          'role': 'owner',
+        });
+        await db.insert('Session', {
+          'id': 1,
+          'user_id': 'owner1',
+          'expires_at': DateTime.now()
+              .add(const Duration(days: 10))
+              .millisecondsSinceEpoch,
+        });
+        await db.insert('sport_types', {
+          'sportTypeId': 1,
+          'name': 'Football',
+        });
+        await db.insert('venues', {
+          'id': 'v1',
+          'ownerId': 'owner1',
+          'sportTypeId': 1,
+          'sportType': 'Football',
+          'name': 'Legacy Venue',
+          'address': 'Old address',
+          'pricePerHour': 200000.0,
+          'latitude': 10.0,
+          'longitude': 106.0,
+          'status': 'approved',
+          'rating': 4.5,
+        });
+        await db.insert('venue_images', {
+          'id': 'img1',
+          'venueId': 'v1',
+          'imageUrl': 'legacy.jpg',
+          'isPrimary': 1,
+          'sortOrder': 0,
+        });
+        await db.insert('venue_services', {
+          'id': 's1',
+          'venueId': 'v1',
+          'name': 'Water',
+          'price': 10000.0,
+          'unit': 'bottle',
+        });
+        await db.insert('promotions', {
+          'id': 'promo1',
+          'code': 'OLD10',
+          'discountPercent': 10.0,
+          'expiryDate': '2027-01-01',
+          'isActive': 1,
+          'usedCount': 1,
+        });
+        await db.insert('bookings', {
+          'id': 'b1',
+          'venueId': 'v1',
+          'userId': 'owner1',
+          'date': '2026-11-10',
+          'startTime': '08:00',
+          'endTime': '09:00',
+          'totalPrice': 190000.0,
+          'originalAmount': 200000.0,
+          'serviceAmount': 10000.0,
+          'discountAmount': 20000.0,
+          'status': 'confirmed',
+          'paymentStatus': 'paid',
+          'promoId': 'promo1',
+          'createdAt': '2026-11-10T08:00:00',
+        });
+        await db.insert('booking_services', {
+          'id': 'bs1',
+          'bookingId': 'b1',
+          'serviceId': 's1',
+          'quantity': 1,
+          'unitPrice': 10000.0,
+          'subtotal': 10000.0,
+        });
+        await db.insert('payments', {
+          'id': 'p1',
+          'bookingId': 'b1',
+          'method': 'momo',
+          'amount': 190000.0,
+          'status': 'success',
+          'createdAt': '2026-11-10T09:00:00',
+        });
+        await db.insert('time_slots', {
+          'id': 'ts1',
+          'venueId': 'v1',
+          'slotDate': '2026-11-10',
+          'startTime': '08:00',
+          'endTime': '09:00',
+          'price': 200000.0,
+          'status': 'booked',
+        });
+        await db.insert('venue_hours', {
+          'venueId': 'v1',
+          'openHour': 6,
+          'closeHour': 22,
+        });
+        await db.close();
+
+        db = await databaseFactory.openDatabase(
+          path,
+          options: OpenDatabaseOptions(
+            version: DatabaseHelper.databaseVersion,
+            onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
+            onUpgrade: (db, oldVersion, newVersion) async {
+              await DatabaseHelper().upgradeSchema(db, oldVersion);
+            },
+          ),
+        );
+
+        expect((await db.query('venues')).length, 1);
+        expect((await db.query('Session')).single['user_id'], 'owner1');
+        expect((await db.query('venue_images')).length, 1);
+        expect((await db.query('venue_services')).length, 1);
+        expect((await db.query('bookings')).length, 1);
+        expect((await db.query('booking_services')).length, 1);
+        expect((await db.query('payments')).length, 1);
+        expect((await db.query('time_slots')).length, 1);
+        expect((await db.query('venue_hours')).length, 1);
+        expect(
+          (await db.query('booking_services')).single['serviceName'],
+          isNull,
+        );
+        expect(
+          (await db.query('payments')).single['refundAmount'],
+          isNull,
+        );
+        expect(
+          (await db.query('legacy_account_import')).single['password'],
+          'legacy-password',
+        );
+
+        await db.close();
+        await databaseFactory.deleteDatabase(path);
+      },
+    );
+
+    test(
       'Kiểm tra importLegacyAccountDatabase không làm mất tài khoản và Session',
       () async {
         final legacyPath = p.join(
@@ -299,6 +520,14 @@ void main() {
           'email': 'legacy@example.com',
           'phone': '0987654321',
           'password_hash': 'secret_hash_legacy',
+          'role': 'customer',
+        });
+        await legacyDb.insert('Users', {
+          'user_id': 'existing_user',
+          'full_name': 'Old Profile',
+          'email': 'old-profile@example.com',
+          'phone': '0987654322',
+          'password_hash': 'old_hash',
           'role': 'customer',
         });
         await legacyDb.insert('Session', {
@@ -335,8 +564,25 @@ void main() {
           ),
         );
 
+        // User cùng ID đã tồn tại trong DB chính phải được giữ nguyên.
+        await targetDb.insert('Users', {
+          'user_id': 'existing_user',
+          'full_name': 'Current Profile',
+          'email': 'current-profile@example.com',
+          'phone': '0911111111',
+          'password_hash': 'current_hash',
+          'role': 'customer',
+        });
+
         // Thực hiện import
         await AccountRepository.importLegacyAccountDatabase(targetDb);
+
+        final existingUser = await targetDb.query(
+          'Users',
+          where: 'user_id = ?',
+          whereArgs: ['existing_user'],
+        );
+        expect(existingUser.single['full_name'], 'Current Profile');
 
         final importedUsers = await targetDb.query(
           'Users',
@@ -357,9 +603,148 @@ void main() {
         expect(importedSession.length, equals(1));
         expect(importedSession.first['user_id'], equals('legacy_user_1'));
 
+        // A second startup must not overwrite a locally edited account or
+        // replace a newer, valid session with the legacy session.
+        await targetDb.update(
+          'Users',
+          {'full_name': 'Edited In Main Database'},
+          where: 'user_id = ?',
+          whereArgs: ['legacy_user_1'],
+        );
+        await targetDb.insert('Users', {
+          'user_id': 'current_user',
+          'full_name': 'Current User',
+          'email': 'current@example.com',
+          'phone': '0912345678',
+          'password_hash': 'current_hash',
+          'role': 'customer',
+        });
+        await targetDb.insert('Session', {
+          'id': 1,
+          'user_id': 'current_user',
+          'expires_at': DateTime.now()
+              .add(const Duration(days: 20))
+              .millisecondsSinceEpoch,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+        await AccountRepository.importLegacyAccountDatabase(targetDb);
+
+        final preservedUser = await targetDb.query(
+          'Users',
+          where: 'user_id = ?',
+          whereArgs: ['legacy_user_1'],
+        );
+        expect(preservedUser.single['full_name'], 'Edited In Main Database');
+        final preservedSession = await targetDb.query(
+          'Session',
+          where: 'id = 1',
+        );
+        expect(preservedSession.single['user_id'], 'current_user');
+
+        final migrationMarker = await targetDb.query(
+          'app_migrations',
+          where: 'migration_key = ?',
+          whereArgs: ['legacy_accounts_db_v1_imported'],
+        );
+        expect(migrationMarker.length, 1);
+
         await targetDb.close();
         await databaseFactory.deleteDatabase(targetPath);
         await databaseFactory.deleteDatabase(legacyPath);
+      },
+    );
+
+    test(
+      'Migration V1 rollback nếu schema Session cũ không tương thích',
+      () async {
+        final dbName =
+            'test_migrate_v1_invalid_session_${DateTime.now().microsecondsSinceEpoch}.db';
+        final path = p.join(await databaseFactory.getDatabasesPath(), dbName);
+        final db = await databaseFactory.openDatabase(
+          path,
+          options: OpenDatabaseOptions(
+            version: 1,
+            onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
+            onCreate: (db, version) async {
+              await db.execute('''
+                CREATE TABLE users (
+                  id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
+                  phone TEXT NOT NULL, password TEXT NOT NULL, role TEXT
+                )
+              ''');
+              await db.execute('''
+                CREATE TABLE Session (
+                  id INTEGER PRIMARY KEY, user_id TEXT NOT NULL
+                )
+              ''');
+              await db.insert('users', {
+                'id': 'u1',
+                'name': 'Legacy User',
+                'email': 'legacy@example.com',
+                'phone': '0900000001',
+                'password': 'legacy-password',
+                'role': 'customer',
+              });
+              await db.insert('Session', {'id': 1, 'user_id': 'u1'});
+            },
+          ),
+        );
+
+        await expectLater(
+          db.transaction(
+            (txn) => DatabaseHelper().upgradeSchema(txn, 1),
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect((await db.query('users')).single['id'], 'u1');
+        expect((await db.query('Session')).single['user_id'], 'u1');
+        await db.close();
+        await databaseFactory.deleteDatabase(path);
+      },
+    );
+
+    test(
+      'Migration V1 rollback rõ ràng khi role cũ không thuộc danh sách hỗ trợ',
+      () async {
+        final dbName =
+            'test_migrate_v1_invalid_role_${DateTime.now().microsecondsSinceEpoch}.db';
+        final path = p.join(await databaseFactory.getDatabasesPath(), dbName);
+        final db = await databaseFactory.openDatabase(
+          path,
+          options: OpenDatabaseOptions(
+            version: 1,
+            onCreate: (db, version) async {
+              await db.execute('''
+                CREATE TABLE users (
+                  id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
+                  phone TEXT NOT NULL, password TEXT NOT NULL, role TEXT
+                )
+              ''');
+              await db.insert('users', {
+                'id': 'u1',
+                'name': 'Legacy User',
+                'email': 'legacy@example.com',
+                'phone': '0900000001',
+                'password': 'legacy-password',
+                'role': 'venue_manager',
+              });
+            },
+          ),
+        );
+
+        await expectLater(
+          db.transaction(
+            (txn) => DatabaseHelper().upgradeSchema(txn, 1),
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        final preserved = await db.query('users');
+        expect(preserved.single['id'], 'u1');
+        expect(preserved.single['role'], 'venue_manager');
+        await db.close();
+        await databaseFactory.deleteDatabase(path);
       },
     );
   });
