@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   image_picker: ^1.2.4
+  path: ^1.9.1
   path_provider: ^2.1.6
   sqflite: ^2.4.5
   cryptography: ^2.9.0
