@@ -17,6 +17,60 @@ String _formatMoney(num value) {
   return buffer.toString();
 }
 
+const _maxNameLength = 50;
+const _maxUnitLength = 15;
+const _minPrice = 1000;
+const _maxPriceDigits = 9;
+const _maxPrice = 100000000; // 100 triệu
+
+// "  Thuê   vợt " -> "Thuê vợt"
+String _normalizeSpaces(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+String? _validateName(
+  String raw,
+  List<VenueService> existing, {
+  String? editingId,
+}) {
+  final name = _normalizeSpaces(raw);
+  if (name.isEmpty) return 'Vui lòng nhập tên dịch vụ';
+  if (name.length < 2) return 'Tên dịch vụ tối thiểu 2 ký tự';
+  if (name.length > _maxNameLength) {
+    return 'Tên dịch vụ tối đa $_maxNameLength ký tự';
+  }
+  if (!RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(name)) {
+    return 'Tên dịch vụ phải chứa chữ hoặc số';
+  }
+  final duplicated = existing.any(
+    (s) =>
+        s.id != editingId &&
+        _normalizeSpaces(s.name).toLowerCase() == name.toLowerCase(),
+  );
+  if (duplicated) return 'Dịch vụ này đã tồn tại';
+  return null;
+}
+
+String? _validatePrice(String raw) {
+  final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return 'Vui lòng nhập giá';
+  final value = int.tryParse(digits);
+  if (value == null || value <= 0) return 'Giá phải lớn hơn 0';
+  if (value < _minPrice) return 'Giá tối thiểu ${_formatMoney(_minPrice)} đ';
+  if (value > _maxPrice) return 'Giá tối đa ${_formatMoney(_maxPrice)} đ';
+  return null;
+}
+
+String? _validateUnit(String raw) {
+  final unit = _normalizeSpaces(raw);
+  if (unit.isEmpty) return 'Vui lòng nhập đơn vị';
+  if (unit.length > _maxUnitLength) {
+    return 'Đơn vị tối đa $_maxUnitLength ký tự';
+  }
+  if (!RegExp(r'^\p{L}[\p{L} ]*$', unicode: true).hasMatch(unit)) {
+    return 'Đơn vị chỉ gồm chữ cái';
+  }
+  return null;
+}
+
 // Tự thêm dấu chấm ngăn cách hàng nghìn khi nhập giá.
 class _ThousandsFormatter extends TextInputFormatter {
   @override
@@ -26,6 +80,7 @@ class _ThousandsFormatter extends TextInputFormatter {
   ) {
     final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return const TextEditingValue();
+    if (digits.length > _maxPriceDigits) return oldValue;
     final text = _formatMoney(int.parse(digits));
     return TextEditingValue(
       text: text,
@@ -377,6 +432,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                   children: [
                     TextField(
                       controller: nameController,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(_maxNameLength),
+                      ],
                       textCapitalization: TextCapitalization.sentences,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       onChanged: (_) {
@@ -393,8 +451,11 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: priceController,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(_maxUnitLength),
+                        _ThousandsFormatter(),
+                      ],
                       keyboardType: TextInputType.number,
-                      inputFormatters: [_ThousandsFormatter()],
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       onChanged: (_) {
                         if (priceError != null) {
@@ -482,30 +543,25 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                         label: service == null ? 'Thêm' : 'Lưu',
                         color: AppTheme.primary,
                         onPressed: () {
-                          final name = nameController.text.trim();
-                          final price = double.tryParse(
-                            priceController.text
-                                .trim()
-                                .replaceAll('.', '')
-                                .replaceAll(',', ''),
+                          final newNameError = _validateName(
+                            nameController.text,
+                            _services,
+                            editingId: service?.id,
                           );
-                          final unit = unitController.text.trim();
-                          final nameInvalid = name.isEmpty;
-                          final priceInvalid =
-                              price == null || !price.isFinite || price <= 0;
-                          final unitInvalid = unit.isEmpty;
+                          final newPriceError = _validatePrice(
+                            priceController.text,
+                          );
+                          final newUnitError = _validateUnit(
+                            unitController.text,
+                          );
 
-                          if (nameInvalid || priceInvalid || unitInvalid) {
+                          if (newNameError != null ||
+                              newPriceError != null ||
+                              newUnitError != null) {
                             setDialogState(() {
-                              nameError = nameInvalid
-                                  ? 'Vui lòng nhập tên dịch vụ'
-                                  : null;
-                              priceError = priceInvalid
-                                  ? 'Vui lòng nhập giá hợp lệ'
-                                  : null;
-                              unitError = unitInvalid
-                                  ? 'Vui lòng nhập đơn vị'
-                                  : null;
+                              nameError = newNameError;
+                              priceError = newPriceError;
+                              unitError = newUnitError;
                             });
                             return;
                           }
@@ -522,9 +578,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       },
     );
 
-    final name = nameController.text.trim();
+    final name = _normalizeSpaces(nameController.text);
     final priceText = priceController.text.trim();
-    final unit = unitController.text.trim();
+    final unit = _normalizeSpaces(unitController.text);
 
     await dialogRoute?.completed;
     nameController.dispose();
@@ -534,9 +590,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     if (result != true || !mounted) return;
 
     // Đã được kiểm tra hợp lệ ngay trong dialog.
-    final price = double.parse(
-      priceText.replaceAll('.', '').replaceAll(',', ''),
-    );
+    final price = int.parse(
+      priceText.replaceAll(RegExp(r'[^0-9]'), ''),
+    ).toDouble();
 
     final saved = VenueService(
       id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
