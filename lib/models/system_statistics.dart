@@ -9,7 +9,7 @@ class SystemStatistics {
   final Map<String, int> bookingsByStatus;
   final Map<String, int> venuesByStatus;
 
-  /// Tổng tiền các lịch đặt đã xác nhận hoặc hoàn thành.
+  /// Tổng tiền đã thanh toán của các lịch đặt đã xác nhận hoặc hoàn thành.
   final double revenue;
 
   int get totalBookings =>

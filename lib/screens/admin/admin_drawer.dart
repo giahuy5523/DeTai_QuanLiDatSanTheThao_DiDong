@@ -3,7 +3,7 @@ import '../../data/account_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 
-class AdminDrawer extends StatelessWidget {
+class AdminDrawer extends StatefulWidget {
   final int selectedIndex;
   final VoidCallback? onReturn;
 
@@ -18,19 +18,35 @@ class AdminDrawer extends StatelessWidget {
     this.pendingVenueCount = 0,
   });
 
+  @override
+  State<AdminDrawer> createState() => _AdminDrawerState();
+}
+
+class _AdminDrawerState extends State<AdminDrawer> {
+  bool _loggingOut = false;
+
   Future<void> _goTo(BuildContext context, String route) async {
-    Navigator.pop(context);
-    if (ModalRoute.of(context)?.settings.name == route) return;
-    await Navigator.pushNamed(context, route);
+    if (_loggingOut) return;
+    final navigator = Navigator.of(context);
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final onReturn = widget.onReturn;
+    navigator.pop();
+    if (currentRoute == route) return;
+    await navigator.pushNamed(route);
     onReturn?.call();
   }
 
   Future<void> _logout(BuildContext context) async {
+    if (_loggingOut) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    _loggingOut = true;
     try {
       await AccountService.logout();
     } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      _loggingOut = false;
+      if (messenger.mounted) {
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Không thể đăng xuất. Vui lòng thử lại.'),
           ),
@@ -38,12 +54,8 @@ class AdminDrawer extends StatelessWidget {
       }
       return;
     }
-    if (!context.mounted) return;
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (route) => false,
-    );
+    if (!navigator.mounted) return;
+    navigator.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
 
   @override
@@ -71,20 +83,20 @@ class AdminDrawer extends StatelessWidget {
                   _DrawerItem(
                     label: 'Tổng quan',
                     icon: Icons.dashboard_outlined,
-                    selected: selectedIndex == 0,
+                    selected: widget.selectedIndex == 0,
                     onTap: () => _goTo(context, AppRoutes.statistics),
                   ),
                   _DrawerItem(
                     label: 'Duyệt sân',
                     icon: Icons.approval,
-                    selected: selectedIndex == 1,
-                    badgeCount: pendingVenueCount,
+                    selected: widget.selectedIndex == 1,
+                    badgeCount: widget.pendingVenueCount,
                     onTap: () => _goTo(context, AppRoutes.approveVenue),
                   ),
                   _DrawerItem(
                     label: 'Quản lý khuyến mãi',
                     icon: Icons.discount_outlined,
-                    selected: selectedIndex == 2,
+                    selected: widget.selectedIndex == 2,
                     onTap: () => _goTo(context, AppRoutes.managePromotion),
                   ),
                 ],

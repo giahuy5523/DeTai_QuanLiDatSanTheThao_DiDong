@@ -558,7 +558,7 @@ void main() {
       expect(MockStore.promotions.last.code, 'MERGE25');
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
-      final card = find.byKey(const ValueKey('promo-MERGE25'));
+      final card = find.byKey(ValueKey('promo-${MockStore.promotions.last.id}'));
       await tester.scrollUntilVisible(
         card,
         200,

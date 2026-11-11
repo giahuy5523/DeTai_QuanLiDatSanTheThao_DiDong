@@ -18,7 +18,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
   // Màu "đã xác nhận"
   static const _confirmedBlue = Color(0xFF3B82F6);
 
-  static const _stripDays = 14;
+  static const _stripDays = 62;
 
   // Dữ liệu lịch đặt đọc từ SQLite.
   List<VenueBookingEntry> _bookings = const [];
@@ -698,49 +698,64 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     VenueBookingEntry booking,
     String newStatus,
   ) async {
-    if (_updating) return; // chặn bấm đúp
-
-    final ownerId = MockStore.currentUser?.id;
-    if (ownerId == null || MockStore.currentUser?.role != 'owner') return;
+    if (_updating) return;
+    final user = MockStore.currentUser;
+    if (user == null || user.role != 'owner') {
+      _showSnack('Chỉ chủ sân được cập nhật lịch đặt.', success: false);
+      return;
+    }
 
     setState(() => _updating = true);
+    var updated = false;
     try {
-      bool success = false;
-      if (newStatus == 'cancelled') {
-        success = await BookingRepository.cancelBooking(
-          booking.id,
-          cancelReason: 'Chủ sân hủy lịch đặt',
-        );
-      } else if (newStatus == 'confirmed' || newStatus == 'completed') {
-        success = await BookingRepository.updateBookingStatusByOwner(
-          bookingId: booking.id,
-          newStatus: newStatus,
-          ownerId: ownerId,
+      // Kiểm tra quyền sở hữu sân và trạng thái hợp lệ được làm ngay trong SQL.
+      updated =
+          MockStore.venueById(widget.venueId)?.ownerId == user.id &&
+          (newStatus == 'cancelled'
+              ? await BookingRepository.cancelBooking(
+                  booking.id,
+                  cancelReason: 'Chủ sân hủy lịch đặt',
+                )
+              : await BookingRepository.updateBookingStatusByOwner(
+                  bookingId: booking.id,
+                  ownerId: user.id,
+                  newStatus: newStatus,
+                ));
+    } catch (_) {
+      if (mounted) {
+        _showSnack(
+          'Không thể cập nhật lịch đặt. Vui lòng thử lại.',
+          success: false,
         );
       }
-
-      if (!mounted) return;
-
-      if (!success) {
-        _showSnack('Cập nhật thất bại, vui lòng thử lại.', success: false);
-        return;
-      }
-
-      await _loadBookings(); // tải lại để UI đổi trạng thái
-      if (!mounted) return;
-
-      const messages = {
-        'cancelled': 'Đã hủy lịch đặt sân.',
-        'confirmed': 'Đã xác nhận lịch đặt sân.',
-        'completed': 'Đã đánh dấu lịch đặt là hoàn thành.',
-      };
-      _showSnack(
-        messages[newStatus] ?? 'Đã cập nhật.',
-        success: newStatus != 'cancelled',
-      );
-    } finally {
-      if (mounted) setState(() => _updating = false);
     }
+
+    if (!mounted) return;
+    setState(() => _updating = false);
+    if (!updated) {
+      // Có thể trạng thái đã đổi ở nơi khác: tải lại để hiển thị đúng.
+      await _loadBookings();
+      if (mounted) {
+        _showSnack(
+          'Không thể cập nhật lịch đặt này. Vui lòng kiểm tra lại.',
+          success: false,
+        );
+      }
+      return;
+    }
+
+    await _loadBookings();
+    if (!mounted) return;
+
+    const messages = {
+      'cancelled': 'Đã hủy lịch đặt sân.',
+      'confirmed': 'Đã xác nhận lịch đặt sân.',
+      'completed': 'Đã đánh dấu lịch đặt là hoàn thành.',
+    };
+    _showSnack(
+      messages[newStatus] ?? 'Đã cập nhật.',
+      success: newStatus != 'cancelled',
+    );
   }
 
   void _showSnack(String message, {required bool success}) {

@@ -17,7 +17,6 @@ dependencies:
   cryptography: ^2.9.0
   cryptography_flutter: ^2.3.4
   path: ^1.9.0
-
 dev_dependencies:
   integration_test:
     sdk: flutter

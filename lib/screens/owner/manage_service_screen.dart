@@ -34,19 +34,6 @@ class _ThousandsFormatter extends TextInputFormatter {
   }
 }
 
-IconData _iconForUnit(String unit) {
-  switch (unit.toLowerCase()) {
-    case 'chai':
-      return Icons.local_drink_outlined;
-    case 'bộ':
-      return Icons.checkroom_outlined;
-    case 'giờ':
-      return Icons.schedule_outlined;
-    default:
-      return Icons.room_service_outlined;
-  }
-}
-
 class ManageServiceScreen extends StatefulWidget {
   final String venueId;
 
@@ -231,19 +218,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppTheme.primaryLight,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                _iconForUnit(service.unit),
-                color: AppTheme.primary.withValues(alpha: 0.6),
-                size: 30,
-              ),
-            ),
+            _serviceImage(service.name),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -290,6 +265,49 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _serviceImage(String serviceName) {
+    final normalized = serviceName.toLowerCase();
+    final asset = normalized.contains('nước')
+        ? 'assets/services/water.jpg'
+        : normalized.contains('vợt')
+        ? 'assets/services/racket.jpg'
+        : normalized.contains('giày')
+        ? 'assets/services/shoes.jpg'
+        : null;
+    if (asset == null) {
+      return _missingServiceImage('Chưa có ảnh cho dịch vụ: $serviceName');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.asset(
+        asset,
+        width: 72,
+        height: 72,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _missingServiceImage('Thiếu ảnh: $asset'),
+      ),
+    );
+  }
+
+  Widget _missingServiceImage(String message) {
+    return Container(
+      width: 72,
+      height: 72,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 8, color: AppTheme.textSecondary),
       ),
     );
   }
@@ -520,7 +538,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       priceText.replaceAll('.', '').replaceAll(',', ''),
     );
 
-    final updatedService = VenueService(
+    final saved = VenueService(
       id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
       venueId: widget.venueId,
       name: name,
@@ -529,22 +547,20 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     );
 
     try {
-      await VenueRepository.saveService(updatedService);
-
-      if (!mounted) return;
-
+      await VenueRepository.saveService(saved);
       await _loadServices();
-      if (!mounted) return;
-
-      _showSnack(
-        service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
-        success: true,
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      _showSnack('Không thể lưu dịch vụ: $e', success: false);
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể lưu dịch vụ. Vui lòng thử lại.', success: false);
+      }
+      return;
     }
+
+    if (!mounted) return;
+    _showSnack(
+      service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
+      success: true,
+    );
   }
 
   Future<void> _deleteService(VenueService service) async {
@@ -591,22 +607,16 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
 
     try {
       await VenueRepository.deleteService(service.id);
-
-      if (!mounted) return;
-
       await _loadServices();
-      if (!mounted) return;
-
-      _showSnack('Đã xóa "${service.name}".', success: true);
-    } on StateError catch (e) {
-      if (!mounted) return;
-
-      _showSnack(e.message.toString(), success: false);
-    } catch (e) {
-      if (!mounted) return;
-
-      _showSnack('Không thể xóa dịch vụ: $e', success: false);
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể xóa dịch vụ. Vui lòng thử lại.', success: false);
+      }
+      return;
     }
+
+    if (!mounted) return;
+    _showSnack('Đã xóa "${service.name}".', success: true);
   }
 
   void _showSnack(String message, {required bool success}) {

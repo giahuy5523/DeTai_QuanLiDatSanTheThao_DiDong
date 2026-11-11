@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/account_service.dart';
 import '../data/mock_store.dart';
 import '../models/venue.dart';
 
@@ -83,6 +84,15 @@ class AppRoutes {
     return builders.map(
       (name, builder) => MapEntry(name, (context) {
         if (name == login || name == register) return builder(context);
+        if (AccountService.expireSessionIfNeeded()) {
+          final navigator = Navigator.of(context);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (navigator.mounted && MockStore.currentUser == null) {
+              navigator.pushNamedAndRemoveUntil(login, (_) => false);
+            }
+          });
+          return const _RouteError('Phiên đăng nhập đã hết hạn.');
+        }
         final role = MockStore.currentUser?.role;
         final ownerRoutes = {uploadVenue, manageVenue, manageService};
         final adminRoutes = {approveVenue, managePromotion, statistics};

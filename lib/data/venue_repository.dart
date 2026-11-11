@@ -1,9 +1,10 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../models/service.dart';
+import '../models/system_statistics.dart';
 import '../models/venue.dart';
 import '../models/venue_booking_entry.dart';
 import '../models/venue_owner_info.dart';
-import '../models/system_statistics.dart';
 import '../utils/database_helper.dart';
 import 'mock_store.dart';
 import 'venue_image_storage.dart';
@@ -33,6 +34,15 @@ class VenueRepository {
     bool approvedOnly = false,
     String? ownerId,
   }) async {
+    if (_useMockStoreForTesting) {
+      return MockStore.venues
+          .where(
+            (venue) =>
+                (!approvedOnly || venue.status == 'approved') &&
+                (ownerId == null || venue.ownerId == ownerId),
+          )
+          .toList();
+    }
     final db = await _db;
     final conditions = <String>[];
     final args = <Object?>[];
@@ -85,9 +95,14 @@ class VenueRepository {
   }
 
   static Future<List<Map<String, Object?>>> loadSportTypes() async =>
-      (await _db).query('sport_types', orderBy: 'sportTypeId');
+      _useMockStoreForTesting
+      ? MockStore.sportTypes
+            .map((row) => <String, Object?>{...row, 'sportTypeId': row['id']})
+            .toList()
+      : (await _db).query('sport_types', orderBy: 'sportTypeId');
 
   static Future<int?> sportTypeIdFor(String name) async {
+    if (_useMockStoreForTesting) return MockStore.sportTypeIdFor(name);
     final rows = await (await _db).query(
       'sport_types',
       columns: ['sportTypeId'],
@@ -99,6 +114,7 @@ class VenueRepository {
   }
 
   static Future<List<VenueService>> loadServicesFor(String venueId) async {
+    if (_useMockStoreForTesting) return MockStore.servicesFor(venueId);
     final rows = await (await _db).query(
       'venue_services',
       where: 'venueId = ?',
@@ -211,6 +227,19 @@ class VenueRepository {
     await refreshCache();
   }
 
+  // Tên sân theo id, null nếu không tìm thấy.
+  static Future<String?> venueNameFor(String venueId) async {
+    if (_useMockStoreForTesting) return MockStore.venueById(venueId)?.name;
+    final rows = await (await _db).query(
+      'venues',
+      columns: ['name'],
+      where: 'id = ?',
+      whereArgs: [venueId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['name'] as String;
+  }
+
   static Future<void> refreshCache() async {
     final db = await _db;
     final venues = await loadVenues();
@@ -266,6 +295,10 @@ class VenueRepository {
   }
 
   static Future<void> saveVenue(Venue venue) async {
+    if (_useMockStoreForTesting) {
+      if (!MockStore.updateVenue(venue)) MockStore.addVenue(venue);
+      return;
+    }
     final db = await _db;
     final imageUrls = await Future.wait(
       venue.imageUrls.map(VenueImageStorage.persist),
@@ -332,6 +365,11 @@ class VenueRepository {
   }
 
   static Future<void> updateStatus(String venueId, String status) async {
+    if (_useMockStoreForTesting) {
+      final venue = MockStore.venueById(venueId);
+      if (venue != null) MockStore.updateVenue(venue.copyWith(status: status));
+      return;
+    }
     final db = await _db;
     final count = await db.update(
       'venues',
@@ -344,6 +382,7 @@ class VenueRepository {
   }
 
   static Future<int> todayBookingCountForOwner(String ownerId) async {
+    if (_useMockStoreForTesting) return 0;
     final db = await _db;
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day).toIso8601String();
@@ -357,6 +396,160 @@ class VenueRepository {
       [ownerId, start, end],
     );
     return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  // Tất cả lịch đặt của một sân, kèm thông tin khách, sắp theo ngày và giờ.
+  static Future<List<VenueBookingEntry>> loadBookingsForVenue(
+    String venueId,
+  ) async {
+    if (_useMockStoreForTesting) {
+      return MockStore.bookings
+          .where((booking) => booking.venueId == venueId)
+          .map(
+            (booking) => VenueBookingEntry(
+              id: booking.id,
+              date: booking.date,
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+              totalPrice: booking.totalPrice,
+              status: booking.status,
+              promotionCode: booking.promotionCode,
+              customerName: null,
+              customerPhone: null,
+            ),
+          )
+          .toList();
+    }
+    final rows = await (await _db).rawQuery(
+      '''
+      SELECT b.id, b.date, b.startTime, b.endTime, b.totalPrice, b.status,
+             b.promotionCode,
+             u.full_name AS customerName, u.phone AS customerPhone
+      FROM bookings b
+      LEFT JOIN Users u ON u.user_id = b.userId
+      WHERE b.venueId = ?
+      ORDER BY b.date, b.startTime
+    ''',
+      [venueId],
+    );
+
+    // Dịch vụ khách chọn kèm mỗi lịch đặt, gom theo bookingId.
+    // LEFT JOIN + COALESCE phòng trường hợp dịch vụ không còn trong venue_services.
+    final serviceRows = await (await _db).rawQuery(
+      '''
+      SELECT bs.bookingId, bs.quantity, bs.unitPrice, bs.subtotal,
+             COALESCE(vs.name, 'Dịch vụ đã xóa') AS name
+      FROM booking_services bs
+      JOIN bookings b ON b.id = bs.bookingId
+      LEFT JOIN venue_services vs ON vs.id = bs.serviceId
+      WHERE b.venueId = ?
+      ORDER BY bs.id
+    ''',
+      [venueId],
+    );
+    final servicesByBooking = <String, List<VenueBookingServiceItem>>{};
+    for (final row in serviceRows) {
+      (servicesByBooking[row['bookingId'] as String] ??= []).add(
+        VenueBookingServiceItem(
+          name: row['name'] as String,
+          quantity: (row['quantity'] as num).toInt(),
+          unitPrice: (row['unitPrice'] as num).toDouble(),
+          subtotal: (row['subtotal'] as num).toDouble(),
+        ),
+      );
+    }
+
+    return rows
+        .map(
+          (row) => VenueBookingEntry(
+            id: row['id'] as String,
+            date: DateTime.parse(row['date'] as String),
+            startTime: row['startTime'] as String,
+            endTime: row['endTime'] as String,
+            totalPrice: (row['totalPrice'] as num).toDouble(),
+            status: row['status'] as String,
+            promotionCode: row['promotionCode'] as String?,
+            customerName: row['customerName'] as String?,
+            customerPhone: row['customerPhone'] as String?,
+            services: servicesByBooking[row['id'] as String] ?? const [],
+          ),
+        )
+        .toList();
+  }
+
+  // Tên, số điện thoại và email của các chủ sân, theo id người dùng.
+  // Id không tồn tại trong bảng Users sẽ không có trong kết quả.
+  static Future<Map<String, VenueOwnerInfo>> loadOwnerContacts(
+    Iterable<String> ownerIds,
+  ) async {
+    if (_useMockStoreForTesting) return const {};
+    final ids = ownerIds.toSet().toList();
+    if (ids.isEmpty) return const {};
+    final rows = await (await _db).query(
+      'Users',
+      columns: ['user_id', 'full_name', 'phone', 'email'],
+      where: 'user_id IN (${List.filled(ids.length, '?').join(',')})',
+      whereArgs: ids,
+    );
+    return {
+      for (final row in rows)
+        row['user_id'] as String: VenueOwnerInfo(
+          id: row['user_id'] as String,
+          name: row['full_name'] as String,
+          phone: row['phone'] as String,
+          email: row['email'] as String,
+        ),
+    };
+  }
+
+  // Tính số liệu thống kê bằng SQL (COUNT / SUM), không tải toàn bộ bản ghi.
+  static Future<SystemStatistics> loadSystemStatistics() async {
+    if (_useMockStoreForTesting) {
+      final venues = <String, int>{};
+      for (final venue in MockStore.venues) {
+        venues.update(venue.status, (count) => count + 1, ifAbsent: () => 1);
+      }
+      return SystemStatistics(
+        bookingsByStatus: const {},
+        venuesByStatus: venues,
+        revenue: 0,
+      );
+    }
+    final db = await _db;
+
+    final bookingRows = await db.rawQuery('''
+      SELECT status,
+             COUNT(*) AS total,
+             COALESCE(SUM(CASE WHEN paymentStatus = 'paid' THEN totalPrice ELSE 0 END), 0) AS amount
+      FROM bookings
+      GROUP BY status
+    ''');
+    final venueRows = await db.rawQuery('''
+      SELECT status, COUNT(*) AS total
+      FROM venues
+      GROUP BY status
+    ''');
+
+    final bookingsByStatus = <String, int>{};
+    var revenue = 0.0;
+    for (final row in bookingRows) {
+      final status = row['status'] as String;
+      bookingsByStatus[status] = (row['total'] as num).toInt();
+      if (status == 'confirmed' || status == 'completed') {
+        revenue += (row['amount'] as num).toDouble();
+      }
+    }
+
+    final venuesByStatus = <String, int>{
+      for (final row in venueRows)
+        row['status'] as String: (row['total'] as num).toInt(),
+    };
+
+    return SystemStatistics(
+      bookingsByStatus: bookingsByStatus,
+      venuesByStatus: venuesByStatus,
+      revenue: revenue,
+    );
   }
 
   static Future<List<Map<String, Object?>>> loadAvailableSlots(
@@ -430,142 +623,6 @@ class VenueRepository {
     final minute = int.tryParse(parts[1]);
     if (hour == null || minute == null) return -1;
     return hour * 60 + minute;
-  }
-
-  // Tên, số điện thoại và email của các chủ sân, theo id người dùng.
-  // Id không tồn tại trong bảng Users sẽ không có trong kết quả.
-  static Future<Map<String, VenueOwnerInfo>> loadOwnerContacts(
-    Iterable<String> ownerIds,
-  ) async {
-    final ids = ownerIds.toSet().toList();
-    if (ids.isEmpty) return const {};
-    final rows = await (await _db).query(
-      'Users',
-      columns: ['user_id', 'full_name', 'phone', 'email'],
-      where: 'user_id IN (${List.filled(ids.length, '?').join(',')})',
-      whereArgs: ids,
-    );
-    return {
-      for (final row in rows)
-        row['user_id'] as String: VenueOwnerInfo(
-          id: row['user_id'] as String,
-          name: row['full_name'] as String,
-          phone: row['phone'] as String,
-          email: row['email'] as String,
-        ),
-    };
-  }
-
-  // Tính số liệu thống kê bằng SQL (COUNT / SUM), không tải toàn bộ bản ghi.
-  static Future<SystemStatistics> loadSystemStatistics() async {
-    final db = await _db;
-
-    final bookingRows = await db.rawQuery('''
-      SELECT status,
-             COUNT(*) AS total,
-             COALESCE(SUM(totalPrice), 0) AS amount
-      FROM bookings
-      GROUP BY status
-    ''');
-    final venueRows = await db.rawQuery('''
-      SELECT status, COUNT(*) AS total
-      FROM venues
-      GROUP BY status
-    ''');
-
-    final bookingsByStatus = <String, int>{};
-    var revenue = 0.0;
-    for (final row in bookingRows) {
-      final status = row['status'] as String;
-      bookingsByStatus[status] = (row['total'] as num).toInt();
-      if (status == 'confirmed' || status == 'completed') {
-        revenue += (row['amount'] as num).toDouble();
-      }
-    }
-
-    final venuesByStatus = <String, int>{
-      for (final row in venueRows)
-        row['status'] as String: (row['total'] as num).toInt(),
-    };
-
-    return SystemStatistics(
-      bookingsByStatus: bookingsByStatus,
-      venuesByStatus: venuesByStatus,
-      revenue: revenue,
-    );
-  }
-
-  // Tên sân theo id, null nếu không tìm thấy.
-  static Future<String?> venueNameFor(String venueId) async {
-    final rows = await (await _db).query(
-      'venues',
-      columns: ['name'],
-      where: 'id = ?',
-      whereArgs: [venueId],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : rows.single['name'] as String;
-  }
-
-  // Tất cả lịch đặt của một sân, kèm thông tin khách, sắp theo ngày và giờ.
-  static Future<List<VenueBookingEntry>> loadBookingsForVenue(
-    String venueId,
-  ) async {
-    final rows = await (await _db).rawQuery(
-      '''
-      SELECT b.id, b.date, b.startTime, b.endTime, b.totalPrice, b.status,
-             b.promotionCode,
-             u.full_name AS customerName, u.phone AS customerPhone
-      FROM bookings b
-      LEFT JOIN Users u ON u.user_id = b.userId
-      WHERE b.venueId = ?
-      ORDER BY b.date, b.startTime
-    ''',
-      [venueId],
-    );
-
-    // Dịch vụ khách chọn kèm mỗi lịch đặt, gom theo bookingId.
-    // LEFT JOIN + COALESCE phòng trường hợp dịch vụ không còn trong venue_services.
-    final serviceRows = await (await _db).rawQuery(
-      '''
-      SELECT bs.bookingId, bs.quantity, bs.unitPrice, bs.subtotal,
-             COALESCE(vs.name, 'Dịch vụ đã xóa') AS name
-      FROM booking_services bs
-      JOIN bookings b ON b.id = bs.bookingId
-      LEFT JOIN venue_services vs ON vs.id = bs.serviceId
-      WHERE b.venueId = ?
-      ORDER BY bs.id
-    ''',
-      [venueId],
-    );
-    final servicesByBooking = <String, List<VenueBookingServiceItem>>{};
-    for (final row in serviceRows) {
-      (servicesByBooking[row['bookingId'] as String] ??= []).add(
-        VenueBookingServiceItem(
-          name: row['name'] as String,
-          quantity: (row['quantity'] as num).toInt(),
-          unitPrice: (row['unitPrice'] as num).toDouble(),
-          subtotal: (row['subtotal'] as num).toDouble(),
-        ),
-      );
-    }
-
-    return rows
-        .map(
-          (row) => VenueBookingEntry(
-            id: row['id'] as String,
-            date: DateTime.parse(row['date'] as String),
-            startTime: row['startTime'] as String,
-            endTime: row['endTime'] as String,
-            totalPrice: (row['totalPrice'] as num).toDouble(),
-            status: row['status'] as String,
-            promotionCode: row['promotionCode'] as String?,
-            customerName: row['customerName'] as String?,
-            customerPhone: row['customerPhone'] as String?,
-            services: servicesByBooking[row['id'] as String] ?? const [],
-          ),
-        )
-        .toList();
   }
 
   // Chủ sân đổi trạng thái lịch đặt. Chỉ cho phép khi sân thuộc về [ownerId]
