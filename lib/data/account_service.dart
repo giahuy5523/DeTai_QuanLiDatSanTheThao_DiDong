@@ -14,11 +14,11 @@ class AccountService {
 
   static Future<void> initialize() async {
     final appDatabase = await DatabaseHelper().database;
+    await AccountRepository.importLegacyAccountDatabase(appDatabase);
     repository = await AccountRepository.open(
       seed: List.of(MockStore.users),
       database: appDatabase,
     );
-    await AccountRepository.importLegacyAccountDatabase(appDatabase);
     await _seedBusinessData(appDatabase);
     await VenueRepository.initialize(appDatabase);
     await BookingRepository.refreshCache();
@@ -28,6 +28,16 @@ class AccountService {
 
   static Future<void> _seedBusinessData(Database database) async {
     await database.transaction((txn) async {
+      await txn.execute('''CREATE TABLE IF NOT EXISTS business_seed (
+        id INTEGER PRIMARY KEY CHECK(id = 1)
+      )''');
+      if ((await txn.query('business_seed', limit: 1)).isNotEmpty) return;
+      await txn.insert('business_seed', {'id': 1});
+
+      // Previous versions seeded sport types in the same transaction as the
+      // other samples. Users can remove services and promotions independently.
+      if ((await txn.query('sport_types', limit: 1)).isNotEmpty) return;
+
       for (final row in MockStore.sportTypes) {
         await txn.insert('sport_types', {
           'sportTypeId': row['id'],
@@ -177,6 +187,14 @@ class AccountService {
   static Future<void> logout() async {
     await repository?.logout();
     MockStore.logout();
+  }
+
+  static bool expireSessionIfNeeded() {
+    if (MockStore.currentUser == null || repository?.isSessionExpired != true) {
+      return false;
+    }
+    MockStore.logout();
+    return true;
   }
 
   static Future<AppUser?> updateProfile({

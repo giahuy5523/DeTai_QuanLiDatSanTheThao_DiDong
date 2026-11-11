@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
+import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/venue_image.dart';
 
@@ -12,10 +14,35 @@ class VenueListScreen extends StatefulWidget {
 
 class _VenueListScreenState extends State<VenueListScreen> {
   String _sport = 'Tất cả';
+  List<Venue> _databaseVenues = const [];
+  bool _hasDatabaseSnapshot = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadVenues();
+  }
+
+  Future<void> _reloadVenues() async {
+    if (!VenueRepository.isInitialized) return;
+    try {
+      final venues = await VenueRepository.loadVenues(approvedOnly: true);
+      if (mounted) {
+        setState(() {
+          _databaseVenues = venues;
+          _hasDatabaseSnapshot = true;
+        });
+      }
+    } catch (_) {
+      // Keep the startup snapshot visible if a refresh cannot complete.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final approved = MockStore.venues
+    final approved = (_hasDatabaseSnapshot
+            ? _databaseVenues
+            : MockStore.venues)
         .where((venue) => venue.status == 'approved')
         .toList();
     final sports = [
@@ -57,7 +84,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       final venue = venues[index];
-                      final images = MockStore.imageUrlsOf(venue.id);
+                      final images = venue.imageUrls;
 
                       return Card(
                         clipBehavior: Clip.antiAlias,

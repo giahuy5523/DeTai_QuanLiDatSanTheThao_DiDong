@@ -1,3 +1,4 @@
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
@@ -10,10 +11,12 @@ import 'test_helpers.dart';
 void main() {
   setUpAll(() {
     BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
   });
   for (final action in ['Xác nhận', 'Hoàn thành', 'Hủy đặt']) {
     testWidgets(

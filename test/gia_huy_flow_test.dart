@@ -1,3 +1,4 @@
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -130,10 +131,12 @@ Future<void> pick(WidgetTester tester) async {
 void main() {
   setUpAll(() {
     BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
   });
   final originalVenues = List.of(MockStore.venues);
   final originalBookings = List.of(MockStore.bookings);

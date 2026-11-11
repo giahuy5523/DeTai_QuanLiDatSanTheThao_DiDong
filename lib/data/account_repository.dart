@@ -12,6 +12,13 @@ import '../utils/auth_validation.dart';
 class AccountRepository {
   AccountRepository(this.database);
   final Database database;
+  int? _sessionExpiresAt;
+  bool get isSessionExpired {
+    final expiresAt = _sessionExpiresAt;
+    return expiresAt != null &&
+        expiresAt <= DateTime.now().millisecondsSinceEpoch;
+  }
+
   static final _kdf = Pbkdf2(
     macAlgorithm: Hmac.sha256(),
     iterations: 600000,
@@ -84,12 +91,13 @@ class AccountRepository {
       expires_at INTEGER NOT NULL
     )''');
 
-    final importTable = await database.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_account_import'",
-    );
-    if (importTable.isNotEmpty) {
-      final legacyUsers = await database.query('legacy_account_import');
-      for (final row in legacyUsers) {
+    await database.transaction((txn) async {
+      final importTable = await txn.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_account_import'",
+      );
+      if (importTable.isEmpty) return;
+
+      for (final row in await txn.query('legacy_account_import')) {
         final rawPassword = row['password'] as String? ?? '';
         final userId = row['user_id'] as String;
         final values = {
@@ -100,20 +108,32 @@ class AccountRepository {
           'role': row['role'],
           'avatar_path': row['avatar_path'],
         };
-        final updated = await database.update(
-          'Users', values, where: 'user_id = ?', whereArgs: [userId],
+        final updated = await txn.update(
+          'Users',
+          {
+            'email': values['email'],
+            'password_hash': values['password_hash'],
+            'avatar_path': values['avatar_path'],
+          },
+          where: 'user_id = ? AND password_hash = ?',
+          whereArgs: [userId, 'migration-pending'],
         );
         if (updated == 0) {
-          await database.insert('Users', {'user_id': userId, ...values},
-              conflictAlgorithm: ConflictAlgorithm.ignore);
+          await txn.insert('Users', {
+            'user_id': userId,
+            ...values,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
         }
       }
-      await database.execute('DROP TABLE legacy_account_import');
-    }
+      await txn.execute('DROP TABLE legacy_account_import');
+    });
     for (final user in seed) {
       final existing = await database.query(
-        'Users', columns: ['user_id'], where: 'user_id = ?',
-        whereArgs: [user.id], limit: 1,
+        'Users',
+        columns: ['user_id'],
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+        limit: 1,
       );
       if (existing.isNotEmpty) continue;
       await database.insert('Users', {
@@ -128,65 +148,68 @@ class AccountRepository {
     }
   }
 
-  /// One-time compatible copy from the former `accounts.db` file.
-  /// Password hashes and the active local session are copied as-is.
+  /// Copies the former accounts.db before demo accounts are seeded.
   static Future<void> importLegacyAccountDatabase(Database target) async {
     final factory = databaseFactory;
     final sourcePath = p.join(await factory.getDatabasesPath(), 'accounts.db');
-    if (!await factory.databaseExists(sourcePath)) return;
+    if (p.equals(sourcePath, target.path) ||
+        !await factory.databaseExists(sourcePath)) {
+      return;
+    }
 
-    final source = await factory.openDatabase(
-      sourcePath,
-      options: OpenDatabaseOptions(readOnly: true),
-    );
-    try {
-      final tables = await source.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'",
+    await target.transaction((txn) async {
+      await txn.execute('''CREATE TABLE IF NOT EXISTS account_migrations (
+        name TEXT PRIMARY KEY
+      )''');
+      const migration = 'standalone_accounts_v1';
+      final completed = await txn.query(
+        'account_migrations',
+        where: 'name = ?',
+        whereArgs: [migration],
       );
-      if (tables.isEmpty) return;
-      await target.transaction((txn) async {
-        final users = await source.query('Users');
-        for (final user in users) {
-          final id = user['user_id'];
-          final values = Map<String, Object?>.from(user)..remove('user_id');
+      if (completed.isNotEmpty) return;
+
+      final source = await factory.openDatabase(
+        sourcePath,
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      try {
+        final tables = await source.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('Users', 'Session')",
+        );
+        final tableNames = tables.map((row) => row['name']).toSet();
+        if (!tableNames.contains('Users')) return;
+        final legacySession = tableNames.contains('Session')
+            ? (await source.query(
+                'Session',
+                where: 'id = 1 AND expires_at > ?',
+                whereArgs: [DateTime.now().millisecondsSinceEpoch],
+              )).firstOrNull
+            : null;
+
+        for (final user in await source.query('Users')) {
           try {
-            final updated = await txn.update(
-              'Users', values, where: 'user_id = ?', whereArgs: [id],
-            );
-            if (updated == 0) {
-              await txn.insert(
-                'Users', user,
-                conflictAlgorithm: ConflictAlgorithm.ignore,
-              );
-            }
+            await txn.insert('Users', user);
           } on DatabaseException catch (error) {
             if (!error.isUniqueConstraintError()) rethrow;
+            continue;
           }
-        }
-        final sessionTable = await source.rawQuery(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='Session'",
-        );
-        if (sessionTable.isNotEmpty) {
-          final sessions = await source.query('Session');
-          for (final session in sessions) {
-            final user = await txn.query(
-              'Users',
-              columns: ['user_id'],
-              where: 'user_id = ?',
-              whereArgs: [session['user_id']],
-              limit: 1,
-            );
-            if (user.isEmpty) continue;
+          // An existing account may have logged out after an earlier import.
+          if (legacySession != null &&
+              legacySession['user_id'] == user['user_id'] &&
+              user['is_active'] == 1) {
             await txn.insert(
-              'Session', session,
-              conflictAlgorithm: ConflictAlgorithm.replace,
+              'Session',
+              legacySession,
+              conflictAlgorithm: ConflictAlgorithm.ignore,
             );
           }
         }
-      });
-    } finally {
-      await source.close();
-    }
+        await txn.insert('account_migrations', {'name': migration});
+      } finally {
+        await source.close();
+      }
+    });
   }
 
   static Future<String> _hash(String password, {List<int>? salt}) async {
@@ -233,30 +256,38 @@ class AccountRepository {
     }
     if (mismatch != 0) return null;
     final user = _user(rows.single);
+    final expiresAt = DateTime.now()
+        .add(const Duration(days: 30))
+        .millisecondsSinceEpoch;
     await database.insert('Session', {
       'id': 1,
       'user_id': user.id,
-      'expires_at': DateTime.now()
-          .add(const Duration(days: 30))
-          .millisecondsSinceEpoch,
+      'expires_at': expiresAt,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+    _sessionExpiresAt = expiresAt;
     return user;
   }
 
   Future<AppUser?> restoreSession() async {
-    final rows = await database.rawQuery(
-      '''
-      SELECT u.* FROM Users u JOIN Session s ON s.user_id = u.user_id
-      WHERE s.id = 1 AND s.expires_at > ? AND u.is_active = 1
-    ''',
-      [DateTime.now().millisecondsSinceEpoch],
-    );
-    if (rows.isNotEmpty) return _user(rows.single);
-    await logout();
-    return null;
+    final row = await database.transaction((txn) async {
+      final rows = await txn.rawQuery(
+        '''
+        SELECT u.*, s.expires_at FROM Users u JOIN Session s ON s.user_id = u.user_id
+        WHERE s.id = 1 AND s.expires_at > ? AND u.is_active = 1
+        ''',
+        [DateTime.now().millisecondsSinceEpoch],
+      );
+      if (rows.isEmpty) await txn.delete('Session');
+      return rows.firstOrNull;
+    });
+    _sessionExpiresAt = row?['expires_at'] as int?;
+    return row == null ? null : _user(row);
   }
 
-  Future<void> logout() => database.delete('Session').then((_) {});
+  Future<void> logout() async {
+    await database.delete('Session');
+    _sessionExpiresAt = null;
+  }
 
   Future<void> register(AppUser user) async {
     if (!{'customer', 'owner'}.contains(user.role)) {

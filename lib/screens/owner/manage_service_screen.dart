@@ -1,21 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../data/mock_store.dart';
 import '../../data/venue_repository.dart';
 import '../../models/service.dart';
-
-const _kGreen = Color(0xFF118C5F);
-const _kGreenDark = Color(0xFF0A6B49);
-const _kRed = Color(0xFFEF4444);
-const _kBackground = Color(0xFFF5F7FB);
-const _kInk = Color(0xFF10231B);
-const _kMuted = Color(0xFF64748B);
-const _kPlaceholder = Color(0xFFEFF4F0);
-const _kFieldBorder = Color(0xFFA7EBD0);
+import '../../utils/app_theme.dart';
 
 const _quickUnits = ['chai', 'bộ', 'giờ', 'lần'];
 
-/// 30000 -> "30.000"
+// 30000 -> "30.000"
 String _formatMoney(num value) {
   final digits = value.round().toString();
   final buffer = StringBuffer();
@@ -26,7 +17,7 @@ String _formatMoney(num value) {
   return buffer.toString();
 }
 
-/// Tự thêm dấu chấm ngăn cách hàng nghìn khi nhập giá.
+// Tự thêm dấu chấm ngăn cách hàng nghìn khi nhập giá.
 class _ThousandsFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -66,35 +57,60 @@ class ManageServiceScreen extends StatefulWidget {
 }
 
 class _ManageServiceScreenState extends State<ManageServiceScreen> {
-  List<VenueService> get _services =>
-      MockStore.servicesByVenue[widget.venueId] ?? [];
+  // Toàn bộ dữ liệu đến từ SQLite (bảng venues, venue_services).
+  List<VenueService> _services = const [];
+  String? _venueName;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServices();
+  }
+
+  Future<void> _loadServices() async {
+    try {
+      final services = await VenueRepository.loadServicesFor(widget.venueId);
+      final venueName = await VenueRepository.venueNameFor(widget.venueId);
+      if (!mounted) return;
+      setState(() {
+        _services = services;
+        _venueName = venueName;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải danh sách dịch vụ. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _loadServices();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final venue = MockStore.venueById(widget.venueId);
     final services = _services;
-
     return Scaffold(
-      backgroundColor: _kBackground,
       appBar: AppBar(
-        backgroundColor: _kGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-        ),
         title: Text(
-          venue == null
+          _venueName == null
               ? 'Quản lý dịch vụ kèm theo'
-              : 'Dịch vụ - ${venue.name}',
+              : 'Dịch vụ - $_venueName',
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _editService(),
-        backgroundColor: _kGreen,
+        onPressed: _isLoading || _error != null ? null : () => _editService(),
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -104,29 +120,62 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      body: services.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _buildError(_error!)
+          : services.isEmpty
           ? _buildEmpty()
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-              itemCount: services.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 0),
-                    child: Text(
-                      '${services.length} dịch vụ',
-                      style: const TextStyle(
-                        color: _kGreenDark,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+          : RefreshIndicator(
+              onRefresh: _loadServices,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                itemCount: services.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, i) {
+                  if (i == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 0),
+                      child: Text(
+                        '${services.length} dịch vụ',
+                        style: const TextStyle(
+                          color: AppTheme.primaryDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  );
-                }
-                return _buildServiceCard(services[i - 1]);
-              },
+                    );
+                  }
+                  return _buildServiceCard(services[i - 1]);
+                },
+              ),
             ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(140, 48)),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -141,13 +190,13 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: _kPlaceholder,
+                color: AppTheme.primaryLight,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: const Icon(
                 Icons.room_service_outlined,
                 size: 40,
-                color: _kGreen,
+                color: AppTheme.primary,
               ),
             ),
             const SizedBox(height: 16),
@@ -156,14 +205,14 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: _kInk,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             const Text(
               'Nhấn "Thêm dịch vụ" để tạo dịch vụ kèm theo cho sân.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _kMuted),
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -172,73 +221,72 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
   }
 
   Widget _buildServiceCard(VenueService service) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: _kPlaceholder,
-              borderRadius: BorderRadius.circular(16),
+    return Card(
+      key: ValueKey(service.id),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryLight,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                _iconForUnit(service.unit),
+                color: AppTheme.primary.withValues(alpha: 0.6),
+                size: 30,
+              ),
             ),
-            child: Icon(
-              _iconForUnit(service.unit),
-              color: _kGreen.withValues(alpha: 0.6),
-              size: 30,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  service.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _kInk,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${_formatMoney(service.price)} đ / ${service.unit}',
-                  style: const TextStyle(
-                    color: _kGreen,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _SmallButton(
-                      label: 'Sửa',
-                      color: _kGreen,
-                      onPressed: () => _editService(service: service),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
                     ),
-                    const SizedBox(width: 8),
-                    _SmallButton(
-                      label: 'Xóa',
-                      color: _kRed,
-                      onPressed: () => _deleteService(service),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_formatMoney(service.price)} đ / ${service.unit}',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _SmallButton(
+                        label: 'Sửa',
+                        color: AppTheme.primary,
+                        onPressed: () => _editService(service: service),
+                      ),
+                      const SizedBox(width: 8),
+                      _SmallButton(
+                        label: 'Xóa',
+                        color: AppTheme.error,
+                        onPressed: () => _deleteService(service),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -249,27 +297,16 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     String? suffix,
     String? errorText,
   }) {
-    OutlineInputBorder border(Color color, [double width = 1]) =>
-        OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: color, width: width),
-        );
-
     return InputDecoration(
       labelText: label,
       hintText: hint,
       suffixText: suffix,
       errorText: errorText,
-      errorBorder: border(_kRed),
-      focusedErrorBorder: border(_kRed, 1.6),
-      filled: true,
-      fillColor: Colors.white,
-      labelStyle: const TextStyle(color: _kMuted),
-      hintStyle: const TextStyle(color: _kMuted),
-      suffixStyle: const TextStyle(color: _kMuted, fontSize: 16),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      enabledBorder: border(_kFieldBorder),
-      focusedBorder: border(_kGreen, 1.6),
+      suffixStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppTheme.error, width: 1.6),
+      ),
     );
   }
 
@@ -292,7 +329,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: _kBackground,
+              backgroundColor: AppTheme.background,
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
@@ -303,7 +340,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               title: Text(
                 service == null ? 'Thêm dịch vụ' : 'Sửa dịch vụ',
                 style: const TextStyle(
-                  color: _kInk,
+                  color: AppTheme.textPrimary,
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
@@ -360,7 +397,10 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     const SizedBox(height: 16),
                     const Text(
                       'Chọn nhanh đơn vị',
-                      style: TextStyle(color: _kMuted, fontSize: 14),
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -372,10 +412,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                             label: Text(u),
                             selected: unitController.text.trim() == u,
                             showCheckmark: false,
-                            backgroundColor: Colors.white,
-                            selectedColor: _kGreen,
-                            side: BorderSide.none,
-                            shape: const StadiumBorder(),
+                            selectedColor: AppTheme.primary,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
                               vertical: 6,
@@ -384,7 +421,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                               fontWeight: FontWeight.w700,
                               color: unitController.text.trim() == u
                                   ? Colors.white
-                                  : _kMuted,
+                                  : AppTheme.textSecondary,
                             ),
                             onSelected: (_) => setDialogState(() {
                               unitController.text = u;
@@ -402,7 +439,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     Expanded(
                       child: _DialogButton(
                         label: 'Hủy',
-                        color: _kRed,
+                        color: AppTheme.error,
                         onPressed: () => Navigator.pop(dialogContext, false),
                       ),
                     ),
@@ -410,7 +447,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     Expanded(
                       child: _DialogButton(
                         label: service == null ? 'Thêm' : 'Lưu',
-                        color: _kGreen,
+                        color: AppTheme.primary,
                         onPressed: () {
                           final name = nameController.text.trim();
                           final price = double.tryParse(
@@ -468,7 +505,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       priceText.replaceAll('.', '').replaceAll(',', ''),
     );
 
-    final updatedService = VenueService(
+    final saved = VenueService(
       id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
       venueId: widget.venueId,
       name: name,
@@ -477,33 +514,36 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     );
 
     try {
-      await VenueRepository.saveService(updatedService);
-
-      if (!mounted) return;
-
-      setState(() {});
-
-      _showSnack(
-        service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
-        success: true,
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      _showSnack('Không thể lưu dịch vụ: $e', success: false);
+      await VenueRepository.saveService(saved);
+      await _loadServices();
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể lưu dịch vụ. Vui lòng thử lại.', success: false);
+      }
+      return;
     }
+
+    if (!mounted) return;
+    _showSnack(
+      service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
+      success: true,
+    );
+
   }
 
   Future<void> _deleteService(VenueService service) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: _kBackground,
+        backgroundColor: AppTheme.background,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
           'Xóa dịch vụ',
-          style: TextStyle(color: _kInk, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         content: Text('Bạn có chắc muốn xóa "${service.name}"?'),
         actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -513,7 +553,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               Expanded(
                 child: _DialogButton(
                   label: 'Hủy',
-                  color: _kMuted,
+                  color: AppTheme.textSecondary,
                   onPressed: () => Navigator.pop(dialogContext, false),
                 ),
               ),
@@ -521,7 +561,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               Expanded(
                 child: _DialogButton(
                   label: 'Xóa',
-                  color: _kRed,
+                  color: AppTheme.error,
                   onPressed: () => Navigator.pop(dialogContext, true),
                 ),
               ),
@@ -535,31 +575,25 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
 
     try {
       await VenueRepository.deleteService(service.id);
-
-      if (!mounted) return;
-
-      setState(() {});
-
-      _showSnack('Đã xóa "${service.name}".', success: true);
-    } on StateError catch (e) {
-      if (!mounted) return;
-
-      _showSnack(e.message.toString(), success: false);
-    } catch (e) {
-      if (!mounted) return;
-
-      _showSnack('Không thể xóa dịch vụ: $e', success: false);
+      await _loadServices();
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể xóa dịch vụ. Vui lòng thử lại.', success: false);
+      }
+      return;
     }
+
+    if (!mounted) return;
+    _showSnack('Đã xóa "${service.name}".', success: true);
   }
 
-  /// success = true: nền xanh + icon check; false: nền đỏ + icon cancel.
   void _showSnack(String message, {required bool success}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: success ? _kGreen : _kRed,
+          backgroundColor: success ? AppTheme.success : AppTheme.error,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -587,7 +621,6 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
   }
 }
 
-/// Nút nhỏ (Sửa / Xóa) trên thẻ dịch vụ.
 class _SmallButton extends StatelessWidget {
   final String label;
   final Color color;
@@ -605,11 +638,9 @@ class _SmallButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
         minimumSize: const Size(54, 34),
         padding: const EdgeInsets.symmetric(horizontal: 18),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
       ),
       child: Text(label),
@@ -617,7 +648,6 @@ class _SmallButton extends StatelessWidget {
   }
 }
 
-/// Nút lớn trong dialog (Hủy / Thêm / Lưu).
 class _DialogButton extends StatelessWidget {
   final String label;
   final Color color;
@@ -635,9 +665,7 @@ class _DialogButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       ),
       child: Text(label),

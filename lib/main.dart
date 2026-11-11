@@ -58,9 +58,38 @@ class _AccountBootstrapState extends State<_AccountBootstrap> {
   );
 }
 
-class SportFieldBookingApp extends StatelessWidget {
+class SportFieldBookingApp extends StatefulWidget {
   const SportFieldBookingApp({super.key, this.restoreSession = false});
   final bool restoreSession;
+
+  @override
+  State<SportFieldBookingApp> createState() => _SportFieldBookingAppState();
+}
+
+class _SportFieldBookingAppState extends State<SportFieldBookingApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (AccountService.expireSessionIfNeeded()) {
+          _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            AppRoutes.login,
+            (_) => false,
+          );
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +97,8 @@ class SportFieldBookingApp extends StatelessWidget {
       title: 'Nhom1_DatSanTheThao',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: restoreSession && MockStore.currentUser != null
+      navigatorKey: _navigatorKey,
+      initialRoute: widget.restoreSession && MockStore.currentUser != null
           ? switch (MockStore.currentUser!.role) {
               'owner' => AppRoutes.manageVenue,
               'admin' => AppRoutes.statistics,
