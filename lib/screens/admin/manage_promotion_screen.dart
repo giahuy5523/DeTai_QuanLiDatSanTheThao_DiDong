@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart';
 import '../../data/promotion_repository.dart';
 import '../../data/venue_repository.dart';
 import '../../models/promotion.dart';
@@ -144,7 +146,6 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
 
   Future<void> _openPromotionSheet({Promotion? promotion}) async {
     final isEditing = promotion != null;
-    final editingId = promotion?.id;
     final codeController = TextEditingController(text: promotion?.code ?? '');
     final discountController = TextEditingController(
       text: promotion != null
@@ -154,7 +155,6 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
     DateTime selectedDate =
         promotion?.expiryDate ?? DateTime.now().add(const Duration(days: 30));
     bool isActive = promotion?.isActive ?? true;
-    bool saving = false;
     String? errorMessage;
     ModalRoute<void>? sheetRoute;
 
@@ -171,79 +171,6 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
               if (errorMessage != null) {
                 setModalState(() => errorMessage = null);
               }
-            }
-
-            Future<void> submit() async {
-              final normalizedCode = codeController.text.trim().toUpperCase();
-              final discountVal = double.tryParse(
-                discountController.text.trim(),
-              );
-
-              if (normalizedCode.isEmpty) {
-                setModalState(() {
-                  errorMessage = 'Vui lòng nhập mã khuyến mãi.';
-                });
-                return;
-              }
-
-              if (discountVal == null ||
-                  !discountVal.isFinite ||
-                  discountVal <= 0 ||
-                  discountVal > 100) {
-                setModalState(() {
-                  errorMessage =
-                      'Mức giảm giá phải nằm trong khoảng từ 1% đến 100%.';
-                });
-                return;
-              }
-
-              setModalState(() => saving = true);
-              try {
-                // Kiểm tra trùng mã trong SQLite (không phân biệt hoa thường).
-                final isDuplicate = await PromotionRepository.codeExists(
-                  normalizedCode,
-                  excludeId: editingId,
-                );
-                if (isDuplicate) {
-                  if (!modalContext.mounted) return;
-                  setModalState(() {
-                    saving = false;
-                    errorMessage =
-                        'Mã "$normalizedCode" đã tồn tại trong hệ thống.';
-                  });
-                  return;
-                }
-
-                await PromotionRepository.save(
-                  Promotion(
-                    id:
-                        editingId ??
-                        'p${DateTime.now().microsecondsSinceEpoch}',
-                    code: normalizedCode,
-                    discountPercent: discountVal,
-                    expiryDate: selectedDate,
-                    isActive: isActive,
-                    usedCount: promotion?.usedCount ?? 0,
-                  ),
-                );
-              } catch (_) {
-                if (!modalContext.mounted) return;
-                setModalState(() {
-                  saving = false;
-                  errorMessage = 'Không thể lưu khuyến mãi. Vui lòng thử lại.';
-                });
-                return;
-              }
-
-              if (!modalContext.mounted) return;
-              Navigator.pop(modalContext);
-              await _load();
-              if (!mounted) return;
-              _showSnack(
-                isEditing
-                    ? 'Đã cập nhật mã "$normalizedCode"'
-                    : 'Đã tạo mới mã "$normalizedCode"',
-              );
             }
 
             return Container(
@@ -569,9 +496,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                           flex: 4,
                           child: ElevatedButton(
                             style: _filledButtonStyle(AppTheme.error),
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.pop(modalContext),
+                            onPressed: () => Navigator.pop(modalContext),
                             child: const Text('Hủy'),
                           ),
                         ),
@@ -580,21 +505,95 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
                           flex: 6,
                           child: ElevatedButton(
                             style: _filledButtonStyle(AppTheme.primary),
-                            onPressed: saving ? null : submit,
-                            child: saving
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    isEditing
-                                        ? 'Lưu thay đổi'
-                                        : 'Tạo khuyến mãi',
-                                  ),
+                            onPressed: () async {
+                              final normalizedCode = codeController.text
+                                  .trim()
+                                  .toUpperCase();
+                              final discountVal = double.tryParse(
+                                discountController.text.trim(),
+                              );
+
+                              if (normalizedCode.isEmpty) {
+                                setModalState(() {
+                                  errorMessage = 'Vui lòng nhập mã khuyến mãi.';
+                                });
+                                return;
+                              }
+
+                              if (discountVal == null ||
+                                  !discountVal.isFinite ||
+                                  discountVal <= 0 ||
+                                  discountVal > 100) {
+                                setModalState(() {
+                                  errorMessage =
+                                      'Mức giảm giá phải nằm trong khoảng từ 1% đến 100%.';
+                                });
+                                return;
+                              }
+
+                              final isDuplicate = MockStore.promotions.any(
+                                (p) =>
+                                    p.code.toUpperCase() == normalizedCode &&
+                                    (!isEditing || p.id != promotion.id),
+                              );
+                              if (isDuplicate) {
+                                setModalState(() {
+                                  errorMessage =
+                                      'Mã "$normalizedCode" đã tồn tại trong hệ thống.';
+                                });
+                                return;
+                              }
+
+                              bool success = false;
+                              if (isEditing) {
+                                final updatedPromo = Promotion(
+                                  id: promotion.id,
+                                  code: normalizedCode,
+                                  discountPercent: discountVal,
+                                  expiryDate: selectedDate,
+                                  isActive: isActive,
+                                  usedCount: promotion.usedCount,
+                                  usageHistory: promotion.usageHistory,
+                                );
+                                success =
+                                    await BookingRepository.updatePromotion(
+                                      updatedPromo,
+                                    );
+                              } else {
+                                final newPromo = Promotion(
+                                  id: 'p${DateTime.now().millisecondsSinceEpoch}',
+                                  code: normalizedCode,
+                                  discountPercent: discountVal,
+                                  expiryDate: selectedDate,
+                                  isActive: isActive,
+                                );
+                                success =
+                                    await BookingRepository.createPromotion(
+                                      newPromo,
+                                    );
+                              }
+
+                              if (!success) {
+                                setModalState(() {
+                                  errorMessage =
+                                      'Không thể lưu mã khuyến mãi. Vui lòng kiểm tra lại.';
+                                });
+                                return;
+                              }
+
+                              if (!mounted || !modalContext.mounted) return;
+                              Navigator.pop(modalContext);
+                              await _load();
+                              if (!mounted) return;
+                              _showSnack(
+                                isEditing
+                                    ? 'Đã cập nhật mã "$normalizedCode"'
+                                    : 'Đã tạo mới mã "$normalizedCode"',
+                              );
+                            },
+                            child: Text(
+                              isEditing ? 'Lưu thay đổi' : 'Tạo khuyến mãi',
+                            ),
                           ),
                         ),
                       ],
@@ -694,21 +693,21 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
       ),
     );
 
-    if (confirmed != true || !mounted || _busy) return;
+    if (confirmed != true) return;
 
     setState(() => _busy = true);
-    try {
-      await PromotionRepository.delete(promotion.id);
-    } catch (_) {
-      if (!mounted) return;
+    final success = await BookingRepository.deletePromotion(promotion.id);
+    if (!mounted) return;
+
+    if (!success) {
       setState(() => _busy = false);
       _showError('Không thể xóa mã "${promotion.code}". Vui lòng thử lại.');
       return;
     }
-    if (!mounted) return;
-    setState(() => _busy = false);
+
     await _load();
     if (!mounted) return;
+    setState(() => _busy = false);
     _showSnack(
       'Đã xóa thành công mã "${promotion.code}"',
       color: AppTheme.error,
@@ -716,21 +715,19 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
   }
 
   Future<void> _toggleActive(Promotion p, bool value) async {
-    if (_busy) return;
     setState(() => _busy = true);
-    try {
-      await PromotionRepository.setActive(p.id, value);
-    } catch (_) {
-      if (!mounted) return;
+    final success = await BookingRepository.togglePromotionActive(p.id, value);
+    if (!mounted) return;
+
+    if (!success) {
       setState(() => _busy = false);
-      _showError('Không thể cập nhật mã "${p.code}". Vui lòng thử lại.');
-      await _load();
+      _showError('Không thể cập nhật trạng thái mã "${p.code}"');
       return;
     }
-    if (!mounted) return;
-    setState(() => _busy = false);
+
     await _load();
     if (!mounted) return;
+    setState(() => _busy = false);
     _showSnack(
       value ? 'Đã kích hoạt mã "${p.code}"' : 'Đã tạm dừng mã "${p.code}"',
     );

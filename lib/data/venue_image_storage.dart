@@ -20,18 +20,22 @@ class VenueImageStorage {
     final directory = Directory(p.join(root.path, 'venue_images'));
     await directory.create(recursive: true);
     final sourceFile = File(source);
-    if (p.equals(p.normalize(sourceFile.absolute.path),
-        p.normalize(directory.absolute.path)) ||
+    if (p.equals(
+          p.normalize(sourceFile.absolute.path),
+          p.normalize(directory.absolute.path),
+        ) ||
         p.isWithin(directory.absolute.path, sourceFile.absolute.path)) {
       return source;
     }
     if (!await sourceFile.exists()) return source;
 
     final extension = p.extension(sourceFile.path);
-    final destination = File(p.join(
-      directory.path,
-      'venue_${DateTime.now().microsecondsSinceEpoch}_${_sequence++}$extension',
-    ));
+    final destination = File(
+      p.join(
+        directory.path,
+        'venue_${DateTime.now().microsecondsSinceEpoch}_${_sequence++}$extension',
+      ),
+    );
     return (await sourceFile.copy(destination.path)).path;
   }
 }

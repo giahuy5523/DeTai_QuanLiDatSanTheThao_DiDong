@@ -11,6 +11,7 @@ class VenueBookingEntry {
     this.promotionCode,
     this.customerName,
     this.customerPhone,
+    this.services = const [],
   });
 
   final String id;
@@ -22,4 +23,22 @@ class VenueBookingEntry {
   final String? promotionCode;
   final String? customerName;
   final String? customerPhone;
+
+  // Dịch vụ kèm theo khách đã chọn (rỗng nếu khách không chọn dịch vụ nào).
+  final List<VenueBookingServiceItem> services;
+}
+
+// Một dịch vụ khách chọn kèm lịch đặt (từ bảng booking_services).
+class VenueBookingServiceItem {
+  const VenueBookingServiceItem({
+    required this.name,
+    required this.quantity,
+    required this.unitPrice,
+    required this.subtotal,
+  });
+
+  final String name;
+  final int quantity;
+  final double unitPrice;
+  final double subtotal;
 }

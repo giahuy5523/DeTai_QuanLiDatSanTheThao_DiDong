@@ -56,6 +56,9 @@ class BookingConfirmationScreen extends StatelessWidget {
     final serviceIds = List<String>.from(
       args['serviceIds'] as List<dynamic>? ?? const [],
     );
+    final serviceQuantities = Map<String, int>.from(
+      args['serviceQuantities'] as Map? ?? const <String, int>{},
+    );
 
     final courtPrice =
         (args['courtPrice'] as num?)?.toDouble() ?? venue.pricePerHour;
@@ -95,6 +98,7 @@ class BookingConfirmationScreen extends StatelessWidget {
             startTime: startTime,
             endTime: endTime,
             selectedServices: selectedServices,
+            serviceQuantities: serviceQuantities,
             promoCode: promoCode,
             discount: discount,
           ),
@@ -117,6 +121,7 @@ class BookingConfirmationScreen extends StatelessWidget {
         startTime: startTime,
         endTime: endTime,
         serviceIds: serviceIds,
+        serviceQuantities: serviceQuantities,
         courtPrice: courtPrice,
         serviceTotal: serviceTotal,
         discount: discount,
@@ -356,6 +361,7 @@ class BookingConfirmationScreen extends StatelessWidget {
     required String startTime,
     required String endTime,
     required List selectedServices,
+    required Map<String, int> serviceQuantities,
     required String? promoCode,
     required double discount,
   }) {
@@ -435,7 +441,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 6),
                               child: Text(
-                                '${s.name} • ${s.price.toStringAsFixed(0)} đ/${s.unit}',
+                                '${s.name} ×${serviceQuantities[s.id] ?? 0} • ${s.price.toStringAsFixed(0)} đ/${s.unit}',
                                 textAlign: TextAlign.end,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
@@ -644,6 +650,7 @@ class BookingConfirmationScreen extends StatelessWidget {
     required String startTime,
     required String endTime,
     required List<String> serviceIds,
+    required Map<String, int> serviceQuantities,
     required double courtPrice,
     required double serviceTotal,
     required double discount,
@@ -689,6 +696,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                     'endTime': endTime,
                     'time': startTime,
                     'serviceIds': serviceIds,
+                    'serviceQuantities': serviceQuantities,
                     'courtPrice': courtPrice,
                     'serviceTotal': serviceTotal,
                     'discount': discount,

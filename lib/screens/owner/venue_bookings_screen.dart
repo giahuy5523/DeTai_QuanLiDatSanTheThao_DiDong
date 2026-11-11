@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart';
 import '../../data/venue_repository.dart';
 import '../../models/venue_booking_entry.dart';
 import '../../utils/app_theme.dart';
@@ -347,7 +348,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     final customerPhone = booking.customerPhone ?? 'Không có số điện thoại';
 
     return Container(
-      key: ValueKey(booking.id),
+      key: ValueKey('owner-booking-${booking.id}'),
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -419,6 +420,12 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
           ),
           const SizedBox(height: 14),
 
+          // Dịch vụ khách đã chọn (nếu có)
+          if (booking.services.isNotEmpty) ...[
+            _buildServicesSection(booking.services),
+            const SizedBox(height: 14),
+          ],
+
           // Tổng tiền
           Row(
             children: [
@@ -473,6 +480,56 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
 
           // Nút thao tác
           ..._buildActions(booking),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServicesSection(List<VenueBookingServiceItem> services) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Dịch vụ đã chọn',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final service in services)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${service.name} × ${service.quantity}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _formatMoney(service.subtotal),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -641,58 +698,49 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     VenueBookingEntry booking,
     String newStatus,
   ) async {
-    if (_updating) return;
-    final user = MockStore.currentUser;
-    if (user == null || user.role != 'owner') {
-      _showSnack('Chỉ chủ sân được cập nhật lịch đặt.', success: false);
-      return;
-    }
+    if (_updating) return; // chặn bấm đúp
+
+    final ownerId = MockStore.currentUser?.id;
+    if (ownerId == null || MockStore.currentUser?.role != 'owner') return;
 
     setState(() => _updating = true);
-    var updated = false;
     try {
-      // Kiểm tra quyền sở hữu sân và trạng thái hợp lệ được làm ngay trong SQL.
-      updated = await VenueRepository.updateBookingStatus(
-        bookingId: booking.id,
-        ownerId: user.id,
-        newStatus: newStatus,
-        cancelReason: newStatus == 'cancelled' ? 'Chủ sân hủy lịch đặt' : null,
+      bool success = false;
+      if (newStatus == 'cancelled') {
+        success = await BookingRepository.cancelBooking(
+          booking.id,
+          cancelReason: 'Chủ sân hủy lịch đặt',
+        );
+      } else if (newStatus == 'confirmed' || newStatus == 'completed') {
+        success = await BookingRepository.updateBookingStatusByOwner(
+          bookingId: booking.id,
+          newStatus: newStatus,
+          ownerId: ownerId,
+        );
+      }
+
+      if (!mounted) return;
+
+      if (!success) {
+        _showSnack('Cập nhật thất bại, vui lòng thử lại.', success: false);
+        return;
+      }
+
+      await _loadBookings(); // tải lại để UI đổi trạng thái
+      if (!mounted) return;
+
+      const messages = {
+        'cancelled': 'Đã hủy lịch đặt sân.',
+        'confirmed': 'Đã xác nhận lịch đặt sân.',
+        'completed': 'Đã đánh dấu lịch đặt là hoàn thành.',
+      };
+      _showSnack(
+        messages[newStatus] ?? 'Đã cập nhật.',
+        success: newStatus != 'cancelled',
       );
-    } catch (_) {
-      if (mounted) {
-        _showSnack(
-          'Không thể cập nhật lịch đặt. Vui lòng thử lại.',
-          success: false,
-        );
-      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
     }
-
-    if (!mounted) return;
-    setState(() => _updating = false);
-    if (!updated) {
-      // Có thể trạng thái đã đổi ở nơi khác: tải lại để hiển thị đúng.
-      await _loadBookings();
-      if (mounted) {
-        _showSnack(
-          'Không thể cập nhật lịch đặt này. Vui lòng kiểm tra lại.',
-          success: false,
-        );
-      }
-      return;
-    }
-
-    await _loadBookings();
-    if (!mounted) return;
-
-    const messages = {
-      'cancelled': 'Đã hủy lịch đặt sân.',
-      'confirmed': 'Đã xác nhận lịch đặt sân.',
-      'completed': 'Đã đánh dấu lịch đặt là hoàn thành.',
-    };
-    _showSnack(
-      messages[newStatus] ?? 'Đã cập nhật.',
-      success: newStatus != 'cancelled',
-    );
   }
 
   void _showSnack(String message, {required bool success}) {

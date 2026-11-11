@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/booking_repository.dart';
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:sportfield_booking/models/booking.dart';
+import 'package:sportfield_booking/models/app_notification.dart';
 import 'package:sportfield_booking/models/promotion.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
@@ -32,10 +35,33 @@ Future<void> openRoute(
 }
 
 void main() {
+  setUpAll(() {
+    BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
+  });
+
+  tearDownAll(() {
+    BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
+  });
   final venues = List.of(MockStore.venues);
   final bookings = List.of(MockStore.bookings);
   final payments = List.of(MockStore.payments);
+  final notifications = List.of(MockStore.notifications);
   final promotions = List.of(MockStore.promotions);
+  final promotionUsageHistory = {
+    for (final promotion in MockStore.promotions)
+      promotion.id: promotion.usageHistory
+          .map(
+            (usage) => PromotionUsage(
+              promotionId: usage.promotionId,
+              userId: usage.userId,
+              bookingId: usage.bookingId,
+              isReversed: usage.isReversed,
+            ),
+          )
+          .toList(),
+  };
   final services = {
     for (final entry in MockStore.servicesByVenue.entries)
       entry.key: List.of(entry.value),
@@ -52,9 +78,17 @@ void main() {
     MockStore.payments
       ..clear()
       ..addAll(payments);
+    MockStore.notifications
+      ..clear()
+      ..addAll(notifications);
     MockStore.promotions
       ..clear()
       ..addAll(promotions);
+    for (final promotion in MockStore.promotions) {
+      promotion.usageHistory
+        ..clear()
+        ..addAll(promotionUsageHistory[promotion.id] ?? const []);
+    }
     MockStore.servicesByVenue
       ..clear()
       ..addAll({
@@ -319,6 +353,140 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Owner completing a booking preserves payment and service details',
+    (tester) async {
+      final booking = Booking(
+        id: 'owner-complete-preserve-${DateTime.now().microsecondsSinceEpoch}',
+        venueId: venue.id,
+        userId: 'customer1',
+        date: DateTime.now().add(const Duration(days: 1)),
+        startTime: '16:00',
+        endTime: '17:00',
+        originalAmount: venue.pricePerHour,
+        serviceAmount: 60000,
+        totalPrice: venue.pricePerHour + 60000,
+        serviceItems: [
+          BookingServiceItem(serviceId: 's1', quantity: 2, unitPrice: 30000),
+        ],
+      );
+      expect(MockStore.confirmBooking(booking, 'cash'), isTrue);
+      final originalPaymentId = booking.paymentId;
+
+      await openRoute(tester, AppRoutes.manageVenue, role: 'owner');
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byKey(ValueKey(venue.id)),
+              matching: find.text('Lịch đặt'),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      final bookingRow = find.byKey(ValueKey('owner-booking-${booking.id}'));
+      final completeButton = find.descendant(
+        of: bookingRow,
+        matching: find.text('Hoàn thành'),
+      );
+      await tester.ensureVisible(completeButton);
+      await tester.pumpAndSettle();
+      await tester.tap(completeButton);
+      await tester.pumpAndSettle();
+
+      expect(booking.status, 'completed');
+      expect(booking.paymentStatus, 'unpaid');
+      expect(booking.paymentId, originalPaymentId);
+      expect(booking.originalAmount, venue.pricePerHour);
+      expect(booking.serviceAmount, 60000);
+      expect(booking.totalPrice, venue.pricePerHour + 60000);
+      expect(booking.serviceItems.single.quantity, 2);
+      expect(MockStore.paymentOfBooking(booking.id)?['status'], 'pending');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Owner cancellation refunds payment and restores promo use', (
+    tester,
+  ) async {
+    final promo = MockStore.promotions.firstWhere(
+      (item) => item.code == 'SAN10',
+    );
+    final originalUseCount = promo.usedCount;
+    addTearDown(() => promo.usedCount = originalUseCount);
+    final subtotal = venue.pricePerHour + 30000;
+    final discount = subtotal * promo.discountPercent / 100;
+    final booking = Booking(
+      id: 'owner-cancel-refund-${DateTime.now().microsecondsSinceEpoch}',
+      venueId: venue.id,
+      userId: 'customer1',
+      date: DateTime.now().add(const Duration(days: 1)),
+      startTime: '16:00',
+      endTime: '17:00',
+      originalAmount: venue.pricePerHour,
+      serviceAmount: 30000,
+      discountAmount: discount,
+      totalPrice: subtotal - discount,
+      promoId: promo.id,
+      promotionCode: promo.code,
+      serviceItems: [
+        BookingServiceItem(serviceId: 's1', quantity: 1, unitPrice: 30000),
+      ],
+    );
+    expect(MockStore.confirmBooking(booking, 'momo'), isTrue);
+    expect(promo.usedCount, originalUseCount + 1);
+
+    await openRoute(tester, AppRoutes.manageVenue, role: 'owner');
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byKey(ValueKey(venue.id)),
+            matching: find.text('Lịch đặt'),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    final bookingRow = find.byKey(ValueKey('owner-booking-${booking.id}'));
+    final cancelButton = find.descendant(
+      of: bookingRow,
+      matching: find.text('Hủy đặt'),
+    );
+    await tester.ensureVisible(cancelButton);
+    await tester.pumpAndSettle();
+    await tester.tap(cancelButton);
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Đồng ý'));
+
+    expect(booking.status, 'cancelled');
+    expect(booking.paymentStatus, 'paid');
+    expect(booking.cancelReason, 'Chủ sân hủy lịch đặt');
+    expect(MockStore.paymentOfBooking(booking.id)?['status'], 'success');
+    expect(
+      MockStore.paymentOfBooking(booking.id)?['refundStatus'],
+      'processing',
+    );
+    expect(
+      MockStore.notifications
+          .where((item) => item.bookingId == booking.id)
+          .map((item) => item.type),
+      [
+        AppNotificationType.bookingCancelled,
+        AppNotificationType.refundProcessing,
+      ],
+    );
+    expect(MockStore.completeRefund(booking.id), isTrue);
+    expect(booking.paymentStatus, 'refunded');
+    expect(MockStore.paymentOfBooking(booking.id)?['status'], 'refunded');
+    expect(
+      MockStore.notifications
+          .where((item) => item.bookingId == booking.id)
+          .last
+          .type,
+      AppNotificationType.refundSucceeded,
+    );
+    expect(promo.usedCount, originalUseCount);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final (route, args, message) in [
     (AppRoutes.customerShell, 10, 'Tab không hợp lệ.'),
     (
@@ -327,8 +495,34 @@ void main() {
       'Thông tin thanh toán không hợp lệ.',
     ),
     (
+      AppRoutes.bookingConfirmation,
+      Booking(
+        id: 'booking-route-arg',
+        venueId: venue.id,
+        userId: 'customer1',
+        date: future,
+        startTime: '18:00',
+        endTime: '19:00',
+        totalPrice: 300000,
+      ),
+      'Thông tin thanh toán không hợp lệ.',
+    ),
+    (
       AppRoutes.payment,
       {'venue': venue, 'date': future, 'time': '18:00', 'total': double.nan},
+      'Thông tin thanh toán không hợp lệ.',
+    ),
+    (
+      AppRoutes.payment,
+      Booking(
+        id: 'payment-route-arg',
+        venueId: venue.id,
+        userId: 'customer1',
+        date: future,
+        startTime: '18:00',
+        endTime: '19:00',
+        totalPrice: 300000,
+      ),
       'Thông tin thanh toán không hợp lệ.',
     ),
   ]) {
@@ -438,6 +632,71 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final isCashPayment in [true, false]) {
+    testWidgets(
+      'Payment result shows ${isCashPayment ? 'cash pending' : 'online success'} status',
+      (tester) async {
+        final testDate = DateTime.now().add(const Duration(days: 10));
+        await openRoute(
+          tester,
+          AppRoutes.payment,
+          args: <String, dynamic>{
+            'venue': venue,
+            'date': testDate,
+            'startTime': '20:00',
+            'endTime': '21:00',
+            'courtPrice': venue.pricePerHour,
+            'serviceIds': <String>[],
+            'serviceQuantities': <String, int>{},
+            'serviceTotal': 0.0,
+            'discount': 0.0,
+            'discountAmount': 0.0,
+            'total': venue.pricePerHour,
+          },
+        );
+
+        if (isCashPayment) {
+          await tapVisible(tester, find.text('Tiền mặt'));
+        }
+        final agreement = find.byType(CheckboxListTile);
+        await tester.scrollUntilVisible(
+          agreement,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.drag(find.byType(ListView).first, const Offset(0, -220));
+        await tester.pumpAndSettle();
+        await tester.tap(agreement);
+        await tester.pumpAndSettle();
+        await press(tester, 'Xác nhận thanh toán');
+
+        expect(
+          find.text(
+            isCashPayment
+                ? 'Đặt sân đã được xác nhận'
+                : 'Thanh toán thành công',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Bạn sẽ thanh toán tiền mặt tại sân.'),
+          isCashPayment ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.text(isCashPayment ? 'pending / unpaid' : 'success / confirmed'),
+          findsOneWidget,
+        );
+
+        final booking = MockStore.bookings.last;
+        final payment = MockStore.paymentOfBooking(booking.id)!;
+        expect(booking.status, 'confirmed');
+        expect(booking.paymentStatus, isCashPayment ? 'unpaid' : 'paid');
+        expect(payment['status'], isCashPayment ? 'pending' : 'success');
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('Detail booking confirmation and payment fit 360 pixel screen', (
     tester,

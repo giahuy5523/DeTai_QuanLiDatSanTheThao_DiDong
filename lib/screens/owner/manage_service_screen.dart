@@ -102,10 +102,13 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     final services = _services;
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
         title: Text(
           _venueName == null
               ? 'Quản lý dịch vụ kèm theo'
               : 'Dịch vụ - $_venueName',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -329,6 +332,10 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
               backgroundColor: AppTheme.background,
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
@@ -403,31 +410,39 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Row(
                       children: [
-                        for (final u in _quickUnits)
-                          ChoiceChip(
-                            label: Text(u),
-                            selected: unitController.text.trim() == u,
-                            showCheckmark: false,
-                            selectedColor: AppTheme.primary,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
+                        for (var i = 0; i < _quickUnits.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: SizedBox(
+                                width: double.infinity,
+                                child: Text(
+                                  _quickUnits[i],
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              selected:
+                                  unitController.text.trim() == _quickUnits[i],
+                              showCheckmark: false,
+                              selectedColor: AppTheme.primary,
+                              labelPadding: EdgeInsets.zero,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              labelStyle: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    unitController.text.trim() == _quickUnits[i]
+                                    ? Colors.white
+                                    : AppTheme.textSecondary,
+                              ),
+                              onSelected: (_) => setDialogState(() {
+                                unitController.text = _quickUnits[i];
+                                unitError = null;
+                              }),
                             ),
-                            labelStyle: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: unitController.text.trim() == u
-                                  ? Colors.white
-                                  : AppTheme.textSecondary,
-                            ),
-                            onSelected: (_) => setDialogState(() {
-                              unitController.text = u;
-                              unitError = null;
-                            }),
                           ),
+                        ],
                       ],
                     ),
                   ],
@@ -505,7 +520,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       priceText.replaceAll('.', '').replaceAll(',', ''),
     );
 
-    final saved = VenueService(
+    final updatedService = VenueService(
       id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
       venueId: widget.venueId,
       name: name,
@@ -514,20 +529,22 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     );
 
     try {
-      await VenueRepository.saveService(saved);
-      await _loadServices();
-    } catch (_) {
-      if (mounted) {
-        _showSnack('Không thể lưu dịch vụ. Vui lòng thử lại.', success: false);
-      }
-      return;
-    }
+      await VenueRepository.saveService(updatedService);
 
-    if (!mounted) return;
-    _showSnack(
-      service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
-      success: true,
-    );
+      if (!mounted) return;
+
+      await _loadServices();
+      if (!mounted) return;
+
+      _showSnack(
+        service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
+        success: true,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showSnack('Không thể lưu dịch vụ: $e', success: false);
+    }
   }
 
   Future<void> _deleteService(VenueService service) async {
@@ -573,25 +590,23 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      final deleted = await VenueRepository.deleteService(service.id);
-      if (!mounted) return;
-      if (!deleted) {
-        _showSnack(
-          '"${service.name}" đã được dùng trong lịch đặt nên không thể xóa.',
-          success: false,
-        );
-        return;
-      }
-      await _loadServices();
-    } catch (_) {
-      if (mounted) {
-        _showSnack('Không thể xóa dịch vụ. Vui lòng thử lại.', success: false);
-      }
-      return;
-    }
+      await VenueRepository.deleteService(service.id);
 
-    if (!mounted) return;
-    _showSnack('Đã xóa "${service.name}".', success: false);
+      if (!mounted) return;
+
+      await _loadServices();
+      if (!mounted) return;
+
+      _showSnack('Đã xóa "${service.name}".', success: true);
+    } on StateError catch (e) {
+      if (!mounted) return;
+
+      _showSnack(e.message.toString(), success: false);
+    } catch (e) {
+      if (!mounted) return;
+
+      _showSnack('Không thể xóa dịch vụ: $e', success: false);
+    }
   }
 
   void _showSnack(String message, {required bool success}) {

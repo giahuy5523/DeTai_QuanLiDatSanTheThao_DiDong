@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/booking_repository.dart';
 import 'package:sportfield_booking/screens/owner/upload_venue_screen.dart';
 import 'package:sportfield_booking/screens/customer/home_screen.dart';
 import 'package:sportfield_booking/screens/customer/venue_list_screen.dart';
@@ -127,6 +128,13 @@ Future<void> pick(WidgetTester tester) async {
 }
 
 void main() {
+  setUpAll(() {
+    BookingRepository.setUseMockStoreForTesting(true);
+  });
+
+  tearDownAll(() {
+    BookingRepository.setUseMockStoreForTesting(false);
+  });
   final originalVenues = List.of(MockStore.venues);
   final originalBookings = List.of(MockStore.bookings);
   final originalPayments = List.of(MockStore.payments);
@@ -411,6 +419,7 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
       await press(tester, 'Tiếp tục');
       await press(tester, 'Chọn phương thức thanh toán');
+      expect(find.text('Tiền thuê sân'), findsOneWidget);
 
       await tapVisible(tester, find.text('Ví MoMo'));
       await tester.pumpAndSettle();

@@ -1,3 +1,17 @@
+class PromotionUsage {
+  final String promotionId;
+  final String userId;
+  final String bookingId;
+  bool isReversed;
+
+  PromotionUsage({
+    required this.promotionId,
+    required this.userId,
+    required this.bookingId,
+    this.isReversed = false,
+  });
+}
+
 class Promotion {
   final String id;
   final String code;
@@ -7,6 +21,9 @@ class Promotion {
 
   // Số lượt sử dụng mã khuyến mãi
   int usedCount;
+  final int usageLimit;
+  final int perUserLimit;
+  final List<PromotionUsage> usageHistory;
 
   Promotion({
     required this.id,
@@ -15,7 +32,10 @@ class Promotion {
     required this.expiryDate,
     this.isActive = true,
     this.usedCount = 0,
-  });
+    this.usageLimit = 0x7fffffff,
+    this.perUserLimit = 0x7fffffff,
+    List<PromotionUsage>? usageHistory,
+  }) : usageHistory = usageHistory ?? [];
 
   bool isExpiredAt(DateTime now) => !now.isBefore(
     DateTime(

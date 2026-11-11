@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../models/user.dart';
 import 'account_repository.dart';
+import 'booking_repository.dart';
 import 'mock_store.dart';
 import 'venue_repository.dart';
 import '../utils/database_helper.dart';
@@ -20,6 +21,7 @@ class AccountService {
     await AccountRepository.importLegacyAccountDatabase(appDatabase);
     await _seedBusinessData(appDatabase);
     await VenueRepository.initialize(appDatabase);
+    await BookingRepository.refreshCache();
     await _refresh();
     MockStore.currentUser = await repository!.restoreSession();
   }
@@ -115,6 +117,7 @@ class AccountService {
             'id': '${booking.id}_${item.serviceId}_$i',
             'bookingId': booking.id,
             'serviceId': item.serviceId,
+            'serviceName': item.serviceName,
             'quantity': item.quantity,
             'unitPrice': item.unitPrice,
             'subtotal': item.subtotal,
@@ -135,6 +138,12 @@ class AccountService {
           'createdAt': createdAt is DateTime
               ? createdAt.toIso8601String()
               : (createdAt?.toString() ?? DateTime.now().toIso8601String()),
+          'refundAmount': payment['refundAmount'],
+          'refundMethod': payment['refundMethod'],
+          'refundStatus': payment['refundStatus'],
+          'refundExpectedAt': payment['refundExpectedAt'] is DateTime
+              ? (payment['refundExpectedAt'] as DateTime).toIso8601String()
+              : payment['refundExpectedAt'],
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
     });
