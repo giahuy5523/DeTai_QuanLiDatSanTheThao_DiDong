@@ -7,6 +7,7 @@ import '../models/payment.dart';
 import '../models/promotion.dart';
 import '../utils/database_helper.dart';
 import 'mock_store.dart';
+import 'promotion_repository.dart';
 
 /// SQLite Repository managing persistence and transactions for Booking,
 /// Payment, PromotionUsage, and AppNotification.
@@ -14,13 +15,20 @@ class BookingRepository {
   BookingRepository._();
 
   static Database? _database;
+  /// Chỉ dùng trong test (widget test không có SQLite driver). Production
+  /// luôn đi qua SQLite: nếu database không mở được, lỗi được ném ra,
+  /// không chuyển sang MockStore.
   static bool _useMockStoreForTesting = false;
   static bool get isInitialized => _database != null;
 
-  static void setDatabaseForTesting(Database? db) => _database = db;
+  static void setDatabaseForTesting(Database? db) {
+    _database = db;
+    PromotionRepository.setDatabaseForTesting(db);
+  }
 
   static void setUseMockStoreForTesting(bool enabled) {
     _useMockStoreForTesting = enabled;
+    PromotionRepository.setUseMockStoreForTesting(enabled);
   }
 
   static Future<Database?> get _db async {
@@ -29,6 +37,22 @@ class BookingRepository {
 
     _database = await DatabaseHelper().database;
     return _database;
+  }
+
+  /// Chạy một transaction SQLite. Các thao tác ghi vào cache MockStore được
+  /// xếp vào `afterCommit` và chỉ chạy SAU khi transaction commit thành công,
+  /// nên rollback không làm MockStore đi trước database.
+  static Future<T> _txn<T>(
+    Database db,
+    Future<T> Function(Transaction txn, List<void Function()> afterCommit)
+    action,
+  ) async {
+    final afterCommit = <void Function()>[];
+    final result = await db.transaction<T>((txn) => action(txn, afterCommit));
+    for (final op in afterCommit) {
+      op();
+    }
+    return result;
   }
 
   // --------------------------------------------------------------------------
@@ -112,7 +136,7 @@ class BookingRepository {
       );
     }
 
-    return await db.transaction<BookingPaymentResult>((txn) async {
+    return _txn<BookingPaymentResult>(db, (txn, afterCommit) async {
       // 1.1 Kiểm tra trùng booking id
       final existingBooking = await txn.query(
         'bookings',
@@ -289,7 +313,6 @@ class BookingRepository {
 
       final resolvedPaymentId =
           booking.paymentId ?? 'pay_${DateTime.now().microsecondsSinceEpoch}';
-      booking.paymentId = resolvedPaymentId;
       final isOnlinePayment = method != 'cash';
 
       // 3. Phân nhánh: Mô phỏng thanh toán trực tuyến thất bại
@@ -297,10 +320,8 @@ class BookingRepository {
         final failedTxn =
             transactionCode ??
             'TXN-FAILED-${DateTime.now().microsecondsSinceEpoch}';
-        booking.status = 'cancelled';
-        booking.paymentStatus = 'unpaid';
-        booking.cancelReason = 'Thanh toán trực tuyến thất bại';
-        booking.cancelledAt = DateTime.now();
+        const failCancelReason = 'Thanh toán trực tuyến thất bại';
+        final failCancelledAt = DateTime.now();
 
         await txn.insert('bookings', {
           'id': booking.id,
@@ -319,8 +340,8 @@ class BookingRepository {
           'promoId': booking.promoId,
           'promotionCode': booking.promotionCode,
           'note': booking.note,
-          'cancelReason': booking.cancelReason,
-          'cancelledAt': booking.cancelledAt?.toIso8601String(),
+          'cancelReason': failCancelReason,
+          'cancelledAt': failCancelledAt.toIso8601String(),
           'createdAt': booking.createdAt.toIso8601String(),
         });
 
@@ -348,11 +369,17 @@ class BookingRepository {
           'isRead': 0,
         });
 
-        // Sync to MockStore
-        MockStore.bookings.add(booking);
-        MockStore.payments.add({
-          ...paymentRecord,
-          'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
+        afterCommit.add(() {
+          booking.status = 'cancelled';
+          booking.paymentStatus = 'unpaid';
+          booking.paymentId = resolvedPaymentId;
+          booking.cancelReason = failCancelReason;
+          booking.cancelledAt = failCancelledAt;
+          MockStore.bookings.add(booking);
+          MockStore.payments.add({
+            ...paymentRecord,
+            'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
+          });
         });
 
         return BookingPaymentResult(
@@ -366,13 +393,14 @@ class BookingRepository {
       }
 
       // 4. Phân nhánh: Thành công
-      booking.status = 'confirmed';
+      const bookingStatus = 'confirmed';
+      final bool isCash = method == 'cash';
+      final String paymentStatusValue = isCash ? 'unpaid' : 'paid';
       final String? successTxn;
       final Map<String, dynamic> paymentRecord;
 
       if (method == 'cash') {
         successTxn = null;
-        booking.paymentStatus = 'unpaid';
         paymentRecord = <String, dynamic>{
           'id': resolvedPaymentId,
           'bookingId': booking.id,
@@ -385,7 +413,6 @@ class BookingRepository {
       } else {
         successTxn =
             transactionCode ?? 'TXN${Random().nextInt(900000) + 100000}';
-        booking.paymentStatus = 'paid';
         paymentRecord = <String, dynamic>{
           'id': resolvedPaymentId,
           'bookingId': booking.id,
@@ -410,8 +437,8 @@ class BookingRepository {
         'originalAmount': booking.originalAmount,
         'serviceAmount': booking.serviceAmount,
         'discountAmount': booking.discountAmount,
-        'status': booking.status,
-        'paymentStatus': booking.paymentStatus,
+        'status': bookingStatus,
+        'paymentStatus': paymentStatusValue,
         'paymentId': resolvedPaymentId,
         'promoId': booking.promoId,
         'promotionCode': booking.promotionCode,
@@ -455,33 +482,37 @@ class BookingRepository {
         );
       }
 
-      // 5. Cập nhật Cache MockStore đồng bộ
-      MockStore.bookings.add(booking);
-      MockStore.payments.add({
-        ...paymentRecord,
-        'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
-        if (paymentRecord['paidAt'] != null)
-          'paidAt': DateTime.parse(paymentRecord['paidAt'] as String),
-      });
-
-      if (booking.promoId != null) {
-        final pIndex = MockStore.promotions.indexWhere(
-          (p) => p.id == booking.promoId,
-        );
-        if (pIndex != -1) {
-          final p = MockStore.promotions[pIndex];
-          if (!p.usageHistory.any((u) => u.bookingId == booking.id)) {
-            p.usageHistory.add(
-              PromotionUsage(
-                promotionId: booking.promoId!,
-                userId: booking.userId,
-                bookingId: booking.id,
-              ),
-            );
-            p.usedCount++;
+      // 5. Cập nhật Cache MockStore: chỉ chạy sau khi commit
+      afterCommit.add(() {
+        booking.status = bookingStatus;
+        booking.paymentStatus = paymentStatusValue;
+        booking.paymentId = resolvedPaymentId;
+        MockStore.bookings.add(booking);
+        MockStore.payments.add({
+          ...paymentRecord,
+          'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
+          if (paymentRecord['paidAt'] != null)
+            'paidAt': DateTime.parse(paymentRecord['paidAt'] as String),
+        });
+        if (booking.promoId != null) {
+          final pIndex = MockStore.promotions.indexWhere(
+            (p) => p.id == booking.promoId,
+          );
+          if (pIndex != -1) {
+            final p = MockStore.promotions[pIndex];
+            if (!p.usageHistory.any((u) => u.bookingId == booking.id)) {
+              p.usageHistory.add(
+                PromotionUsage(
+                  promotionId: booking.promoId!,
+                  userId: booking.userId,
+                  bookingId: booking.id,
+                ),
+              );
+              p.usedCount++;
+            }
           }
         }
-      }
+      });
 
       return BookingPaymentResult(
         isSuccess: true,
@@ -505,7 +536,7 @@ class BookingRepository {
       return MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
@@ -648,8 +679,9 @@ class BookingRepository {
         }
       }
 
-      // Đồng bộ Cache MockStore
-      MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
+      afterCommit.add(() {
+        MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
+      });
       return true;
     });
   }
@@ -659,7 +691,7 @@ class BookingRepository {
     if (db == null) {
       return MockStore.completeRefund(bookingId);
     }
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
@@ -713,7 +745,7 @@ class BookingRepository {
         'isRead': 0,
       });
 
-      MockStore.completeRefund(bookingId);
+      afterCommit.add(() => MockStore.completeRefund(bookingId));
       return true;
     });
   }
@@ -723,7 +755,7 @@ class BookingRepository {
     if (db == null) {
       return MockStore.failRefund(bookingId);
     }
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
@@ -769,7 +801,7 @@ class BookingRepository {
         'isRead': 0,
       });
 
-      MockStore.failRefund(bookingId);
+      afterCommit.add(() => MockStore.failRefund(bookingId));
       return true;
     });
   }
@@ -804,7 +836,7 @@ class BookingRepository {
       return false;
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final rows = await txn.rawQuery(
         'SELECT b.id, b.status, b.venueId, v.ownerId FROM bookings b JOIN venues v ON v.id = b.venueId WHERE b.id = ? LIMIT 1',
         [bookingId],
@@ -827,239 +859,30 @@ class BookingRepository {
         whereArgs: [bookingId],
       );
 
-      // Đồng bộ MockStore
-      final mockIdx = MockStore.bookings.indexWhere((b) => b.id == bookingId);
-      if (mockIdx != -1) {
-        MockStore.bookings[mockIdx].status = newStatus;
-      }
-      return true;
-    });
-  }
-
-  // --------------------------------------------------------------------------
-  // 3.2 QUẢN LÝ KHUYẾN MÃI DÀNH CHO ADMIN (Tạo, Sửa, Xóa/Vô hiệu hóa, Bật/Tắt)
-  // --------------------------------------------------------------------------
-  static Future<bool> createPromotion(Promotion promotion) async {
-    final normalizedCode = promotion.code.trim().toUpperCase();
-    if (normalizedCode.isEmpty ||
-        !promotion.discountPercent.isFinite ||
-        promotion.discountPercent <= 0 ||
-        promotion.discountPercent > 100) {
-      return false;
-    }
-
-    final db = await _db;
-    if (db == null) {
-      final exists = MockStore.promotions.any(
-        (p) => p.code.trim().toUpperCase() == normalizedCode,
-      );
-      if (exists) return false;
-      MockStore.promotions.add(promotion);
-      return true;
-    }
-
-    return await db.transaction<bool>((txn) async {
-      final existing = await txn.query(
-        'promotions',
-        columns: ['id'],
-        where: 'UPPER(code) = ?',
-        whereArgs: [normalizedCode],
-        limit: 1,
-      );
-      if (existing.isNotEmpty) return false;
-
-      await txn.insert('promotions', {
-        'id': promotion.id,
-        'code': normalizedCode,
-        'discountPercent': promotion.discountPercent,
-        'expiryDate': promotion.expiryDate.toIso8601String(),
-        'isActive': promotion.isActive ? 1 : 0,
-        'usedCount': promotion.usedCount,
-      });
-
-      // Đồng bộ MockStore
-      MockStore.promotions.add(promotion);
-      return true;
-    });
-  }
-
-  static Future<bool> updatePromotion(Promotion promotion) async {
-    final normalizedCode = promotion.code.trim().toUpperCase();
-    if (normalizedCode.isEmpty ||
-        !promotion.discountPercent.isFinite ||
-        promotion.discountPercent <= 0 ||
-        promotion.discountPercent > 100) {
-      return false;
-    }
-
-    final db = await _db;
-    if (db == null) {
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promotion.id);
-      if (idx == -1) return false;
-      final duplicate = MockStore.promotions.any(
-        (p) =>
-            p.code.trim().toUpperCase() == normalizedCode &&
-            p.id != promotion.id,
-      );
-      if (duplicate) return false;
-      MockStore.promotions[idx] = promotion;
-      return true;
-    }
-
-    return await db.transaction<bool>((txn) async {
-      final duplicate = await txn.query(
-        'promotions',
-        columns: ['id'],
-        where: 'UPPER(code) = ? AND id != ?',
-        whereArgs: [normalizedCode, promotion.id],
-        limit: 1,
-      );
-      if (duplicate.isNotEmpty) return false;
-
-      final updated = await txn.update(
-        'promotions',
-        {
-          'code': normalizedCode,
-          'discountPercent': promotion.discountPercent,
-          'expiryDate': promotion.expiryDate.toIso8601String(),
-          'isActive': promotion.isActive ? 1 : 0,
-          'usedCount': promotion.usedCount,
-        },
-        where: 'id = ?',
-        whereArgs: [promotion.id],
-      );
-      if (updated == 0) return false;
-
-      // Đồng bộ MockStore
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promotion.id);
-      if (idx != -1) {
-        MockStore.promotions[idx] = promotion;
-      }
-      return true;
-    });
-  }
-
-  static Future<bool> togglePromotionActive(
-    String promoId,
-    bool isActive,
-  ) async {
-    final db = await _db;
-    if (db == null) {
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
-      if (idx == -1) return false;
-      final p = MockStore.promotions[idx];
-      MockStore.promotions[idx] = Promotion(
-        id: p.id,
-        code: p.code,
-        discountPercent: p.discountPercent,
-        expiryDate: p.expiryDate,
-        isActive: isActive,
-        usedCount: p.usedCount,
-        usageHistory: p.usageHistory,
-      );
-      return true;
-    }
-
-    return await db.transaction<bool>((txn) async {
-      final count = await txn.update(
-        'promotions',
-        {'isActive': isActive ? 1 : 0},
-        where: 'id = ?',
-        whereArgs: [promoId],
-      );
-      if (count == 0) return false;
-
-      // Đồng bộ MockStore
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
-      if (idx != -1) {
-        final p = MockStore.promotions[idx];
-        MockStore.promotions[idx] = Promotion(
-          id: p.id,
-          code: p.code,
-          discountPercent: p.discountPercent,
-          expiryDate: p.expiryDate,
-          isActive: isActive,
-          usedCount: p.usedCount,
-          usageHistory: p.usageHistory,
-        );
-      }
-      return true;
-    });
-  }
-
-  static Future<bool> deletePromotion(String promoId) async {
-    final db = await _db;
-    if (db == null) {
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
-      if (idx == -1) return false;
-      final p = MockStore.promotions[idx];
-      // Kiểm tra nếu đã được dùng thì không xóa cứng để tránh mất lịch sử mà vô hiệu hóa
-      if (p.usedCount > 0 || p.usageHistory.isNotEmpty) {
-        MockStore.promotions[idx] = Promotion(
-          id: p.id,
-          code: p.code,
-          discountPercent: p.discountPercent,
-          expiryDate: p.expiryDate,
-          isActive: false,
-          usedCount: p.usedCount,
-          usageHistory: p.usageHistory,
-        );
-        return true;
-      }
-      MockStore.promotions.removeAt(idx);
-      return true;
-    }
-
-    return await db.transaction<bool>((txn) async {
-      final promoRows = await txn.query(
-        'promotions',
-        columns: ['id', 'usedCount'],
-        where: 'id = ?',
-        whereArgs: [promoId],
-        limit: 1,
-      );
-      if (promoRows.isEmpty) return false;
-
-      final usedCount = promoRows.single['usedCount'] as int? ?? 0;
-      final usages = await txn.query(
-        'promotion_usages',
-        columns: ['id'],
-        where: 'promotionId = ?',
-        whereArgs: [promoId],
-        limit: 1,
-      );
-
-      // Nếu đã từng có lịch sử sử dụng hoặc usedCount > 0: bảo toàn lịch sử bằng cách vô hiệu hóa
-      if (usedCount > 0 || usages.isNotEmpty) {
-        await txn.update(
-          'promotions',
-          {'isActive': 0},
-          where: 'id = ?',
-          whereArgs: [promoId],
-        );
-        final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
-        if (idx != -1) {
-          final p = MockStore.promotions[idx];
-          MockStore.promotions[idx] = Promotion(
-            id: p.id,
-            code: p.code,
-            discountPercent: p.discountPercent,
-            expiryDate: p.expiryDate,
-            isActive: false,
-            usedCount: p.usedCount,
-            usageHistory: p.usageHistory,
-          );
+      afterCommit.add(() {
+        final mockIdx = MockStore.bookings.indexWhere((b) => b.id == bookingId);
+        if (mockIdx != -1) {
+          MockStore.bookings[mockIdx].status = newStatus;
         }
-        return true;
-      }
-
-      await txn.delete('promotions', where: 'id = ?', whereArgs: [promoId]);
-
-      // Đồng bộ MockStore
-      MockStore.promotions.removeWhere((p) => p.id == promoId);
+      });
       return true;
     });
   }
+
+  // --------------------------------------------------------------------------
+  // 3.2 QUẢN LÝ KHUYẾN MÃI: ủy quyền sang PromotionRepository (giữ API cũ)
+  // --------------------------------------------------------------------------
+  static Future<bool> createPromotion(Promotion promotion) =>
+      PromotionRepository.createPromotion(promotion);
+
+  static Future<bool> updatePromotion(Promotion promotion) =>
+      PromotionRepository.updatePromotion(promotion);
+
+  static Future<bool> togglePromotionActive(String promoId, bool isActive) =>
+      PromotionRepository.togglePromotionActive(promoId, isActive);
+
+  static Future<bool> deletePromotion(String promoId) =>
+      PromotionRepository.deletePromotion(promoId);
 
   // --------------------------------------------------------------------------
   // 4. TRUY VẤN DỮ LIỆU

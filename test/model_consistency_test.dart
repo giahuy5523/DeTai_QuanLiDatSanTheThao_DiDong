@@ -311,7 +311,7 @@ void main() {
     booking.paymentStatus = 'paid';
     MockStore.bookings.add(booking);
 
-    final result = BookingRepository.cancelBooking(booking.id);
+    final result = MockStoreBookingCancel.cancelBooking(booking.id);
 
     expect(result, isNull);
     expect(booking.status, 'confirmed');
@@ -336,7 +336,7 @@ void main() {
     };
     MockStore.payments.add(payment);
 
-    final result = BookingRepository.cancelBooking(booking.id);
+    final result = MockStoreBookingCancel.cancelBooking(booking.id);
 
     expect(result, isNull);
     expect(booking.status, 'confirmed');
@@ -361,7 +361,7 @@ void main() {
     };
     MockStore.payments.add(payment);
 
-    expect(BookingRepository.cancelBooking(booking.id), isNull);
+    expect(MockStoreBookingCancel.cancelBooking(booking.id), isNull);
     expect(MockStore.cancelBooking(booking.id), isFalse);
     expect(booking.status, 'confirmed');
     expect(booking.paymentStatus, 'paid');

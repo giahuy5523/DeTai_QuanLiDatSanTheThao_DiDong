@@ -47,6 +47,245 @@ class DatabaseHelper {
     if (oldVersion < 3) await _upgradeToV3(db);
   }
 
+  /// One-time, non-destructive import from the former `accounts.db` file.
+  /// This legacy-source read belongs to DatabaseHelper; repositories use only
+  /// the shared target database supplied by this helper.
+  /// Existing target accounts and valid target sessions always take priority.
+  static Future<void> importLegacyAccountDatabase(Database target) async {
+    const migrationKey = 'legacy_accounts_db_v1_imported';
+    final factory = databaseFactory;
+    final migrationTable = await target.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='app_migrations'",
+    );
+    if (migrationTable.isNotEmpty) {
+      final completed = await target.query(
+        'app_migrations',
+        columns: ['migration_key'],
+        where: 'migration_key = ?',
+        whereArgs: [migrationKey],
+        limit: 1,
+      );
+      if (completed.isNotEmpty) return;
+    }
+
+    final sourcePath = join(await factory.getDatabasesPath(), 'accounts.db');
+    if (!await factory.databaseExists(sourcePath)) return;
+
+    final source = await factory.openDatabase(
+      sourcePath,
+      options: OpenDatabaseOptions(readOnly: true),
+    );
+    try {
+      final tables = await source.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'",
+      );
+      if (tables.isEmpty) return;
+
+      final userColumns = (await source.rawQuery(
+        'PRAGMA table_info(Users)',
+      )).map((row) => row['name'] as String).toSet();
+      const requiredColumns = {
+        'user_id',
+        'full_name',
+        'email',
+        'phone',
+        'password_hash',
+        'role',
+      };
+      if (!userColumns.containsAll(requiredColumns)) {
+        throw FormatException(
+          'Schema Users trong accounts.db không tương thích; chưa thực hiện import.',
+        );
+      }
+
+      final sourceUsers = await source.query('Users');
+      final sessionTable = await source.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='Session'",
+      );
+
+      var sourceSessions = <Map<String, Object?>>[];
+
+      if (sessionTable.isNotEmpty) {
+        final sessionColumns = (await source.rawQuery(
+          'PRAGMA table_info(Session)',
+        )).map((row) => row['name'] as String).toSet();
+
+        const requiredSessionColumns = {'user_id', 'expires_at'};
+
+        if (!sessionColumns.containsAll(requiredSessionColumns)) {
+          throw FormatException(
+            'Schema Session trong accounts.db không tương thích; '
+            'chưa thực hiện import.',
+          );
+        }
+
+        sourceSessions = await source.query('Session');
+      }
+
+      await target.transaction((txn) async {
+        await txn.execute('''CREATE TABLE IF NOT EXISTS app_migrations (
+          migration_key TEXT PRIMARY KEY,
+          completed_at INTEGER NOT NULL
+        )''');
+        await txn.execute(
+          '''CREATE TABLE IF NOT EXISTS legacy_account_import_conflicts (
+          user_id TEXT PRIMARY KEY,
+          reason TEXT NOT NULL,
+          recorded_at INTEGER NOT NULL
+        )''',
+        );
+
+        final completed = await txn.query(
+          'app_migrations',
+          where: 'migration_key = ?',
+          whereArgs: [migrationKey],
+          limit: 1,
+        );
+        if (completed.isNotEmpty) return;
+
+        final now = DateTime.now().millisecondsSinceEpoch;
+        for (final user in sourceUsers) {
+          final userId = user['user_id']?.toString();
+          if (userId == null || userId.isEmpty) {
+            throw FormatException(
+              'accounts.db có user_id rỗng; import bị hủy.',
+            );
+          }
+
+          final normalizedEmail = (user['email'] as String)
+              .trim()
+              .toLowerCase();
+
+          final existingById = await txn.query(
+            'Users',
+            columns: ['user_id', 'password_hash'],
+            where: 'user_id = ?',
+            whereArgs: [userId],
+            limit: 1,
+          );
+          if (existingById.isNotEmpty) {
+            // A V1 migration placeholder is not a usable account. Prefer the
+            // PBKDF2 hash and profile from accounts.db, but never replace a
+            // normal account already stored in the shared database.
+            if (existingById.single['password_hash'] == 'migration-pending') {
+              try {
+                await txn.update(
+                  'Users',
+                  {
+                    'full_name': user['full_name'],
+                    'email': normalizedEmail,
+                    'phone': user['phone'],
+                    'password_hash': user['password_hash'],
+                    'role': user['role'],
+                    'avatar_path': userColumns.contains('avatar_path')
+                        ? user['avatar_path']
+                        : null,
+                    'is_active': userColumns.contains('is_active')
+                        ? user['is_active']
+                        : 1,
+                  },
+                  where: 'user_id = ?',
+                  whereArgs: [userId],
+                );
+              } on DatabaseException catch (error) {
+                if (!error.isUniqueConstraintError()) rethrow;
+                await txn.insert('legacy_account_import_conflicts', {
+                  'user_id': userId,
+                  'reason': 'v1_placeholder_conflict',
+                  'recorded_at': now,
+                }, conflictAlgorithm: ConflictAlgorithm.replace);
+              }
+            } else {
+              // A real account with this ID already exists. Preserve it
+              // and record the skipped legacy account as a conflict.
+              await txn.insert('legacy_account_import_conflicts', {
+                'user_id': userId,
+                'reason': 'existing_user_id_conflict',
+                'recorded_at': now,
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+            continue;
+          }
+
+          try {
+            await txn.insert('Users', {
+              'user_id': userId,
+              'full_name': user['full_name'],
+              'email': normalizedEmail,
+              'phone': user['phone'],
+              'password_hash': user['password_hash'],
+              'role': user['role'],
+              'avatar_path': userColumns.contains('avatar_path')
+                  ? user['avatar_path']
+                  : null,
+              'is_active': userColumns.contains('is_active')
+                  ? user['is_active']
+                  : 1,
+            });
+          } on DatabaseException catch (error) {
+            if (!error.isUniqueConstraintError()) rethrow;
+            final emailOwner = await txn.query(
+              'Users',
+              columns: ['user_id'],
+              where: 'email = ? COLLATE NOCASE',
+              whereArgs: [normalizedEmail],
+              limit: 1,
+            );
+            final phoneOwner = await txn.query(
+              'Users',
+              columns: ['user_id'],
+              where: 'phone = ?',
+              whereArgs: [user['phone']],
+              limit: 1,
+            );
+            final reason = emailOwner.isNotEmpty
+                ? "email_conflict:${emailOwner.single['user_id']}"
+                : "phone_conflict:${phoneOwner.isNotEmpty ? phoneOwner.single['user_id'] : 'unknown'}";
+            await txn.insert('legacy_account_import_conflicts', {
+              'user_id': userId,
+              'reason': reason,
+              'recorded_at': now,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+
+        // Do not replace a still-valid session already belonging to this app.
+        final validTargetSession = await txn.rawQuery(
+          'SELECT id FROM Session WHERE id = 1 AND expires_at > ? LIMIT 1',
+          [now],
+        );
+        if (validTargetSession.isEmpty) {
+          await txn.delete('Session', where: 'id = 1');
+          for (final session in sourceSessions) {
+            final expiry = session['expires_at'];
+            if (expiry is! int || expiry <= now) continue;
+            final user = await txn.query(
+              'Users',
+              columns: ['user_id'],
+              where: 'user_id = ?',
+              whereArgs: [session['user_id']],
+              limit: 1,
+            );
+            if (user.isEmpty) continue;
+            await txn.insert('Session', {
+              'id': 1,
+              'user_id': session['user_id'],
+              'expires_at': expiry,
+            });
+            break;
+          }
+        }
+
+        await txn.insert('app_migrations', {
+          'migration_key': migrationKey,
+          'completed_at': now,
+        });
+      });
+    } finally {
+      await source.close();
+    }
+  }
+
   Future<void> _createSchema(DatabaseExecutor db) async {
     await db.execute('''CREATE TABLE Users (
       user_id TEXT PRIMARY KEY,
@@ -181,89 +420,212 @@ class DatabaseHelper {
     );
   }
 
-  /// Version 1 used an incompatible, plain-text `users` table.
-  /// Giữ nguyên logic migration V2 gốc của Quốc Đạt.
+  /// Migrates the original schema while preserving every known V2 business
+  /// table, including dependent rows. Child tables are removed before parents
+  /// so PRAGMA foreign_keys can remain enabled throughout the migration.
   Future<void> _upgradeToV2(DatabaseExecutor txn) async {
-    final preserved = <String, List<Map<String, Object?>>>{};
-    for (final table in [
+    const businessTables = <String>[
       'sport_types',
       'venues',
       'venue_images',
       'venue_services',
       'promotions',
       'bookings',
+      'booking_services',
       'payments',
-    ]) {
-      try {
-        preserved[table] = await txn.query(table);
-      } on DatabaseException {
-        preserved[table] = [];
-      }
+      'time_slots',
+      'venue_hours',
+    ];
+
+    final preserved = <String, List<Map<String, Object?>>>{};
+    for (final table in businessTables) {
+      final exists = await txn.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND lower(name)=?",
+        [table.toLowerCase()],
+      );
+      preserved[table] = exists.isEmpty
+          ? <Map<String, Object?>>[]
+          : await txn.query(table);
     }
-    final existing = await txn.rawQuery(
+    final sessionExists = await txn.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND lower(name)='session'",
+    );
+    if (sessionExists.isNotEmpty) {
+      final sessionColumns = (await txn.rawQuery(
+        'PRAGMA table_info(Session)',
+      )).map((row) => row['name'] as String).toSet();
+      if (!sessionColumns.containsAll({'id', 'user_id', 'expires_at'})) {
+        throw StateError(
+          'Schema Session V1 không tương thích (cần id/user_id/expires_at); '
+          'migration đã được rollback để bảo toàn phiên đăng nhập cũ.',
+        );
+      }
+      preserved['Session'] = await txn.query('Session');
+    } else {
+      preserved['Session'] = <Map<String, Object?>>[];
+    }
+
+    // V1's plain-text account table used `users`, not the current Users schema.
+    final usersTable = await txn.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND lower(name)='users'",
     );
-    if (existing.isNotEmpty) {
-      await txn.execute('ALTER TABLE users RENAME TO legacy_users_v1');
+    if (usersTable.isNotEmpty) {
+      await txn.execute(
+        'ALTER TABLE "${usersTable.single['name']}" RENAME TO legacy_users_v1',
+      );
     }
-    for (final table in [
+
+    // Drop dependent tables first to prevent cascades from deleting rows.
+    const dropOrder = <String>[
+      'Session',
+      'booking_services',
+      'payments',
+      'time_slots',
+      'venue_hours',
       'venue_images',
       'venue_services',
-      'payments',
       'bookings',
       'venues',
       'promotions',
       'sport_types',
-    ]) {
+    ];
+    for (final table in dropOrder) {
       await txn.execute('DROP TABLE IF EXISTS $table');
     }
-    // Tạo cấu trúc cơ bản V2
+
     await _createSchemaV2(txn);
+
     await txn.execute('''CREATE TABLE IF NOT EXISTS legacy_account_import (
       user_id TEXT PRIMARY KEY, full_name TEXT NOT NULL, email TEXT NOT NULL,
       phone TEXT NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL,
       avatar_path TEXT
     )''');
+
     final legacy = await txn.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_users_v1'",
     );
     if (legacy.isNotEmpty) {
+      final columns = (await txn.rawQuery(
+        'PRAGMA table_info(legacy_users_v1)',
+      )).map((row) => row['name'] as String).toSet();
       final rows = await txn.query('legacy_users_v1');
-      for (final row in rows) {
-        await txn.insert('legacy_account_import', {
-          'user_id': row['id'],
-          'full_name': row['name'],
-          'email': row['email'],
-          'phone': row['phone'],
-          'password': row['password'],
-          'role': row['role'] ?? 'customer',
-          'avatar_path': row['avatarPath'],
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-        await txn.insert('Users', {
-          'user_id': row['id'],
-          'full_name': row['name'],
-          'email': row['email'],
-          'phone': row['phone'],
-          'password_hash': 'migration-pending',
-          'role': row['role'] ?? 'customer',
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+      if (columns.containsAll({'id', 'name', 'email', 'phone', 'password'})) {
+        // Original plain-text V1 accounts are converted by AccountRepository
+        // after the database schema upgrade, using PBKDF2 before login.
+        for (final row in rows) {
+          final id = row['id']?.toString();
+          final name = row['name']?.toString();
+          final email = row['email']?.toString();
+          final phone = row['phone']?.toString();
+          final password = row['password']?.toString();
+          if ([
+            id,
+            name,
+            email,
+            phone,
+            password,
+          ].any((value) => value == null || value.isEmpty)) {
+            throw StateError(
+              'Không thể migrate users V1: thiếu id/name/email/phone/password.',
+            );
+          }
+          final role = (row['role']?.toString() ?? 'customer')
+              .trim()
+              .toLowerCase();
+          if (!const {'customer', 'owner', 'admin'}.contains(role)) {
+            throw StateError(
+              'Role V1 không hợp lệ cho user_id=$id: "$role". '
+              'Migration đã được rollback; cần ánh xạ role theo nghiệp vụ.',
+            );
+          }
+          final avatar = row['avatarPath']?.toString();
+          await txn.insert('legacy_account_import', {
+            'user_id': id,
+            'full_name': name,
+            'email': email,
+            'phone': phone,
+            'password': password,
+            'role': role,
+            'avatar_path': avatar,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          await txn.insert('Users', {
+            'user_id': id,
+            'full_name': name,
+            'email': email,
+            'phone': phone,
+            'password_hash': 'migration-pending',
+            'role': role,
+            'avatar_path': avatar,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      } else if (columns.containsAll({
+        'user_id',
+        'full_name',
+        'email',
+        'phone',
+        'password_hash',
+        'role',
+      })) {
+        // Also tolerate a V1 database that already used the account schema.
+        for (final row in rows) {
+          final role = row['role']?.toString().trim().toLowerCase() ?? '';
+          if (!const {'customer', 'owner', 'admin'}.contains(role)) {
+            throw StateError(
+              'Role V1 không hợp lệ cho user_id=${row['user_id']}: "$role". '
+              'Migration đã được rollback; cần ánh xạ role theo nghiệp vụ.',
+            );
+          }
+          await txn.insert('Users', {
+            'user_id': row['user_id'],
+            'full_name': row['full_name'],
+            'email': row['email'],
+            'phone': row['phone'],
+            'password_hash': row['password_hash'],
+            'role': role,
+            'avatar_path': columns.contains('avatar_path')
+                ? row['avatar_path']
+                : null,
+            'is_active': columns.contains('is_active') ? row['is_active'] : 1,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      } else {
+        throw StateError(
+          'Schema users V1 không nhận diện được; migration đã được rollback để bảo toàn dữ liệu.',
+        );
       }
       await txn.execute('DROP TABLE legacy_users_v1');
     }
-    for (final table in [
+
+    // Restore parents before children. If a required legacy value cannot be
+    // represented in V2, insertion fails and SQLite rolls the whole migration
+    // back instead of silently dropping the affected row.
+    const restoreOrder = <String>[
       'sport_types',
+      'Session',
       'venues',
       'venue_images',
       'venue_services',
       'promotions',
       'bookings',
+      'booking_services',
       'payments',
-    ]) {
-      for (final row in preserved[table]!) {
+      'time_slots',
+      'venue_hours',
+    ];
+    for (final table in restoreOrder) {
+      final rows = preserved[table]!;
+      if (rows.isEmpty) continue;
+      final info = await txn.rawQuery('PRAGMA table_info($table)');
+      final columns = info.map((row) => row['name'] as String).toSet();
+      for (final row in rows) {
+        final compatibleRow = Map<String, Object?>.fromEntries(
+          row.entries.where((entry) => columns.contains(entry.key)),
+        );
         await txn.insert(
           table,
-          row,
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          compatibleRow,
+          conflictAlgorithm: ConflictAlgorithm.abort,
         );
       }
     }

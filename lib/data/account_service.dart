@@ -12,17 +12,17 @@ class AccountService {
   AccountService._();
   static AccountRepository? repository;
 
-  static AccountRepository get _requiredRepository {
-    final value = repository;
-    if (value == null) {
-      throw StateError('Dữ liệu tài khoản chưa được khởi tạo.');
-    }
-    return value;
+  // Explicit in-memory adapter for widget tests only. Production defaults to
+  // SQLite and never falls back to MockStore when initialization fails.
+  static bool _useMockStoreForTesting = false;
+
+  static void setUseMockStoreForTesting(bool enabled) {
+    _useMockStoreForTesting = enabled;
   }
 
   static Future<void> initialize() async {
     final appDatabase = await DatabaseHelper().database;
-    await AccountRepository.importLegacyAccountDatabase(appDatabase);
+    await DatabaseHelper.importLegacyAccountDatabase(appDatabase);
     repository = await AccountRepository.open(
       seed: List.of(MockStore.users),
       database: appDatabase,
@@ -175,18 +175,39 @@ class AccountService {
   }
 
   static Future<AppUser?> login(String email, String password) async {
-    final user = await _requiredRepository.login(email, password);
+    if (_useMockStoreForTesting) return MockStore.login(email, password);
+    final db = repository;
+    if (db == null) {
+      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
+    }
+    final user = await db.login(email, password);
     if (user != null) MockStore.currentUser = user;
     return user;
   }
 
   static Future<void> register(AppUser user) async {
-    await _requiredRepository.register(user);
+    if (_useMockStoreForTesting) {
+      MockStore.addUser(user);
+      return;
+    }
+    final db = repository;
+    if (db == null) {
+      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
+    }
+    await db.register(user);
     await _refresh();
   }
 
   static Future<void> logout() async {
-    await _requiredRepository.logout();
+    if (_useMockStoreForTesting) {
+      MockStore.logout();
+      return;
+    }
+    final db = repository;
+    if (db == null) {
+      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
+    }
+    await db.logout();
     MockStore.logout();
   }
 
@@ -205,7 +226,19 @@ class AccountService {
     required String? avatarPath,
   }) async {
     if (MockStore.currentUser?.id != userId) return null;
-    final updated = await _requiredRepository.updateProfile(
+    if (_useMockStoreForTesting) {
+      return MockStore.updateCurrentProfile(
+        userId: userId,
+        name: name,
+        phone: phone,
+        avatarPath: avatarPath,
+      );
+    }
+    final db = repository;
+    if (db == null) {
+      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
+    }
+    final updated = await db.updateProfile(
       userId: userId,
       name: name,
       phone: phone,
