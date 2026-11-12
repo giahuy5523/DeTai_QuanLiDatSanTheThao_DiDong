@@ -97,6 +97,12 @@ class AdminDrawer extends StatelessWidget {
                     selected: selectedIndex == 2,
                     onTap: () => _goTo(context, AppRoutes.managePromotion),
                   ),
+                  _DrawerItem(
+                    label: 'Hoàn tiền',
+                    icon: Icons.payments_outlined,
+                    selected: selectedIndex == 3,
+                    onTap: () => _goTo(context, AppRoutes.manageRefund),
+                  ),
                 ],
               ),
             ),

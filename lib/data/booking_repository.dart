@@ -9,6 +9,21 @@ import '../utils/database_helper.dart';
 import 'mock_store.dart';
 import 'promotion_repository.dart';
 
+/// Một khoản hoàn tiền đang chờ admin xác nhận kết quả.
+class PendingRefund {
+  const PendingRefund({
+    required this.bookingId,
+    required this.userId,
+    required this.refundAmount,
+    this.cancelledAt,
+  });
+
+  final String bookingId;
+  final String userId;
+  final double refundAmount;
+  final DateTime? cancelledAt;
+}
+
 /// SQLite Repository managing persistence and transactions for Booking,
 /// Payment, PromotionUsage, and AppNotification.
 class BookingRepository {
@@ -972,6 +987,53 @@ class BookingRepository {
     );
     if (rows.isEmpty) return null;
     return Payment.fromMap(rows.single);
+  }
+
+  // --------------------------------------------------------------------------
+  // 4.1 HOÀN TIỀN CHỜ XÁC NHẬN (ADMIN)
+  // --------------------------------------------------------------------------
+  /// Các khoản đang ở trạng thái `processing`, chờ admin xác nhận.
+  static Future<List<PendingRefund>> getPendingRefunds() async {
+    final db = await _db;
+    if (db == null) {
+      final result = <PendingRefund>[];
+      for (final p in MockStore.payments) {
+        if (p['refundStatus'] != 'processing') continue;
+        final bookingId = p['bookingId'] as String;
+        final booking = MockStore.bookings
+            .where((b) => b.id == bookingId)
+            .firstOrNull;
+        result.add(
+          PendingRefund(
+            bookingId: bookingId,
+            userId: booking?.userId ?? '',
+            refundAmount: (p['refundAmount'] as num?)?.toDouble() ?? 0,
+            cancelledAt: booking?.cancelledAt,
+          ),
+        );
+      }
+      return result;
+    }
+
+    final rows = await db.rawQuery('''
+      SELECT p.bookingId, p.refundAmount, b.userId, b.cancelledAt
+      FROM payments p
+      JOIN bookings b ON b.id = p.bookingId
+      WHERE p.refundStatus = 'processing'
+      ORDER BY b.cancelledAt ASC
+    ''');
+    return rows
+        .map(
+          (r) => PendingRefund(
+            bookingId: r['bookingId'] as String,
+            userId: r['userId'] as String,
+            refundAmount: (r['refundAmount'] as num).toDouble(),
+            cancelledAt: r['cancelledAt'] == null
+                ? null
+                : DateTime.parse(r['cancelledAt'] as String),
+          ),
+        )
+        .toList();
   }
 
   // --------------------------------------------------------------------------
