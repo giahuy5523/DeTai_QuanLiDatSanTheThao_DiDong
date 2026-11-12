@@ -1,5 +1,5 @@
-
 import 'package:flutter/material.dart';
+import '../../data/booking_repository.dart';
 import '../../data/mock_store.dart';
 import '../../models/booking.dart';
 import '../../models/venue.dart';
@@ -81,22 +81,42 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final serviceIds = List<String>.from(
       args['serviceIds'] as List<dynamic>? ?? const [],
     );
+    final serviceQuantities = Map<String, int>.from(
+      args['serviceQuantities'] as Map? ?? const <String, int>{},
+    );
 
     final courtPrice =
         (args['courtPrice'] as num?)?.toDouble() ?? venue.pricePerHour;
-    final serviceTotal = (args['serviceTotal'] as num?)?.toDouble() ?? 0;
+    final services = MockStore.servicesFor(venue.id);
+    final serviceItems = <BookingServiceItem>[];
+    for (final serviceId in serviceIds) {
+      final service = services
+          .where((item) => item.id == serviceId)
+          .firstOrNull;
+      final quantity = serviceQuantities[serviceId] ?? 0;
+      if (service != null && quantity > 0) {
+        serviceItems.add(
+          BookingServiceItem(
+            serviceId: service.id,
+            serviceName: service.name,
+            quantity: quantity,
+            unitPrice: service.price,
+          ),
+        );
+      }
+    }
+    final serviceTotal = serviceItems.fold<double>(
+      0,
+      (sum, item) => sum + item.subtotal,
+    );
     final discount = (args['discount'] as num?)?.toDouble() ?? 0;
     final discountAmount = (args['discountAmount'] as num?)?.toDouble() ?? 0;
     final total =
         (args['total'] as num?)?.toDouble() ??
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
-    debugPrint(
-      'PAYMENT ARGS: date=$date start=$startTime end=$endTime '
-      'venue=${venue.id} total=$total promo=$promoCode',
-    );
 
-    final services = MockStore.servicesFor(
+    final selectedServices = MockStore.servicesFor(
       venue.id,
     ).where((s) => serviceIds.contains(s.id)).toList();
 
@@ -117,7 +137,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
             date: date,
             startTime: startTime,
             endTime: endTime,
-            services: services,
+            services: selectedServices,
+            serviceQuantities: serviceQuantities,
             promoCode: promoCode,
             courtPrice: courtPrice,
             serviceTotal: serviceTotal,
@@ -147,6 +168,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     required String startTime,
     required String endTime,
     required List services,
+    required Map<String, int> serviceQuantities,
     required String? promoCode,
     required double courtPrice,
     required double serviceTotal,
@@ -169,17 +191,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
             const Divider(height: 22, color: AppTheme.border),
-            _priceLine('Tiền thuê sân', courtPrice),
-            if (serviceTotal > 0) _priceLine('Dịch vụ', serviceTotal),
-            if (discountAmount > 0)
-              _priceLine(
-                discount > 0
-                    ? 'Giảm giá (${discount.toStringAsFixed(0)}%)'
-                    : 'Giảm giá',
-                -discountAmount,
-                positive: true,
-              ),
-            const SizedBox(height: 8),
             Text(
               venue.name,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
@@ -216,7 +227,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '${s.name} • ${_formatMoney(s.price)}/${s.unit}',
+                          '${s.name} ×${serviceQuantities[s.id] ?? 0} • ${_formatMoney(s.price)}/${s.unit}',
                           style: const TextStyle(fontSize: 12),
                         ),
                       ),
@@ -250,7 +261,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
             _priceLine('Tiền thuê sân', courtPrice),
             if (serviceTotal > 0) _priceLine('Dịch vụ', serviceTotal),
             if (discountAmount > 0)
-              _priceLine(discount > 0 ? 'Giảm giá (${discount.toStringAsFixed(0)}%)' : 'Giảm giá', -discountAmount, positive: true),
+              _priceLine(
+                discount > 0
+                    ? 'Giảm giá (${discount.toStringAsFixed(0)}%)'
+                    : 'Giảm giá',
+                -discountAmount,
+                positive: true,
+              ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -791,9 +808,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final serviceIds = List<String>.from(
       args['serviceIds'] as List<dynamic>? ?? const [],
     );
+    final serviceQuantities = Map<String, int>.from(
+      args['serviceQuantities'] as Map? ?? const <String, int>{},
+    );
+    final availableServices = MockStore.servicesFor(venue.id);
+    final serviceItems = <BookingServiceItem>[];
+    for (final serviceId in serviceIds) {
+      final service = availableServices
+          .where((item) => item.id == serviceId)
+          .firstOrNull;
+      final quantity = serviceQuantities[serviceId] ?? 0;
+      if (service != null && quantity > 0) {
+        serviceItems.add(
+          BookingServiceItem(
+            serviceId: service.id,
+            serviceName: service.name,
+            quantity: quantity,
+            unitPrice: service.price,
+          ),
+        );
+      }
+    }
     final courtPrice =
         (args['courtPrice'] as num?)?.toDouble() ?? venue.pricePerHour;
-    final serviceTotal = (args['serviceTotal'] as num?)?.toDouble() ?? 0;
+    final serviceTotal = serviceItems.fold<double>(
+      0,
+      (sum, item) => sum + item.subtotal,
+    );
     final discountAmount = (args['discountAmount'] as num?)?.toDouble() ?? 0;
     final total =
         (args['total'] as num?)?.toDouble() ??
@@ -815,17 +856,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    // 1. Kiểm tra tính khả dụng của khoảng thời gian (Khớp bước 27-30 Sequence)
-    final isAvailable = MockStore.isRangeAvailable(
-      venue.id,
-      date,
-      startTime,
-      endTime,
+    // 1. Kiểm tra tính khả dụng của khoảng thời gian trong SQLite
+    final isAvailable = await BookingRepository.isRangeAvailable(
+      venueId: venue.id,
+      date: date,
+      startTime: startTime,
+      endTime: endTime,
     );
-    debugPrint(
-      'AVAILABILITY CHECK: venue=${venue.id} status=${venue.status} '
-      'date=$date start=$startTime end=$endTime result=$isAvailable',
-    );
+
     if (!isAvailable) {
       setState(() => _isProcessing = false);
       await _showSlotUnavailable();
@@ -837,8 +875,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final paymentId = 'pay$timestamp';
     final normalizedPromoCode = promoCode?.trim().toUpperCase();
 
-    final matchingPromotion = normalizedPromoCode == null ||
-            normalizedPromoCode.isEmpty
+    final matchingPromotion =
+        normalizedPromoCode == null || normalizedPromoCode.isEmpty
         ? null
         : MockStore.promotions
               .where(
@@ -867,9 +905,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       promotionCode: promoCode,
       promoId: promoId,
       selectedServiceIds: serviceIds,
+      serviceItems: serviceItems,
     );
 
-    final result = MockStore.processBookingPayment(
+    final result = await BookingRepository.processBookingPayment(
       booking: booking,
       method: _method,
       simulateFailure: _simulateFailure,
@@ -883,10 +922,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (result.failureReason == 'Khung giờ không còn trống.') {
         await _showSlotUnavailable();
       } else if (result.booking != null && result.payment != null) {
-        await _showPaymentFailed(
-          bookingId: bookingId,
-          paymentId: paymentId,
-        );
+        await _showPaymentFailed(bookingId: bookingId, paymentId: paymentId);
       } else {
         await showDialog<void>(
           context: context,
@@ -1033,24 +1069,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
     required String paymentId,
     required String? transactionCode,
   }) {
+    final isCashPayment = _method == 'cash';
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Column(
+        title: Column(
           children: [
             Icon(Icons.check_circle_rounded, color: Colors.green, size: 54),
             SizedBox(height: 8),
-            Text('Thanh toán thành công', textAlign: TextAlign.center),
+            Text(
+              isCashPayment
+                  ? 'Đặt sân đã được xác nhận'
+                  : 'Thanh toán thành công',
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Center(
+              Center(
                 child: Text(
-                  'Đặt sân đã được xác nhận.',
+                  isCashPayment
+                      ? 'Bạn sẽ thanh toán tiền mặt tại sân.'
+                      : 'Đặt sân đã được xác nhận.',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -1063,7 +1107,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
               _resultRow('Ngày', _dateText(date)),
               _resultRow('Thời gian', '$startTime - $endTime'),
               _resultRow('Thanh toán', _paymentMethodLabel(_method)),
-              _resultRow('Trạng thái', 'success / confirmed'),
+              _resultRow(
+                'Trạng thái',
+                isCashPayment ? 'pending / unpaid' : 'success / confirmed',
+              ),
               const Divider(height: 22),
               _resultRow('Tổng tiền', _formatMoney(total), bold: true),
             ],
