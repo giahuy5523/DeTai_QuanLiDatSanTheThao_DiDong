@@ -68,6 +68,7 @@ class AdminDrawer extends StatelessWidget {
         ),
       ),
       child: SafeArea(
+        child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -118,7 +119,7 @@ class AdminDrawer extends StatelessWidget {
                 onTap: () => _logout(context),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
             const Padding(
               padding: EdgeInsets.fromLTRB(28, 0, 24, 20),
               child: Text(
@@ -127,6 +128,7 @@ class AdminDrawer extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

@@ -107,7 +107,7 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final refund = items[index];
               final busy = _busy.contains(refund.bookingId);
