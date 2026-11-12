@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/data/booking_repository.dart';
 import 'package:sportfield_booking/screens/owner/upload_venue_screen.dart';
 import 'package:sportfield_booking/screens/customer/home_screen.dart';
@@ -130,10 +131,12 @@ Future<void> pick(WidgetTester tester) async {
 void main() {
   setUpAll(() {
     BookingRepository.setUseMockStoreForTesting(true);
+    AccountService.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     BookingRepository.setUseMockStoreForTesting(false);
+    AccountService.setUseMockStoreForTesting(false);
   });
   final originalVenues = List.of(MockStore.venues);
   final originalBookings = List.of(MockStore.bookings);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'test_helpers.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/data/booking_repository.dart';
 import 'package:sportfield_booking/screens/auth/login_screen.dart';
 import 'package:sportfield_booking/screens/auth/register_screen.dart';
@@ -30,10 +31,12 @@ Future<void> registerForm(
 void main() {
   setUpAll(() {
     BookingRepository.setUseMockStoreForTesting(true);
+    AccountService.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     BookingRepository.setUseMockStoreForTesting(false);
+    AccountService.setUseMockStoreForTesting(false);
   });
   final originalUsers = List.of(MockStore.users);
   setUp(() {

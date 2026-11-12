@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sportfield_booking/data/avatar_storage.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/screens/customer/profile_screen.dart';
 import 'package:sportfield_booking/screens/auth/login_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
@@ -93,6 +94,9 @@ Future<void> pick(WidgetTester tester) async {
 }
 
 void main() {
+  setUpAll(() => AccountService.setUseMockStoreForTesting(true));
+  tearDownAll(() => AccountService.setUseMockStoreForTesting(false));
+
   final users = List.of(MockStore.users);
   setUp(() {
     MockStore.users

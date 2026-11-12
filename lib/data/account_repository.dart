@@ -2,13 +2,12 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../models/user.dart';
 import '../utils/auth_validation.dart';
 
-/// Account-only database. Existing venue/booking IDs remain unchanged.
+/// Account data access through the application's shared SQLite database.
 class AccountRepository {
   AccountRepository(this.database);
   final Database database;
@@ -18,21 +17,31 @@ class AccountRepository {
     bits: 256,
   );
 
+  /// Mở repository trên kết nối SQLite dùng chung do DatabaseHelper cung cấp.
+  ///
+  /// factory + path chỉ dành cho unit test tạo database cô lập; ứng dụng thật
+  /// phải truyền database từ DatabaseHelper và không được tự mở accounts.db.
   static Future<AccountRepository> open({
     required List<AppUser> seed,
+    Database? database,
     DatabaseFactory? factory,
     String? path,
-    Database? database,
   }) async {
     if (database != null) {
       final repository = AccountRepository(database);
       await repository._ensureSharedSchemaAndSeed(seed);
       return repository;
     }
-    final driver = factory ?? databaseFactory;
-    final location = path ?? '${await driver.getDatabasesPath()}/accounts.db';
-    final db = await driver.openDatabase(
-      location,
+
+    if (factory == null || path == null || path.trim().isEmpty) {
+      throw ArgumentError(
+        'AccountRepository phải nhận Database dùng chung từ DatabaseHelper. '
+        'factory/path chỉ được cung cấp trong unit test.',
+      );
+    }
+
+    final db = await factory.openDatabase(
+      path,
       options: OpenDatabaseOptions(
         version: 1,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
@@ -50,21 +59,12 @@ class AccountRepository {
           user_id TEXT NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
           expires_at INTEGER NOT NULL
         )''');
-          for (final user in seed) {
-            await db.insert('Users', {
-              'user_id': user.id,
-              'full_name': user.name,
-              'email': user.email.trim().toLowerCase(),
-              'phone': user.phone,
-              'password_hash': await _hash(user.password),
-              'role': user.role,
-              'avatar_path': user.avatarPath,
-            });
-          }
         },
       ),
     );
-    return AccountRepository(db);
+    final repository = AccountRepository(db);
+    await repository._ensureSharedSchemaAndSeed(seed);
+    return repository;
   }
 
   /// Reuses the app database and imports any old DatabaseHelper accounts.
@@ -84,6 +84,13 @@ class AccountRepository {
       expires_at INTEGER NOT NULL
     )''');
 
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS legacy_account_import_conflicts (
+        user_id TEXT PRIMARY KEY,
+        reason TEXT NOT NULL,
+        recorded_at INTEGER NOT NULL
+      )
+    ''');
     final importTable = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_account_import'",
     );
@@ -121,9 +128,23 @@ class AccountRepository {
                 );
               } on DatabaseException catch (error) {
                 if (!error.isUniqueConstraintError()) rethrow;
+
+                await txn.insert('legacy_account_import_conflicts', {
+                  'user_id': userId,
+                  'reason': 'v1_placeholder_conflict',
+                  'recorded_at': DateTime.now().millisecondsSinceEpoch,
+                }, conflictAlgorithm: ConflictAlgorithm.replace);
                 continue;
               }
+            } else {
+              // A real account with this ID already exists. Preserve it.
+              await txn.insert('legacy_account_import_conflicts', {
+                'user_id': userId,
+                'reason': 'existing_user_id_conflict',
+                'recorded_at': DateTime.now().millisecondsSinceEpoch,
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
             }
+
             await txn.delete(
               'legacy_account_import',
               where: 'user_id = ?',
@@ -148,9 +169,45 @@ class AccountRepository {
               whereArgs: [userId],
             );
           } on DatabaseException catch (error) {
-            // Keep the legacy row for recovery; a unique email/phone collision
-            // must not be silently discarded or overwrite another account.
             if (!error.isUniqueConstraintError()) rethrow;
+
+            final normalizedEmail = (row['email'] as String)
+                .trim()
+                .toLowerCase();
+            final legacyPhone = row['phone'] as String;
+
+            final emailOwner = await txn.query(
+              'Users',
+              columns: ['user_id'],
+              where: 'email = ?',
+              whereArgs: [normalizedEmail],
+              limit: 1,
+            );
+
+            final phoneOwner = await txn.query(
+              'Users',
+              columns: ['user_id'],
+              where: 'phone = ?',
+              whereArgs: [legacyPhone],
+              limit: 1,
+            );
+
+            final String reason;
+            if (emailOwner.isNotEmpty) {
+              reason = 'email_conflict:${emailOwner.single['user_id']}';
+            } else if (phoneOwner.isNotEmpty) {
+              reason = 'phone_conflict:${phoneOwner.single['user_id']}';
+            } else {
+              reason = 'unique_constraint_conflict';
+            }
+
+            await txn.insert('legacy_account_import_conflicts', {
+              'user_id': userId,
+              'reason': reason,
+              'recorded_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+            // Giữ legacy row để có thể xử lý thủ công sau này.
           }
         }
 
@@ -171,234 +228,17 @@ class AccountRepository {
           limit: 1,
         );
         if (existing.isNotEmpty) continue;
-        await txn.insert(
-          'Users',
-          {
-            'user_id': user.id,
-            'full_name': user.name,
-            'email': user.email.trim().toLowerCase(),
-            'phone': user.phone,
-            'password_hash': await _hash(user.password),
-            'role': user.role,
-            'avatar_path': user.avatarPath,
-          },
-          conflictAlgorithm: ConflictAlgorithm.ignore,
-        );
+        await txn.insert('Users', {
+          'user_id': user.id,
+          'full_name': user.name,
+          'email': user.email.trim().toLowerCase(),
+          'phone': user.phone,
+          'password_hash': await _hash(user.password),
+          'role': user.role,
+          'avatar_path': user.avatarPath,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
     });
-  }
-
-  /// One-time, non-destructive import from the former `accounts.db` file.
-  /// Existing target accounts and valid target sessions always take priority.
-  static Future<void> importLegacyAccountDatabase(Database target) async {
-    const migrationKey = 'legacy_accounts_db_v1_imported';
-    final factory = databaseFactory;
-    final migrationTable = await target.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='app_migrations'",
-    );
-    if (migrationTable.isNotEmpty) {
-      final completed = await target.query(
-        'app_migrations',
-        columns: ['migration_key'],
-        where: 'migration_key = ?',
-        whereArgs: [migrationKey],
-        limit: 1,
-      );
-      if (completed.isNotEmpty) return;
-    }
-
-    final sourcePath = p.join(await factory.getDatabasesPath(), 'accounts.db');
-    if (!await factory.databaseExists(sourcePath)) return;
-
-    final source = await factory.openDatabase(
-      sourcePath,
-      options: OpenDatabaseOptions(readOnly: true),
-    );
-    try {
-      final tables = await source.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'",
-      );
-      if (tables.isEmpty) return;
-
-      final userColumns = (await source.rawQuery('PRAGMA table_info(Users)'))
-          .map((row) => row['name'] as String)
-          .toSet();
-      const requiredColumns = {
-        'user_id',
-        'full_name',
-        'email',
-        'phone',
-        'password_hash',
-        'role',
-      };
-      if (!userColumns.containsAll(requiredColumns)) {
-        throw FormatException(
-          'Schema Users trong accounts.db không tương thích; chưa thực hiện import.',
-        );
-      }
-
-      final sourceUsers = await source.query('Users');
-      final sessionTable = await source.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='Session'",
-      );
-      final sourceSessions = sessionTable.isEmpty
-          ? <Map<String, Object?>>[]
-          : await source.query('Session');
-
-      await target.transaction((txn) async {
-        await txn.execute('''CREATE TABLE IF NOT EXISTS app_migrations (
-          migration_key TEXT PRIMARY KEY,
-          completed_at INTEGER NOT NULL
-        )''');
-        await txn.execute('''CREATE TABLE IF NOT EXISTS legacy_account_import_conflicts (
-          user_id TEXT PRIMARY KEY,
-          reason TEXT NOT NULL,
-          recorded_at INTEGER NOT NULL
-        )''');
-
-        final completed = await txn.query(
-          'app_migrations',
-          where: 'migration_key = ?',
-          whereArgs: [migrationKey],
-          limit: 1,
-        );
-        if (completed.isNotEmpty) return;
-
-        final now = DateTime.now().millisecondsSinceEpoch;
-        for (final user in sourceUsers) {
-          final userId = user['user_id']?.toString();
-          if (userId == null || userId.isEmpty) {
-            throw FormatException('accounts.db có user_id rỗng; import bị hủy.');
-          }
-
-          final existingById = await txn.query(
-            'Users',
-            columns: ['user_id', 'password_hash'],
-            where: 'user_id = ?',
-            whereArgs: [userId],
-            limit: 1,
-          );
-          if (existingById.isNotEmpty) {
-            // A V1 migration placeholder is not a usable account. Prefer the
-            // PBKDF2 hash and profile from accounts.db, but never replace a
-            // normal account already stored in the shared database.
-            if (existingById.single['password_hash'] == 'migration-pending') {
-              try {
-                await txn.update(
-                  'Users',
-                  {
-                    'full_name': user['full_name'],
-                    'email': (user['email'] as String).trim().toLowerCase(),
-                    'phone': user['phone'],
-                    'password_hash': user['password_hash'],
-                    'role': user['role'],
-                    'avatar_path': userColumns.contains('avatar_path')
-                        ? user['avatar_path']
-                        : null,
-                    'is_active': userColumns.contains('is_active')
-                        ? user['is_active']
-                        : 1,
-                  },
-                  where: 'user_id = ?',
-                  whereArgs: [userId],
-                );
-              } on DatabaseException catch (error) {
-                if (!error.isUniqueConstraintError()) rethrow;
-                await txn.insert(
-                  'legacy_account_import_conflicts',
-                  {
-                    'user_id': userId,
-                    'reason': 'v1_placeholder_conflict',
-                    'recorded_at': now,
-                  },
-                  conflictAlgorithm: ConflictAlgorithm.replace,
-                );
-              }
-            }
-            continue;
-          }
-
-          try {
-            await txn.insert('Users', {
-              'user_id': userId,
-              'full_name': user['full_name'],
-              'email': (user['email'] as String).trim().toLowerCase(),
-              'phone': user['phone'],
-              'password_hash': user['password_hash'],
-              'role': user['role'],
-              'avatar_path': userColumns.contains('avatar_path')
-                  ? user['avatar_path']
-                  : null,
-              'is_active': userColumns.contains('is_active')
-                  ? user['is_active']
-                  : 1,
-            });
-          } on DatabaseException catch (error) {
-            if (!error.isUniqueConstraintError()) rethrow;
-            final emailOwner = await txn.query(
-              'Users',
-              columns: ['user_id'],
-              where: 'email = ? COLLATE NOCASE',
-              whereArgs: [user['email']],
-              limit: 1,
-            );
-            final phoneOwner = await txn.query(
-              'Users',
-              columns: ['user_id'],
-              where: 'phone = ?',
-              whereArgs: [user['phone']],
-              limit: 1,
-            );
-            final reason = emailOwner.isNotEmpty
-                ? "email_conflict:${emailOwner.single['user_id']}"
-                : "phone_conflict:${phoneOwner.isNotEmpty ? phoneOwner.single['user_id'] : 'unknown'}";
-            await txn.insert(
-              'legacy_account_import_conflicts',
-              {
-                'user_id': userId,
-                'reason': reason,
-                'recorded_at': now,
-              },
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          }
-        }
-
-        // Do not replace a still-valid session already belonging to this app.
-        final validTargetSession = await txn.rawQuery(
-          'SELECT id FROM Session WHERE id = 1 AND expires_at > ? LIMIT 1',
-          [now],
-        );
-        if (validTargetSession.isEmpty) {
-          await txn.delete('Session', where: 'id = 1');
-          for (final session in sourceSessions) {
-            final expiry = session['expires_at'];
-            if (expiry is! int || expiry <= now) continue;
-            final user = await txn.query(
-              'Users',
-              columns: ['user_id'],
-              where: 'user_id = ?',
-              whereArgs: [session['user_id']],
-              limit: 1,
-            );
-            if (user.isEmpty) continue;
-            await txn.insert('Session', {
-              'id': 1,
-              'user_id': session['user_id'],
-              'expires_at': expiry,
-            });
-            break;
-          }
-        }
-
-        await txn.insert('app_migrations', {
-          'migration_key': migrationKey,
-          'completed_at': now,
-        });
-      });
-    } finally {
-      await source.close();
-    }
   }
 
   static Future<String> _hash(String password, {List<int>? salt}) async {

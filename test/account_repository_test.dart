@@ -183,4 +183,174 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
+  test('SQLite records legacy email and phone conflicts', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'legacy_conflicts_test_',
+    );
+    final path = '${directory.path}/accounts.db';
+    AccountRepository? repo;
+
+    final existingUsers = [
+      AppUser(
+        id: 'existing-email',
+        name: 'Email owner',
+        email: 'email-owner@example.test',
+        phone: '0900000001',
+        password: 'test-password',
+      ),
+      AppUser(
+        id: 'existing-phone',
+        name: 'Phone owner',
+        email: 'phone-owner@example.test',
+        phone: '0900000002',
+        password: 'test-password',
+      ),
+      AppUser(
+        id: 'existing-both-email',
+        name: 'Both email owner',
+        email: 'both-email@example.test',
+        phone: '0900000003',
+        password: 'test-password',
+      ),
+      AppUser(
+        id: 'existing-both-phone',
+        name: 'Both phone owner',
+        email: 'both-phone@example.test',
+        phone: '0900000004',
+        password: 'test-password',
+      ),
+    ];
+
+    final legacyRows = [
+      {
+        'user_id': 'legacy-email',
+        'full_name': 'Legacy email conflict',
+        'email': 'EMAIL-OWNER@example.test',
+        'phone': '0911111111',
+        'password': 'legacy-password',
+        'role': 'customer',
+        'avatar_path': null,
+      },
+      {
+        'user_id': 'legacy-phone',
+        'full_name': 'Legacy phone conflict',
+        'email': 'legacy-phone@example.test',
+        'phone': '0900000002',
+        'password': 'legacy-password',
+        'role': 'customer',
+        'avatar_path': null,
+      },
+      {
+        'user_id': 'legacy-both',
+        'full_name': 'Legacy both conflicts',
+        'email': 'both-email@example.test',
+        'phone': '0900000004',
+        'password': 'legacy-password',
+        'role': 'customer',
+        'avatar_path': null,
+      },
+    ];
+
+    try {
+      // Tạo database và các tài khoản đang tồn tại.
+      repo = await AccountRepository.open(
+        seed: [],
+        factory: databaseFactoryFfi,
+        path: path,
+      );
+
+      for (final user in existingUsers) {
+        await repo.register(user);
+      }
+
+      await repo.database.close();
+      repo = null;
+
+      // Tạo bảng staging theo đúng schema V1 migration.
+      final rawDatabase = await databaseFactoryFfi.openDatabase(path);
+      try {
+        await rawDatabase.execute('''
+            CREATE TABLE legacy_account_import (
+              user_id TEXT PRIMARY KEY,
+              full_name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              phone TEXT NOT NULL,
+              password TEXT NOT NULL,
+              role TEXT NOT NULL,
+              avatar_path TEXT
+            )
+          ''');
+
+        for (final row in legacyRows) {
+          await rawDatabase.insert('legacy_account_import', row);
+        }
+      } finally {
+        await rawDatabase.close();
+      }
+
+      // Mở lại repository để xử lý các dòng legacy.
+      repo = await AccountRepository.open(
+        seed: [],
+        factory: databaseFactoryFfi,
+        path: path,
+      );
+
+      final conflicts = await repo.database.query(
+        'legacy_account_import_conflicts',
+        orderBy: 'user_id',
+      );
+
+      final reasons = {
+        for (final conflict in conflicts)
+          conflict['user_id']: conflict['reason'],
+      };
+
+      expect(reasons['legacy-email'], 'email_conflict:existing-email');
+      expect(reasons['legacy-phone'], 'phone_conflict:existing-phone');
+      expect(reasons['legacy-both'], 'email_conflict:existing-both-email');
+
+      // Không được xóa các dòng legacy chưa import được.
+      var remaining = await repo.database.query(
+        'legacy_account_import',
+        orderBy: 'user_id',
+      );
+
+      expect(remaining.map((row) => row['user_id']).toSet(), {
+        'legacy-email',
+        'legacy-phone',
+        'legacy-both',
+      });
+
+      // Mở lại lần nữa: dữ liệu và trạng thái xung đột vẫn phải tồn tại.
+      await repo.database.close();
+      repo = await AccountRepository.open(
+        seed: [],
+        factory: databaseFactoryFfi,
+        path: path,
+      );
+
+      remaining = await repo.database.query('legacy_account_import');
+      expect(remaining, hasLength(3));
+
+      final repeatedConflicts = await repo.database.query(
+        'legacy_account_import_conflicts',
+      );
+      expect(repeatedConflicts, hasLength(3));
+
+      final existing = await repo.database.query(
+        'Users',
+        where: 'user_id IN (?, ?, ?, ?)',
+        whereArgs: [
+          'existing-email',
+          'existing-phone',
+          'existing-both-email',
+          'existing-both-phone',
+        ],
+      );
+      expect(existing, hasLength(4));
+    } finally {
+      await repo?.database.close();
+      await directory.delete(recursive: true);
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }

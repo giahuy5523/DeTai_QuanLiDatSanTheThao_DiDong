@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sportfield_booking/data/account_repository.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:sportfield_booking/data/account_repository.dart';
 import 'package:sportfield_booking/utils/database_helper.dart';
 
 void main() {
@@ -362,10 +362,7 @@ void main() {
               .add(const Duration(days: 10))
               .millisecondsSinceEpoch,
         });
-        await db.insert('sport_types', {
-          'sportTypeId': 1,
-          'name': 'Football',
-        });
+        await db.insert('sport_types', {'sportTypeId': 1, 'name': 'Football'});
         await db.insert('venues', {
           'id': 'v1',
           'ownerId': 'owner1',
@@ -473,13 +470,49 @@ void main() {
           (await db.query('booking_services')).single['serviceName'],
           isNull,
         );
-        expect(
-          (await db.query('payments')).single['refundAmount'],
-          isNull,
-        );
+        expect((await db.query('payments')).single['refundAmount'], isNull);
         expect(
           (await db.query('legacy_account_import')).single['password'],
           'legacy-password',
+        );
+
+        // Kiểm tra không có bản ghi mồ côi sau migration V1 -> V3.
+        final foreignKeyViolations = await db.rawQuery(
+          'PRAGMA foreign_key_check',
+        );
+        expect(
+          foreignKeyViolations,
+          isEmpty,
+          reason:
+              'Migration V1 -> V3 tạo ra lỗi toàn vẹn khóa ngoại: '
+              '$foreignKeyViolations',
+        );
+
+        // AccountRepository consumes the legacy staging table inside the
+        // same shared database and hashes the old plaintext password.
+        final accountRepository = await AccountRepository.open(
+          seed: const [],
+          database: db,
+        );
+        final migratedUser = (await db.query(
+          'Users',
+          where: 'user_id = ?',
+          whereArgs: ['owner1'],
+        )).single;
+        expect(migratedUser['password_hash'], isNot('migration-pending'));
+        expect(migratedUser['password_hash'], contains(':'));
+        expect(
+          await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_account_import'",
+          ),
+          isEmpty,
+        );
+        expect(
+          (await accountRepository.login(
+            'owner@example.com',
+            'legacy-password',
+          ))?.id,
+          'owner1',
         );
 
         await db.close();
@@ -530,6 +563,24 @@ void main() {
           'password_hash': 'old_hash',
           'role': 'customer',
         });
+
+        await legacyDb.insert('Users', {
+          'user_id': 'legacy_email_conflict',
+          'full_name': 'Legacy Email Conflict',
+          'email': ' CURRENT-EMAIL@example.com ',
+          'phone': '0987654323',
+          'password_hash': 'legacy_hash_email',
+          'role': 'customer',
+        });
+
+        await legacyDb.insert('Users', {
+          'user_id': 'legacy_phone_conflict',
+          'full_name': 'Legacy Phone Conflict',
+          'email': 'legacy-phone@example.com',
+          'phone': '0911111112',
+          'password_hash': 'legacy_hash_phone',
+          'role': 'customer',
+        });
         await legacyDb.insert('Session', {
           'id': 1,
           'user_id': 'legacy_user_1',
@@ -574,8 +625,26 @@ void main() {
           'role': 'customer',
         });
 
+        await targetDb.insert('Users', {
+          'user_id': 'current_email_owner',
+          'full_name': 'Current Email Owner',
+          'email': 'current-email@example.com',
+          'phone': '0911111113',
+          'password_hash': 'current_hash',
+          'role': 'customer',
+        });
+
+        await targetDb.insert('Users', {
+          'user_id': 'current_phone_owner',
+          'full_name': 'Current Phone Owner',
+          'email': 'current-phone@example.com',
+          'phone': '0911111112',
+          'password_hash': 'current_hash',
+          'role': 'customer',
+        });
+
         // Thực hiện import
-        await AccountRepository.importLegacyAccountDatabase(targetDb);
+        await DatabaseHelper.importLegacyAccountDatabase(targetDb);
 
         final existingUser = await targetDb.query(
           'Users',
@@ -583,6 +652,55 @@ void main() {
           whereArgs: ['existing_user'],
         );
         expect(existingUser.single['full_name'], 'Current Profile');
+
+        // Existing real account must be preserved and its legacy collision recorded.
+        final conflicts = await targetDb.query(
+          'legacy_account_import_conflicts',
+          where: 'user_id = ?',
+          whereArgs: ['existing_user'],
+        );
+        expect(conflicts.length, 1);
+        expect(conflicts.single['reason'], 'existing_user_id_conflict');
+
+        final emailConflict = await targetDb.query(
+          'legacy_account_import_conflicts',
+          where: 'user_id = ?',
+          whereArgs: ['legacy_email_conflict'],
+        );
+
+        expect(emailConflict.length, 1);
+        expect(
+          emailConflict.single['reason'],
+          'email_conflict:current_email_owner',
+        );
+
+        final phoneConflict = await targetDb.query(
+          'legacy_account_import_conflicts',
+          where: 'user_id = ?',
+          whereArgs: ['legacy_phone_conflict'],
+        );
+
+        expect(phoneConflict.length, 1);
+        expect(
+          phoneConflict.single['reason'],
+          'phone_conflict:current_phone_owner',
+        );
+
+        final preservedEmailOwner = await targetDb.query(
+          'Users',
+          where: 'user_id = ?',
+          whereArgs: ['current_email_owner'],
+        );
+
+        expect(preservedEmailOwner.single['full_name'], 'Current Email Owner');
+
+        final preservedPhoneOwner = await targetDb.query(
+          'Users',
+          where: 'user_id = ?',
+          whereArgs: ['current_phone_owner'],
+        );
+
+        expect(preservedPhoneOwner.single['full_name'], 'Current Phone Owner');
 
         final importedUsers = await targetDb.query(
           'Users',
@@ -627,7 +745,7 @@ void main() {
               .millisecondsSinceEpoch,
         }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-        await AccountRepository.importLegacyAccountDatabase(targetDb);
+        await DatabaseHelper.importLegacyAccountDatabase(targetDb);
 
         final preservedUser = await targetDb.query(
           'Users',
@@ -653,7 +771,6 @@ void main() {
         await databaseFactory.deleteDatabase(legacyPath);
       },
     );
-
     test(
       'Migration V1 rollback nếu schema Session cũ không tương thích',
       () async {
@@ -691,9 +808,7 @@ void main() {
         );
 
         await expectLater(
-          db.transaction(
-            (txn) => DatabaseHelper().upgradeSchema(txn, 1),
-          ),
+          db.transaction((txn) => DatabaseHelper().upgradeSchema(txn, 1)),
           throwsA(isA<StateError>()),
         );
 
@@ -734,9 +849,7 @@ void main() {
         );
 
         await expectLater(
-          db.transaction(
-            (txn) => DatabaseHelper().upgradeSchema(txn, 1),
-          ),
+          db.transaction((txn) => DatabaseHelper().upgradeSchema(txn, 1)),
           throwsA(isA<StateError>()),
         );
 
