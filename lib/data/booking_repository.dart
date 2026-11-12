@@ -31,6 +31,22 @@ class BookingRepository {
     return _database;
   }
 
+  /// Chạy một transaction SQLite. Các thao tác ghi vào cache MockStore được
+  /// xếp vào `afterCommit` và chỉ chạy SAU khi transaction commit thành công,
+  /// nên rollback không làm MockStore đi trước database.
+  static Future<T> _txn<T>(
+    Database db,
+    Future<T> Function(Transaction txn, List<void Function()> afterCommit)
+    action,
+  ) async {
+    final afterCommit = <void Function()>[];
+    final result = await db.transaction<T>((txn) => action(txn, afterCommit));
+    for (final op in afterCommit) {
+      op();
+    }
+    return result;
+  }
+
   // --------------------------------------------------------------------------
   // 1. KIỂM TRA KHUNG GIỜ KHẢ DỤNG
   // --------------------------------------------------------------------------
@@ -112,7 +128,7 @@ class BookingRepository {
       );
     }
 
-    return await db.transaction<BookingPaymentResult>((txn) async {
+    return _txn<BookingPaymentResult>(db, (txn, afterCommit) async {
       // 1.1 Kiểm tra trùng booking id
       final existingBooking = await txn.query(
         'bookings',
@@ -289,7 +305,6 @@ class BookingRepository {
 
       final resolvedPaymentId =
           booking.paymentId ?? 'pay_${DateTime.now().microsecondsSinceEpoch}';
-      booking.paymentId = resolvedPaymentId;
       final isOnlinePayment = method != 'cash';
 
       // 3. Phân nhánh: Mô phỏng thanh toán trực tuyến thất bại
@@ -297,10 +312,8 @@ class BookingRepository {
         final failedTxn =
             transactionCode ??
             'TXN-FAILED-${DateTime.now().microsecondsSinceEpoch}';
-        booking.status = 'cancelled';
-        booking.paymentStatus = 'unpaid';
-        booking.cancelReason = 'Thanh toán trực tuyến thất bại';
-        booking.cancelledAt = DateTime.now();
+        const failCancelReason = 'Thanh toán trực tuyến thất bại';
+        final failCancelledAt = DateTime.now();
 
         await txn.insert('bookings', {
           'id': booking.id,
@@ -319,8 +332,8 @@ class BookingRepository {
           'promoId': booking.promoId,
           'promotionCode': booking.promotionCode,
           'note': booking.note,
-          'cancelReason': booking.cancelReason,
-          'cancelledAt': booking.cancelledAt?.toIso8601String(),
+          'cancelReason': failCancelReason,
+          'cancelledAt': failCancelledAt.toIso8601String(),
           'createdAt': booking.createdAt.toIso8601String(),
         });
 
@@ -348,11 +361,17 @@ class BookingRepository {
           'isRead': 0,
         });
 
-        // Sync to MockStore
-        MockStore.bookings.add(booking);
-        MockStore.payments.add({
-          ...paymentRecord,
-          'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
+        afterCommit.add(() {
+          booking.status = 'cancelled';
+          booking.paymentStatus = 'unpaid';
+          booking.paymentId = resolvedPaymentId;
+          booking.cancelReason = failCancelReason;
+          booking.cancelledAt = failCancelledAt;
+          MockStore.bookings.add(booking);
+          MockStore.payments.add({
+            ...paymentRecord,
+            'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
+          });
         });
 
         return BookingPaymentResult(
@@ -366,13 +385,14 @@ class BookingRepository {
       }
 
       // 4. Phân nhánh: Thành công
-      booking.status = 'confirmed';
+      const bookingStatus = 'confirmed';
+      final bool isCash = method == 'cash';
+      final String paymentStatusValue = isCash ? 'unpaid' : 'paid';
       final String? successTxn;
       final Map<String, dynamic> paymentRecord;
 
       if (method == 'cash') {
         successTxn = null;
-        booking.paymentStatus = 'unpaid';
         paymentRecord = <String, dynamic>{
           'id': resolvedPaymentId,
           'bookingId': booking.id,
@@ -385,7 +405,6 @@ class BookingRepository {
       } else {
         successTxn =
             transactionCode ?? 'TXN${Random().nextInt(900000) + 100000}';
-        booking.paymentStatus = 'paid';
         paymentRecord = <String, dynamic>{
           'id': resolvedPaymentId,
           'bookingId': booking.id,
@@ -410,8 +429,8 @@ class BookingRepository {
         'originalAmount': booking.originalAmount,
         'serviceAmount': booking.serviceAmount,
         'discountAmount': booking.discountAmount,
-        'status': booking.status,
-        'paymentStatus': booking.paymentStatus,
+        'status': bookingStatus,
+        'paymentStatus': paymentStatusValue,
         'paymentId': resolvedPaymentId,
         'promoId': booking.promoId,
         'promotionCode': booking.promotionCode,
@@ -455,33 +474,37 @@ class BookingRepository {
         );
       }
 
-      // 5. Cập nhật Cache MockStore đồng bộ
-      MockStore.bookings.add(booking);
-      MockStore.payments.add({
-        ...paymentRecord,
-        'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
-        if (paymentRecord['paidAt'] != null)
-          'paidAt': DateTime.parse(paymentRecord['paidAt'] as String),
-      });
-
-      if (booking.promoId != null) {
-        final pIndex = MockStore.promotions.indexWhere(
-          (p) => p.id == booking.promoId,
-        );
-        if (pIndex != -1) {
-          final p = MockStore.promotions[pIndex];
-          if (!p.usageHistory.any((u) => u.bookingId == booking.id)) {
-            p.usageHistory.add(
-              PromotionUsage(
-                promotionId: booking.promoId!,
-                userId: booking.userId,
-                bookingId: booking.id,
-              ),
-            );
-            p.usedCount++;
+      // 5. Cập nhật Cache MockStore: chỉ chạy sau khi commit
+      afterCommit.add(() {
+        booking.status = bookingStatus;
+        booking.paymentStatus = paymentStatusValue;
+        booking.paymentId = resolvedPaymentId;
+        MockStore.bookings.add(booking);
+        MockStore.payments.add({
+          ...paymentRecord,
+          'createdAt': DateTime.parse(paymentRecord['createdAt'] as String),
+          if (paymentRecord['paidAt'] != null)
+            'paidAt': DateTime.parse(paymentRecord['paidAt'] as String),
+        });
+        if (booking.promoId != null) {
+          final pIndex = MockStore.promotions.indexWhere(
+            (p) => p.id == booking.promoId,
+          );
+          if (pIndex != -1) {
+            final p = MockStore.promotions[pIndex];
+            if (!p.usageHistory.any((u) => u.bookingId == booking.id)) {
+              p.usageHistory.add(
+                PromotionUsage(
+                  promotionId: booking.promoId!,
+                  userId: booking.userId,
+                  bookingId: booking.id,
+                ),
+              );
+              p.usedCount++;
+            }
           }
         }
-      }
+      });
 
       return BookingPaymentResult(
         isSuccess: true,
@@ -505,7 +528,7 @@ class BookingRepository {
       return MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
@@ -648,8 +671,9 @@ class BookingRepository {
         }
       }
 
-      // Đồng bộ Cache MockStore
-      MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
+      afterCommit.add(() {
+        MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
+      });
       return true;
     });
   }
@@ -659,7 +683,7 @@ class BookingRepository {
     if (db == null) {
       return MockStore.completeRefund(bookingId);
     }
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
@@ -713,7 +737,7 @@ class BookingRepository {
         'isRead': 0,
       });
 
-      MockStore.completeRefund(bookingId);
+      afterCommit.add(() => MockStore.completeRefund(bookingId));
       return true;
     });
   }
@@ -723,7 +747,7 @@ class BookingRepository {
     if (db == null) {
       return MockStore.failRefund(bookingId);
     }
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
@@ -769,7 +793,7 @@ class BookingRepository {
         'isRead': 0,
       });
 
-      MockStore.failRefund(bookingId);
+      afterCommit.add(() => MockStore.failRefund(bookingId));
       return true;
     });
   }
@@ -804,7 +828,7 @@ class BookingRepository {
       return false;
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final rows = await txn.rawQuery(
         'SELECT b.id, b.status, b.venueId, v.ownerId FROM bookings b JOIN venues v ON v.id = b.venueId WHERE b.id = ? LIMIT 1',
         [bookingId],
@@ -827,11 +851,12 @@ class BookingRepository {
         whereArgs: [bookingId],
       );
 
-      // Đồng bộ MockStore
-      final mockIdx = MockStore.bookings.indexWhere((b) => b.id == bookingId);
-      if (mockIdx != -1) {
-        MockStore.bookings[mockIdx].status = newStatus;
-      }
+      afterCommit.add(() {
+        final mockIdx = MockStore.bookings.indexWhere((b) => b.id == bookingId);
+        if (mockIdx != -1) {
+          MockStore.bookings[mockIdx].status = newStatus;
+        }
+      });
       return true;
     });
   }
@@ -858,7 +883,7 @@ class BookingRepository {
       return true;
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final existing = await txn.query(
         'promotions',
         columns: ['id'],
@@ -877,8 +902,7 @@ class BookingRepository {
         'usedCount': promotion.usedCount,
       });
 
-      // Đồng bộ MockStore
-      MockStore.promotions.add(promotion);
+      afterCommit.add(() => MockStore.promotions.add(promotion));
       return true;
     });
   }
@@ -906,7 +930,7 @@ class BookingRepository {
       return true;
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final duplicate = await txn.query(
         'promotions',
         columns: ['id'],
@@ -930,11 +954,12 @@ class BookingRepository {
       );
       if (updated == 0) return false;
 
-      // Đồng bộ MockStore
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promotion.id);
-      if (idx != -1) {
-        MockStore.promotions[idx] = promotion;
-      }
+      afterCommit.add(() {
+        final idx = MockStore.promotions.indexWhere((p) => p.id == promotion.id);
+        if (idx != -1) {
+          MockStore.promotions[idx] = promotion;
+        }
+      });
       return true;
     });
   }
@@ -960,7 +985,7 @@ class BookingRepository {
       return true;
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final count = await txn.update(
         'promotions',
         {'isActive': isActive ? 1 : 0},
@@ -969,20 +994,21 @@ class BookingRepository {
       );
       if (count == 0) return false;
 
-      // Đồng bộ MockStore
-      final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
-      if (idx != -1) {
-        final p = MockStore.promotions[idx];
-        MockStore.promotions[idx] = Promotion(
-          id: p.id,
-          code: p.code,
-          discountPercent: p.discountPercent,
-          expiryDate: p.expiryDate,
-          isActive: isActive,
-          usedCount: p.usedCount,
-          usageHistory: p.usageHistory,
-        );
-      }
+      afterCommit.add(() {
+        final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
+        if (idx != -1) {
+          final p = MockStore.promotions[idx];
+          MockStore.promotions[idx] = Promotion(
+            id: p.id,
+            code: p.code,
+            discountPercent: p.discountPercent,
+            expiryDate: p.expiryDate,
+            isActive: isActive,
+            usedCount: p.usedCount,
+            usageHistory: p.usageHistory,
+          );
+        }
+      });
       return true;
     });
   }
@@ -1010,7 +1036,7 @@ class BookingRepository {
       return true;
     }
 
-    return await db.transaction<bool>((txn) async {
+    return _txn<bool>(db, (txn, afterCommit) async {
       final promoRows = await txn.query(
         'promotions',
         columns: ['id', 'usedCount'],
@@ -1037,26 +1063,29 @@ class BookingRepository {
           where: 'id = ?',
           whereArgs: [promoId],
         );
-        final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
-        if (idx != -1) {
-          final p = MockStore.promotions[idx];
-          MockStore.promotions[idx] = Promotion(
-            id: p.id,
-            code: p.code,
-            discountPercent: p.discountPercent,
-            expiryDate: p.expiryDate,
-            isActive: false,
-            usedCount: p.usedCount,
-            usageHistory: p.usageHistory,
-          );
-        }
+        afterCommit.add(() {
+          final idx = MockStore.promotions.indexWhere((p) => p.id == promoId);
+          if (idx != -1) {
+            final p = MockStore.promotions[idx];
+            MockStore.promotions[idx] = Promotion(
+              id: p.id,
+              code: p.code,
+              discountPercent: p.discountPercent,
+              expiryDate: p.expiryDate,
+              isActive: false,
+              usedCount: p.usedCount,
+              usageHistory: p.usageHistory,
+            );
+          }
+        });
         return true;
       }
 
       await txn.delete('promotions', where: 'id = ?', whereArgs: [promoId]);
 
-      // Đồng bộ MockStore
-      MockStore.promotions.removeWhere((p) => p.id == promoId);
+      afterCommit.add(
+        () => MockStore.promotions.removeWhere((p) => p.id == promoId),
+      );
       return true;
     });
   }
