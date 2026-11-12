@@ -12,6 +12,14 @@ class AccountService {
   AccountService._();
   static AccountRepository? repository;
 
+  static AccountRepository get _requiredRepository {
+    final value = repository;
+    if (value == null) {
+      throw StateError('Dữ liệu tài khoản chưa được khởi tạo.');
+    }
+    return value;
+  }
+
   static Future<void> initialize() async {
     final appDatabase = await DatabaseHelper().database;
     await AccountRepository.importLegacyAccountDatabase(appDatabase);
@@ -167,25 +175,18 @@ class AccountService {
   }
 
   static Future<AppUser?> login(String email, String password) async {
-    final db = repository;
-    if (db == null) return MockStore.login(email, password);
-    final user = await db.login(email, password);
+    final user = await _requiredRepository.login(email, password);
     if (user != null) MockStore.currentUser = user;
     return user;
   }
 
   static Future<void> register(AppUser user) async {
-    final db = repository;
-    if (db == null) {
-      MockStore.addUser(user);
-      return;
-    }
-    await db.register(user);
+    await _requiredRepository.register(user);
     await _refresh();
   }
 
   static Future<void> logout() async {
-    await repository?.logout();
+    await _requiredRepository.logout();
     MockStore.logout();
   }
 
@@ -204,16 +205,7 @@ class AccountService {
     required String? avatarPath,
   }) async {
     if (MockStore.currentUser?.id != userId) return null;
-    final db = repository;
-    if (db == null) {
-      return MockStore.updateCurrentProfile(
-        userId: userId,
-        name: name,
-        phone: phone,
-        avatarPath: avatarPath,
-      );
-    }
-    final updated = await db.updateProfile(
+    final updated = await _requiredRepository.updateProfile(
       userId: userId,
       name: name,
       phone: phone,
