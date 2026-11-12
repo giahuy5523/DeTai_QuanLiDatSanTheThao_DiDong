@@ -10,7 +10,7 @@ import '../../widgets/venue_image.dart';
 // The actual screen continues to use the SQLite repository asynchronously.
 // ============================================================================
 
-class BookingRepository {
+class _MockStoreBookingCancel {
   static Map<String, dynamic>? cancelBooking(String bookingId) {
     final bookingIndex = MockStore.bookings.indexWhere(
       (booking) => booking.id == bookingId,
@@ -41,7 +41,7 @@ class BookingRepository {
 class BookingController {
   /// API đồng bộ giữ tương thích với các test MockStore hiện có.
   static bool cancelBooking(String bookingId) {
-    return BookingRepository.cancelBooking(bookingId) != null;
+    return _MockStoreBookingCancel.cancelBooking(bookingId) != null;
   }
 
   /// Luồng thực tế của màn hình: hủy đơn qua SQLite Repository.

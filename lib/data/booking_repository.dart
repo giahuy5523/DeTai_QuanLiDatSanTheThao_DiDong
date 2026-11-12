@@ -15,6 +15,9 @@ class BookingRepository {
   BookingRepository._();
 
   static Database? _database;
+  /// Chỉ dùng trong test (widget test không có SQLite driver). Production
+  /// luôn đi qua SQLite: nếu database không mở được, lỗi được ném ra,
+  /// không chuyển sang MockStore.
   static bool _useMockStoreForTesting = false;
   static bool get isInitialized => _database != null;
 
