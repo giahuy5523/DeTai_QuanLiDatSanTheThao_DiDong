@@ -71,66 +71,66 @@ class _AdminDrawerState extends State<AdminDrawer> {
       ),
       child: SafeArea(
         child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const _SoftDivider(),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Column(
-                children: [
-                  _DrawerItem(
-                    label: 'Tổng quan',
-                    icon: Icons.dashboard_outlined,
-                    selected: widget.selectedIndex == 0,
-                    onTap: () => _goTo(context, AppRoutes.statistics),
-                  ),
-                  _DrawerItem(
-                    label: 'Duyệt sân',
-                    icon: Icons.approval,
-                    selected: widget.selectedIndex == 1,
-                    badgeCount: widget.pendingVenueCount,
-                    onTap: () => _goTo(context, AppRoutes.approveVenue),
-                  ),
-                  _DrawerItem(
-                    label: 'Quản lý khuyến mãi',
-                    icon: Icons.discount_outlined,
-                    selected: widget.selectedIndex == 2,
-                    onTap: () => _goTo(context, AppRoutes.managePromotion),
-                  ),
-                  _DrawerItem(
-                    label: 'Hoàn tiền',
-                    icon: Icons.payments_outlined,
-                    selected: selectedIndex == 3,
-                    onTap: () => _goTo(context, AppRoutes.manageRefund),
-                  ),
-                ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const _SoftDivider(),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    _DrawerItem(
+                      label: 'Tổng quan',
+                      icon: Icons.dashboard_outlined,
+                      selected: widget.selectedIndex == 0,
+                      onTap: () => _goTo(context, AppRoutes.statistics),
+                    ),
+                    _DrawerItem(
+                      label: 'Duyệt sân',
+                      icon: Icons.approval,
+                      selected: widget.selectedIndex == 1,
+                      badgeCount: widget.pendingVenueCount,
+                      onTap: () => _goTo(context, AppRoutes.approveVenue),
+                    ),
+                    _DrawerItem(
+                      label: 'Quản lý khuyến mãi',
+                      icon: Icons.discount_outlined,
+                      selected: widget.selectedIndex == 2,
+                      onTap: () => _goTo(context, AppRoutes.managePromotion),
+                    ),
+                    _DrawerItem(
+                      label: 'Hoàn tiền',
+                      icon: Icons.payments_outlined,
+                      selected: widget.selectedIndex == 3,
+                      onTap: () => _goTo(context, AppRoutes.manageRefund),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const _SoftDivider(),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _DrawerItem(
-                label: 'Đăng xuất',
-                icon: Icons.logout,
-                color: AppTheme.error,
-                onTap: () => _logout(context),
+              const SizedBox(height: 16),
+              const _SoftDivider(),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _DrawerItem(
+                  label: 'Đăng xuất',
+                  icon: Icons.logout,
+                  color: AppTheme.error,
+                  onTap: () => _logout(context),
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(28, 0, 24, 20),
-              child: Text(
-                'Phiên bản 1.0.0',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              const SizedBox(height: 24),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(28, 0, 24, 20),
+                child: Text(
+                  'Phiên bản 1.0.0',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
