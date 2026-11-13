@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
@@ -9,14 +10,18 @@ import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/service.dart';
 import 'package:sportfield_booking/models/user.dart';
 import 'package:sportfield_booking/models/venue.dart';
+import 'package:sportfield_booking/screens/owner/manage_service_screen.dart';
+import 'package:sportfield_booking/screens/customer/booking_history_screen.dart';
+import 'package:sportfield_booking/screens/customer/payment_screen.dart';
 import 'package:sportfield_booking/utils/database_helper.dart';
 import 'package:sqflite/sqflite.dart';
+import '../test/test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Cross-role booking persists in shared Android SQLite', (
-    _,
+    tester,
   ) async {
     final path = p.join(
       await getDatabasesPath(),
@@ -118,18 +123,90 @@ void main() {
         totalPrice: approved.pricePerHour + item.subtotal,
         serviceItems: [item],
       );
-      final result = await BookingRepository.processBookingPayment(
-        booking: booking,
-        method: 'momo',
-        transactionCode: 'TEST-SHARED-SQLITE',
+      MockStore.currentUser = customerSession;
+      await tester.pumpWidget(
+        MaterialApp(
+          initialRoute: '/payment-test',
+          onGenerateRoute: (_) => MaterialPageRoute<void>(
+            settings: RouteSettings(
+              arguments: <String, dynamic>{
+                'venue': approved,
+                'date': booking.date,
+                'startTime': booking.startTime,
+                'endTime': booking.endTime,
+                'courtPrice': approved.pricePerHour,
+                'serviceIds': [service.id],
+                'serviceQuantities': {service.id: 2},
+                'serviceTotal': item.subtotal,
+                'total': booking.totalPrice,
+              },
+            ),
+            builder: (_) => const PaymentScreen(),
+          ),
+        ),
       );
-      expect(result.isSuccess, isTrue, reason: result.failureReason);
+      await tester.pumpAndSettle();
+      final agreement = find.byType(CheckboxListTile);
+      await tester.scrollUntilVisible(
+        agreement,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tapVisible(tester, agreement);
+      await press(tester, 'Xác nhận thanh toán');
+      expect(find.text('Thanh toán thành công'), findsOneWidget);
+      final bookingId = (await BookingRepository.getBookingsForUser(
+        customer.id,
+      )).single.id;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
 
       await signIn(owner);
       final entries = await VenueRepository.loadBookingsForVenue(venue.id);
-      expect(entries.single.id, booking.id);
+      expect(entries.single.id, bookingId);
       expect(entries.single.customerName, customer.name);
       expect(entries.single.status, 'confirmed');
+
+      await tester.pumpWidget(
+        MaterialApp(home: ManageServiceScreen(venueId: venue.id)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(service.name), findsOneWidget);
+      await tapVisible(tester, find.text('Thêm dịch vụ'));
+      final name = find.byType(TextField).first;
+      final price = find.byType(TextField).at(1);
+      await tapVisible(tester, name);
+      await tester.enterText(name, 'QA Ball Rental');
+      await tapVisible(tester, price);
+      await tester.enterText(price, '20000');
+      expect(tester.widget<TextField>(price).controller!.text, '20.000');
+      await press(tester, 'Thêm');
+      final label = find.text('QA Ball Rental');
+      Future<List<Map<String, Object?>>> rows() => initial.query(
+        'venue_services',
+        where: 'name = ? AND venueId = ?',
+        whereArgs: ['QA Ball Rental', venue.id],
+      );
+      expect((await rows()).single['price'], 20000);
+      expect(label, findsOneWidget);
+      final card = find.ancestor(of: label, matching: find.byType(Card));
+      await tapVisible(
+        tester,
+        find.descendant(of: card, matching: find.text('Sửa')),
+      );
+      await tapVisible(tester, price);
+      await tester.enterText(price, '25000');
+      await press(tester, 'Lưu');
+      expect((await rows()).single['price'], 25000);
+      await tapVisible(
+        tester,
+        find.descendant(of: card, matching: find.text('Xóa')),
+      );
+      await press(tester, 'Xóa');
+      expect(await rows(), isEmpty);
+      expect(label, findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
 
       await signIn(admin);
       final stats = await VenueRepository.loadSystemStatistics();
@@ -145,7 +222,7 @@ void main() {
       await VenueRepository.initialize(reopened);
       BookingRepository.setDatabaseForTesting(reopened);
       await BookingRepository.refreshCache();
-      expect(MockStore.bookings.single.id, booking.id);
+      expect(MockStore.bookings.single.id, bookingId);
 
       expect((await restoredAccounts.restoreSession())?.id, admin.id);
       expect(
@@ -165,15 +242,15 @@ void main() {
       final restoredBooking = (await BookingRepository.getBookingsForUser(
         customer.id,
       )).single;
-      expect(restoredBooking.id, booking.id);
+      expect(restoredBooking.id, bookingId);
       expect(restoredBooking.venueId, venue.id);
       expect(restoredBooking.paymentStatus, 'paid');
       expect(restoredBooking.serviceItems.single.serviceId, service.id);
       expect(restoredBooking.serviceItems.single.quantity, 2);
-      final payment = await BookingRepository.getPaymentForBooking(booking.id);
+      final payment = await BookingRepository.getPaymentForBooking(bookingId);
       expect(payment?.paymentId, restoredBooking.paymentId);
       expect(payment?.status, 'success');
-      expect(payment?.transactionCode, 'TEST-SHARED-SQLITE');
+      expect(payment?.transactionCode, isNotEmpty);
       expect(payment?.amount, 130000);
       Future<bool> slotIsAvailable() => BookingRepository.isRangeAvailable(
         venueId: venue.id,
@@ -186,21 +263,30 @@ void main() {
         (await restoredAccounts.login(customer.email, customer.password))?.id,
         customer.id,
       );
-      expect(await BookingRepository.cancelBooking(booking.id), isTrue);
-      expect(await BookingRepository.cancelBooking(booking.id), isFalse);
-      expect(await slotIsAvailable(), isTrue);
-      final refund = await BookingRepository.getPaymentForBooking(booking.id);
-      expect(refund?.refundStatus, 'processing');
-      expect(await BookingRepository.completeRefund(booking.id), isTrue);
-      expect(await BookingRepository.completeRefund(booking.id), isFalse);
+      MockStore.currentUser = await restoredAccounts.restoreSession();
+      await tester.pumpWidget(const MaterialApp(home: BookingHistoryScreen()));
+      await tester.pumpAndSettle();
+      expect(find.text('Lịch sử đặt sân'), findsOneWidget);
+      expect(find.text(venue.name), findsOneWidget);
+      await press(tester, 'Hủy đặt sân');
       expect(
-        (await BookingRepository.getBookingById(booking.id))?.paymentStatus,
+        (await BookingRepository.getBookingById(bookingId))?.status,
+        'cancelled',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(await BookingRepository.cancelBooking(bookingId), isFalse);
+      expect(await slotIsAvailable(), isTrue);
+      final refund = await BookingRepository.getPaymentForBooking(bookingId);
+      expect(refund?.refundStatus, 'processing');
+      expect(await BookingRepository.completeRefund(bookingId), isTrue);
+      expect(await BookingRepository.completeRefund(bookingId), isFalse);
+      expect(
+        (await BookingRepository.getBookingById(bookingId))?.paymentStatus,
         'refunded',
       );
       expect(
-        (await BookingRepository.getPaymentForBooking(
-          booking.id,
-        ))?.refundStatus,
+        (await BookingRepository.getPaymentForBooking(bookingId))?.refundStatus,
         'succeeded',
       );
       await reopened.close();
@@ -212,13 +298,12 @@ void main() {
       expect(MockStore.bookings.single.status, 'cancelled');
       expect(MockStore.bookings.single.paymentStatus, 'refunded');
       expect(
-        (await BookingRepository.getPaymentForBooking(
-          booking.id,
-        ))?.refundStatus,
+        (await BookingRepository.getPaymentForBooking(bookingId))?.refundStatus,
         'succeeded',
       );
       expect(await afterRefund.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     } finally {
+      MockStore.currentUser = null;
       BookingRepository.setDatabaseForTesting(null);
       await database?.close();
       await deleteDatabase(path);

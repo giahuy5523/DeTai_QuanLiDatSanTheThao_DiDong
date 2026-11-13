@@ -558,7 +558,9 @@ void main() {
       expect(MockStore.promotions.last.code, 'MERGE25');
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
-      final card = find.byKey(ValueKey('promo-${MockStore.promotions.last.id}'));
+      final card = find.byKey(
+        ValueKey('promo-${MockStore.promotions.last.id}'),
+      );
       await tester.scrollUntilVisible(
         card,
         200,
@@ -618,11 +620,17 @@ void main() {
       await tester.enterText(find.byType(TextField).at(1), 'Infinity');
       await press(tester, 'Thêm');
       expect(MockStore.servicesFor(venue.id), isEmpty);
+      expect(find.text('Vui lòng nhập giá'), findsOneWidget);
+      await tapVisible(tester, find.byType(TextField).at(1));
       await tester.enterText(find.byType(TextField).at(1), '20000');
-      await tester.enterText(find.byType(TextField).at(2), 'lần');
+      expect(
+        tester.widget<TextField>(find.byType(TextField).at(1)).controller!.text,
+        '20.000',
+      );
       await press(tester, 'Thêm');
       expect(MockStore.servicesFor(venue.id).single.price, 20000);
       await tapVisible(tester, find.text('Sửa'));
+      await tapVisible(tester, find.byType(TextField).at(1));
       await tester.enterText(find.byType(TextField).at(1), '25000');
       await press(tester, 'Lưu');
       expect(MockStore.servicesFor(venue.id).single.price, 25000);
