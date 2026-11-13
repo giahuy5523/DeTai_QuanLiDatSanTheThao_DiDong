@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/mock_store.dart';
 import '../../data/booking_repository.dart' as data_repo;
+import '../../data/venue_repository.dart';
+import '../../models/service.dart';
 import '../../models/booking.dart';
 import '../../models/promotion.dart';
 import '../../models/venue.dart';
@@ -35,6 +37,12 @@ class _BookingScreenState extends State<BookingScreen> {
   String? _availabilityKey;
   int _availabilityRequestId = 0;
 
+  String? _catalogVenueId;
+  List<int> _hours = const [6, 22];
+  List<VenueService> _services = const [];
+  List<String> _images = const [];
+  List<Promotion> _promotions = const [];
+
   String _availabilityKeyFor(Venue venue) {
     return '${venue.id}_${_date.year}-${_date.month}-${_date.day}';
   }
@@ -50,6 +58,11 @@ class _BookingScreenState extends State<BookingScreen> {
               ? MockStore.venues.first
               : Venue.mockList().first);
 
+    if (_catalogVenueId != venue.id) {
+      _catalogVenueId = venue.id;
+      _loadCatalog(venue.id);
+    }
+
     final nextKey = _availabilityKeyFor(venue);
     if (_availabilityKey != nextKey) {
       _availabilityKey = nextKey;
@@ -57,6 +70,20 @@ class _BookingScreenState extends State<BookingScreen> {
       _availabilityLoadFailed = false;
       _loadBookedBookings(venue);
     }
+  }
+
+  Future<void> _loadCatalog(String venueId) async {
+    final hours = await VenueRepository.loadHoursFor(venueId);
+    final services = await VenueRepository.loadServicesFor(venueId);
+    final images = await VenueRepository.loadImageUrlsFor(venueId);
+    final promotions = await data_repo.BookingRepository.loadActivePromotions();
+    if (!mounted || _catalogVenueId != venueId) return;
+    setState(() {
+      _hours = hours;
+      _services = services;
+      _images = images;
+      _promotions = promotions;
+    });
   }
 
   Future<void> _loadBookedBookings(Venue venue) async {
@@ -105,7 +132,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   List<String> _timesFor(Venue venue, {bool includeClosing = false}) {
-    final hours = MockStore.hoursOf(venue.id);
+    final hours = _hours;
     final openingHour = hours[0];
     final closingHour = hours[1];
 
@@ -311,7 +338,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
 
     Promotion? promo;
-    for (final item in MockStore.promotions) {
+    for (final item in _promotions) {
       if (item.code == code && item.isValidAt(DateTime.now())) {
         promo = item;
         break;
@@ -381,7 +408,7 @@ class _BookingScreenState extends State<BookingScreen> {
               ? MockStore.venues.first
               : Venue.mockList().first);
 
-    final services = MockStore.servicesFor(venue.id);
+    final services = _services;
 
     final serviceTotal = services.fold<double>(0, (sum, service) {
       final qty = _selectedServices[service.id] ?? 0;
@@ -451,7 +478,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildVenuePhoto(Venue venue, {double height = 140}) {
-    final images = MockStore.imageUrlsOf(venue.id);
+    final images = _images;
     if (images.isEmpty) {
       return _missingImageNotice('Chưa có ảnh cho sân ${venue.name}.');
     }

@@ -913,6 +913,31 @@ class BookingRepository {
   // --------------------------------------------------------------------------
   // 3.2 QUẢN LÝ KHUYẾN MÃI DÀNH CHO ADMIN (Tạo, Sửa, Xóa/Vô hiệu hóa, Bật/Tắt)
   // --------------------------------------------------------------------------
+  /// Khuyến mãi đang bật, dùng để kiểm tra mã ở màn đặt sân.
+  static Future<List<Promotion>> loadActivePromotions() async {
+    final db = await _db;
+    if (db == null) {
+      return MockStore.promotions.where((p) => p.isActive).toList();
+    }
+    final rows = await db.query(
+      'promotions',
+      where: 'isActive = 1',
+      orderBy: 'code COLLATE NOCASE',
+    );
+    return rows
+        .map(
+          (row) => Promotion(
+            id: row['id'] as String,
+            code: row['code'] as String,
+            discountPercent: (row['discountPercent'] as num).toDouble(),
+            expiryDate: DateTime.parse(row['expiryDate'] as String),
+            isActive: true,
+            usedCount: row['usedCount'] as int? ?? 0,
+          ),
+        )
+        .toList();
+  }
+
   static Future<bool> createPromotion(Promotion promotion) async {
     final normalizedCode = promotion.code.trim().toUpperCase();
     if (normalizedCode.isEmpty ||
