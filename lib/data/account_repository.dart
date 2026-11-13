@@ -157,9 +157,13 @@ class AccountRepository {
   }
 
   /// Copies the former accounts.db before demo accounts are seeded.
-  static Future<void> importLegacyAccountDatabase(Database target) async {
+  static Future<void> importLegacyAccountDatabase(
+    Database target, {
+    String? legacyPath,
+  }) async {
     final factory = databaseFactory;
-    final sourcePath = p.join(await factory.getDatabasesPath(), 'accounts.db');
+    final sourcePath =
+        legacyPath ?? p.join(await factory.getDatabasesPath(), 'accounts.db');
     if (p.equals(sourcePath, target.path) ||
         !await factory.databaseExists(sourcePath)) {
       return;
@@ -177,6 +181,12 @@ class AccountRepository {
       );
       if (completed.isNotEmpty) return;
 
+      await txn.execute(
+        '''CREATE TABLE IF NOT EXISTS legacy_account_import_conflicts (
+        user_id TEXT PRIMARY KEY,
+        reason TEXT NOT NULL
+      )''',
+      );
       final source = await factory.openDatabase(
         sourcePath,
         options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
@@ -195,11 +205,36 @@ class AccountRepository {
               )).firstOrNull
             : null;
 
-        for (final user in await source.query('Users')) {
+        for (final row in await source.query('Users')) {
+          final user = {
+            ...row,
+            'email': (row['email'] as String).trim().toLowerCase(),
+            'phone': (row['phone'] as String).trim(),
+          };
           try {
             await txn.insert('Users', user);
           } on DatabaseException catch (error) {
             if (!error.isUniqueConstraintError()) rethrow;
+            final String reason;
+            if (error.isUniqueConstraintError('Users.user_id')) {
+              reason = 'existing_user_id_conflict';
+            } else {
+              final field = error.isUniqueConstraintError('Users.email')
+                  ? 'email'
+                  : 'phone';
+              final owners = await txn.query(
+                'Users',
+                columns: ['user_id'],
+                where: '$field = ?',
+                whereArgs: [user[field]],
+                limit: 1,
+              );
+              reason = '${field}_conflict:${owners.firstOrNull?['user_id']}';
+            }
+            await txn.insert('legacy_account_import_conflicts', {
+              'user_id': user['user_id'],
+              'reason': reason,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
             continue;
           }
           // An existing account may have logged out after an earlier import.

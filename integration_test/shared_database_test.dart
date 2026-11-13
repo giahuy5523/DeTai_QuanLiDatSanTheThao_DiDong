@@ -3,6 +3,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sportfield_booking/data/account_repository.dart';
 import 'package:sportfield_booking/data/booking_repository.dart';
+import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/service.dart';
@@ -143,6 +144,8 @@ void main() {
       final restoredAccounts = AccountRepository(reopened);
       await VenueRepository.initialize(reopened);
       BookingRepository.setDatabaseForTesting(reopened);
+      await BookingRepository.refreshCache();
+      expect(MockStore.bookings.single.id, booking.id);
 
       expect((await restoredAccounts.restoreSession())?.id, admin.id);
       expect(
@@ -200,6 +203,21 @@ void main() {
         ))?.refundStatus,
         'succeeded',
       );
+      await reopened.close();
+      database = null;
+      final afterRefund = await openTestDatabase();
+      database = afterRefund;
+      BookingRepository.setDatabaseForTesting(afterRefund);
+      await BookingRepository.refreshCache();
+      expect(MockStore.bookings.single.status, 'cancelled');
+      expect(MockStore.bookings.single.paymentStatus, 'refunded');
+      expect(
+        (await BookingRepository.getPaymentForBooking(
+          booking.id,
+        ))?.refundStatus,
+        'succeeded',
+      );
+      expect(await afterRefund.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     } finally {
       BookingRepository.setDatabaseForTesting(null);
       await database?.close();
