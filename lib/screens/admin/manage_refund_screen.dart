@@ -133,6 +133,7 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
                             onPressed: busy
                                 ? null
                                 : () => _resolve(refund, success: false),
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(96, 44)),
                             child: const Text('Thất bại'),
                           ),
                           const SizedBox(width: 8),
@@ -140,6 +141,7 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
                             onPressed: busy
                                 ? null
                                 : () => _resolve(refund, success: true),
+                            style: FilledButton.styleFrom(minimumSize: const Size(96, 44)),
                             child: const Text('Hoàn tất'),
                           ),
                         ],
