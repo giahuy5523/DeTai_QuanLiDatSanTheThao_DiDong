@@ -19,9 +19,17 @@ class _ControlledRepository extends AccountRepository {
   late final pendingLogout = Completer<void>();
   int logoutCalls = 0;
   bool expired = false;
+  DateTime? deadline;
+  int expiryCleanupCalls = 0;
 
   @override
-  bool get isSessionExpired => expired;
+  Duration? get sessionTimeRemaining => deadline?.difference(DateTime.now());
+
+  @override
+  bool get isSessionExpired => expired || super.isSessionExpired;
+
+  @override
+  Future<void> deleteExpiredSession() async => expiryCleanupCalls++;
 
   @override
   Future<void> logout() {
@@ -97,6 +105,7 @@ void main() {
     expect(MockStore.currentUser, isNull);
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(navigator.currentState!.canPop(), isFalse);
+    expect(repository.expiryCleanupCalls, 1);
   });
 
   testWidgets('returning to the foreground clears an expired session', (
@@ -118,5 +127,26 @@ void main() {
     expect(MockStore.currentUser, isNull);
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(navigator.canPop(), isFalse);
+    expect(repository.expiryCleanupCalls, 1);
+  });
+
+  testWidgets('a session expires while the app stays in the foreground', (
+    tester,
+  ) async {
+    MockStore.login('customer@gmail.com', '123456');
+    repository.deadline = DateTime.now().add(const Duration(seconds: 1));
+    await tester.pumpWidget(const SportFieldBookingApp());
+    final navigator = Navigator.of(tester.element(find.byType(LoginScreen)));
+    navigator.pushNamed(AppRoutes.register);
+    await tester.pumpAndSettle();
+
+    repository.expired = true;
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(MockStore.currentUser, isNull);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(navigator.canPop(), isFalse);
+    expect(repository.expiryCleanupCalls, 1);
   });
 }

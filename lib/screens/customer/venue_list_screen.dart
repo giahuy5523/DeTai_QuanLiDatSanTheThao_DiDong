@@ -12,7 +12,7 @@ class VenueListScreen extends StatefulWidget {
   State<VenueListScreen> createState() => _VenueListScreenState();
 }
 
-class _VenueListScreenState extends State<VenueListScreen> {
+class _VenueListScreenState extends State<VenueListScreen> with WidgetsBindingObserver {
   String _sport = 'Tất cả';
   List<Venue> _databaseVenues = const [];
   bool _hasDatabaseSnapshot = false;
@@ -20,7 +20,19 @@ class _VenueListScreenState extends State<VenueListScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _reloadVenues();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reloadVenues();
   }
 
   Future<void> _reloadVenues() async {
@@ -30,6 +42,9 @@ class _VenueListScreenState extends State<VenueListScreen> {
       if (mounted) {
         setState(() {
           _databaseVenues = venues;
+          if (!venues.any((venue) => venue.sportType == _sport)) {
+            _sport = 'Tất cả';
+          }
           _hasDatabaseSnapshot = true;
         });
       }
@@ -76,160 +91,172 @@ class _VenueListScreenState extends State<VenueListScreen> {
             ),
           ),
           Expanded(
-            child: venues.isEmpty
-                ? const Center(child: Text('Chưa có sân phù hợp.'))
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: venues.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final venue = venues[index];
-                      final images = venue.imageUrls;
-
-                      return Card(
-                        clipBehavior: Clip.antiAlias,
-                        elevation: 2,
-                        margin: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+            child: RefreshIndicator(
+              onRefresh: _reloadVenues,
+              child: venues.isEmpty
+                  ? const CustomScrollView(
+                      physics: AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(child: Text('Chưa có sân phù hợp.')),
                         ),
-                        child: InkWell(
-                          onTap: () => Navigator.pushNamed(
-                            context,
-                            AppRoutes.venueDetail,
-                            arguments: venue,
+                      ],
+                    )
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      itemCount: venues.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        final venue = venues[index];
+                        final images = venue.imageUrls;
+
+                        return Card(
+                          clipBehavior: Clip.antiAlias,
+                          elevation: 2,
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                height: 170,
-                                width: double.infinity,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    if (images.isNotEmpty)
-                                      VenueImage(
-                                        source: images.first,
-                                        placeholder: _buildVenuePlaceholder(),
-                                      )
-                                    else
-                                      _buildVenuePlaceholder(),
-                                    Positioned(
-                                      left: 12,
-                                      top: 12,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.95,
+                          child: InkWell(
+                            onTap: () => Navigator.pushNamed(
+                              context,
+                              AppRoutes.venueDetail,
+                              arguments: venue,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  height: 170,
+                                  width: double.infinity,
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (images.isNotEmpty)
+                                        VenueImage(
+                                          source: images.first,
+                                          placeholder: _buildVenuePlaceholder(),
+                                        )
+                                      else
+                                        _buildVenuePlaceholder(),
+                                      Positioned(
+                                        left: 12,
+                                        top: 12,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
                                           ),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          venue.sportType,
-                                          style: const TextStyle(
-                                            color: Color(0xFF087451),
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  14,
-                                  12,
-                                  14,
-                                  14,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      venue.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on_outlined,
-                                          size: 17,
-                                          color: Colors.grey,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            venue.address,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: Colors.grey.shade700,
-                                              fontSize: 13,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.95,
                                             ),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.payments_outlined,
-                                          size: 18,
-                                          color: Color(0xFF087451),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
                                           child: Text(
-                                            '${_formatPrice(venue.pricePerHour)}đ/giờ',
+                                            venue.sportType,
                                             style: const TextStyle(
                                               color: Color(0xFF087451),
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ),
-                                        const Icon(
-                                          Icons.arrow_forward_ios_rounded,
-                                          size: 15,
-                                          color: Color(0xFF087451),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Text(
-                                          'Chi tiết',
-                                          style: TextStyle(
-                                            color: Color(0xFF087451),
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    14,
+                                    12,
+                                    14,
+                                    14,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        venue.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(
+                                            Icons.location_on_outlined,
+                                            size: 17,
+                                            color: Colors.grey,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              venue.address,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: Colors.grey.shade700,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.payments_outlined,
+                                            size: 18,
+                                            color: Color(0xFF087451),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              '${_formatPrice(venue.pricePerHour)}đ/giờ',
+                                              style: const TextStyle(
+                                                color: Color(0xFF087451),
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          const Icon(
+                                            Icons.arrow_forward_ios_rounded,
+                                            size: 15,
+                                            color: Color(0xFF087451),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Text(
+                                            'Chi tiết',
+                                            style: TextStyle(
+                                              color: Color(0xFF087451),
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
+            ),
           ),
         ],
       ),

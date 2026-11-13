@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/user.dart';
@@ -11,13 +15,19 @@ import '../utils/database_helper.dart';
 class AccountService {
   AccountService._();
   static AccountRepository? repository;
+  static final sessionRevision = ValueNotifier<int>(0);
 
-  // Explicit in-memory adapter for widget tests only. Production defaults to
-  // SQLite and never falls back to MockStore when initialization fails.
-  static bool _useMockStoreForTesting = false;
+  static void _setSessionUser(AppUser? user) {
+    MockStore.currentUser = user;
+    sessionRevision.value++;
+  }
 
-  static void setUseMockStoreForTesting(bool enabled) {
-    _useMockStoreForTesting = enabled;
+  static AccountRepository get _requiredRepository {
+    final value = repository;
+    if (value == null) {
+      throw StateError('Dữ liệu tài khoản chưa được khởi tạo.');
+    }
+    return value;
   }
 
   static Future<void> initialize() async {
@@ -31,7 +41,7 @@ class AccountService {
     await VenueRepository.initialize(appDatabase);
     await BookingRepository.refreshCache();
     await _refresh();
-    MockStore.currentUser = await repository!.restoreSession();
+    _setSessionUser(await repository!.restoreSession());
   }
 
   static Future<void> _seedBusinessData(Database database) async {
@@ -175,48 +185,47 @@ class AccountService {
   }
 
   static Future<AppUser?> login(String email, String password) async {
-    if (_useMockStoreForTesting) return MockStore.login(email, password);
-    final db = repository;
-    if (db == null) {
-      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
-    }
-    final user = await db.login(email, password);
-    if (user != null) MockStore.currentUser = user;
+    final user = await _requiredRepository.login(email, password);
+    if (user != null) _setSessionUser(user);
     return user;
   }
 
   static Future<void> register(AppUser user) async {
-    if (_useMockStoreForTesting) {
-      MockStore.addUser(user);
-      return;
-    }
-    final db = repository;
-    if (db == null) {
-      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
-    }
-    await db.register(user);
+    await _requiredRepository.register(user);
     await _refresh();
   }
 
   static Future<void> logout() async {
-    if (_useMockStoreForTesting) {
-      MockStore.logout();
-      return;
-    }
-    final db = repository;
-    if (db == null) {
-      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
-    }
-    await db.logout();
-    MockStore.logout();
+    await _requiredRepository.logout();
+    _setSessionUser(null);
   }
 
   static bool expireSessionIfNeeded() {
-    if (MockStore.currentUser == null || repository?.isSessionExpired != true) {
+    final currentRepository = repository;
+    if (MockStore.currentUser == null ||
+        currentRepository == null ||
+        !currentRepository.isSessionExpired) {
       return false;
     }
-    MockStore.logout();
+    _setSessionUser(null);
+    // Delete only expired rows so a concurrent login keeps its new session.
+    unawaited(_deleteExpiredSession(currentRepository));
     return true;
+  }
+
+  static Future<void> _deleteExpiredSession(
+    AccountRepository repository,
+  ) async {
+    try {
+      await repository.deleteExpiredSession();
+    } catch (error, stackTrace) {
+      // restoreSession also removes expired rows on the next startup.
+      developer.log(
+        'Không thể dọn phiên đã hết hạn.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   static Future<AppUser?> updateProfile({
@@ -226,19 +235,7 @@ class AccountService {
     required String? avatarPath,
   }) async {
     if (MockStore.currentUser?.id != userId) return null;
-    if (_useMockStoreForTesting) {
-      return MockStore.updateCurrentProfile(
-        userId: userId,
-        name: name,
-        phone: phone,
-        avatarPath: avatarPath,
-      );
-    }
-    final db = repository;
-    if (db == null) {
-      throw StateError('AccountService chưa khởi tạo SQLite dùng chung.');
-    }
-    final updated = await db.updateProfile(
+    final updated = await _requiredRepository.updateProfile(
       userId: userId,
       name: name,
       phone: phone,

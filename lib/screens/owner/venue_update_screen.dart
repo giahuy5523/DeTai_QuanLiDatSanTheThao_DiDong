@@ -188,7 +188,13 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
       var tooLarge = 0;
       var invalid = 0;
       for (final image in picked) {
-        final bytes = await image.readAsBytes();
+        final Uint8List bytes;
+        try {
+          bytes = await image.readAsBytes();
+        } catch (_) {
+          invalid++;
+          continue;
+        }
         if (bytes.length > _maxImageBytes) {
           tooLarge++;
           continue;
@@ -221,6 +227,12 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
           'Đã bỏ qua $invalid ảnh lỗi hoặc không đúng định dạng.',
       ];
       if (notes.isNotEmpty) _message(notes.join(' '));
+    } catch (_) {
+      if (mounted) {
+        _message(
+          'Không thể chọn ảnh. Vui lòng kiểm tra quyền truy cập và thử lại.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }

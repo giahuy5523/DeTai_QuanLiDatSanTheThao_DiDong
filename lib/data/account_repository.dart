@@ -12,10 +12,18 @@ class AccountRepository {
   AccountRepository(this.database);
   final Database database;
   int? _sessionExpiresAt;
-  bool get isSessionExpired {
+  Duration? get sessionTimeRemaining {
     final expiresAt = _sessionExpiresAt;
-    return expiresAt != null &&
-        expiresAt <= DateTime.now().millisecondsSinceEpoch;
+    return expiresAt == null
+        ? null
+        : Duration(
+            milliseconds: expiresAt - DateTime.now().millisecondsSinceEpoch,
+          );
+  }
+
+  bool get isSessionExpired {
+    final remaining = sessionTimeRemaining;
+    return remaining != null && remaining <= Duration.zero;
   }
 
   static final _kdf = Pbkdf2(
@@ -325,6 +333,14 @@ class AccountRepository {
     _sessionExpiresAt = null;
   }
 
+  Future<void> deleteExpiredSession() async {
+    await database.delete(
+      'Session',
+      where: 'expires_at <= ?',
+      whereArgs: [DateTime.now().millisecondsSinceEpoch],
+    );
+  }
+
   Future<void> register(AppUser user) async {
     if (!{'customer', 'owner'}.contains(user.role)) {
       throw ArgumentError('Không được tự đăng ký tài khoản quản trị.');
@@ -336,20 +352,31 @@ class AccountRepository {
     if (error != null || user.name.trim().isEmpty) {
       throw ArgumentError(error ?? 'Họ tên không được để trống.');
     }
-    try {
-      await database.insert('Users', {
-        'user_id': user.id,
-        'full_name': user.name.trim(),
-        'email': user.email.trim().toLowerCase(),
-        'phone': user.phone.trim(),
-        'password_hash': await _hash(user.password),
-        'role': user.role,
-      });
-    } on DatabaseException catch (error) {
-      if (error.isUniqueConstraintError()) {
-        throw ArgumentError('Email hoặc số điện thoại đã được sử dụng.');
+    final random = Random.secure();
+    final values = {
+      'full_name': user.name.trim(),
+      'email': user.email.trim().toLowerCase(),
+      'phone': user.phone.trim(),
+      'password_hash': await _hash(user.password),
+      'role': user.role,
+    };
+    while (true) {
+      final id = List.generate(
+        16,
+        (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+      ).join();
+      try {
+        await database.insert('Users', {'user_id': 'user_$id', ...values});
+        return;
+      } on DatabaseException catch (error) {
+        if (error.isUniqueConstraintError('Users.email')) {
+          throw ArgumentError('Email đã được sử dụng');
+        }
+        if (error.isUniqueConstraintError('Users.phone')) {
+          throw ArgumentError('Số điện thoại đã được sử dụng.');
+        }
+        if (!error.isUniqueConstraintError('Users.user_id')) rethrow;
       }
-      rethrow;
     }
   }
 

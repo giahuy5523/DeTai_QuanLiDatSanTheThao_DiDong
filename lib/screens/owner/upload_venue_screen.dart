@@ -34,7 +34,9 @@ String _formatMoney(num value) {
 }
 
 int? _parsePrice(String? raw) =>
-    int.tryParse((raw ?? '').replaceAll(RegExp(r'[^0-9]'), ''));
+    RegExp(r'^\d+$|^\d{1,3}(\.\d{3})+$').hasMatch(raw ?? '')
+    ? int.tryParse(raw!.replaceAll('.', ''))
+    : null;
 
 class _ThousandsFormatter extends TextInputFormatter {
   @override
@@ -42,7 +44,8 @@ class _ThousandsFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^[0-9.]*$').hasMatch(newValue.text)) return newValue;
+    final digits = newValue.text.replaceAll('.', '');
     if (digits.isEmpty) return const TextEditingValue();
     if (digits.length > _maxPriceDigits) return oldValue;
     final text = _formatMoney(int.parse(digits));
@@ -174,7 +177,13 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
       var tooLarge = 0;
       var invalid = 0;
       for (final image in picked) {
-        final bytes = await image.readAsBytes();
+        final Uint8List bytes;
+        try {
+          bytes = await image.readAsBytes();
+        } catch (_) {
+          invalid++;
+          continue;
+        }
         if (bytes.length > _maxImageBytes) {
           tooLarge++;
           continue;
@@ -212,6 +221,12 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
           'Đã bỏ qua $invalid ảnh lỗi hoặc không đúng định dạng.',
       ];
       if (notes.isNotEmpty) _message(notes.join(' '));
+    } catch (_) {
+      if (mounted) {
+        _message(
+          'Không thể chọn ảnh. Vui lòng kiểm tra quyền truy cập và thử lại.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }

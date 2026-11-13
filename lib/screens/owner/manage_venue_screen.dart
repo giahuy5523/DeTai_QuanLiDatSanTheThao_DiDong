@@ -95,6 +95,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
       setState(() {
         _venues = const [];
         _todayBookingsCount = 0;
+        _pendingByVenue = const {};
         _isLoading = false;
         _error = 'Chưa đăng nhập. Vui lòng đăng nhập lại.';
       });

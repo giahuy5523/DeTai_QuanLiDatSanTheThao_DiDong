@@ -17,7 +17,16 @@ class AvatarStorage {
       '${directory.path}${Platform.pathSeparator}'
       'avatar_${DateTime.now().microsecondsSinceEpoch}.png',
     );
-    await file.writeAsBytes(png, flush: true);
+    try {
+      await file.writeAsBytes(png, flush: true);
+    } catch (_) {
+      try {
+        if (await file.exists()) await file.delete();
+      } on FileSystemException {
+        // Keep the original write error.
+      }
+      rethrow;
+    }
     return file.path;
   }
 

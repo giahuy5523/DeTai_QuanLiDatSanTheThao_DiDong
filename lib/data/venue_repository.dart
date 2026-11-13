@@ -398,11 +398,51 @@ class VenueRepository {
     return Sqflite.firstIntValue(rows) ?? 0;
   }
 
-  // Tất cả lịch đặt của một sân, kèm thông tin khách, sắp theo ngày và giờ.
+  // Lịch chờ xác nhận từ hôm nay trở đi, theo từng sân của chủ sân.
+  static Future<Map<String, int>> pendingBookingCountsByVenue(
+    String ownerId,
+  ) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    if (_useMockStoreForTesting) {
+      final counts = <String, int>{};
+      for (final booking in MockStore.bookings) {
+        if (booking.status == 'pending' &&
+            !booking.date.isBefore(start) &&
+            MockStore.venueById(booking.venueId)?.ownerId == ownerId) {
+          counts.update(
+            booking.venueId,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+        }
+      }
+      return counts;
+    }
+    final rows = await (await _db).rawQuery(
+      '''
+      SELECT b.venueId, COUNT(*) AS total
+      FROM bookings b JOIN venues v ON v.id = b.venueId
+      WHERE v.ownerId = ? AND b.status = 'pending' AND b.date >= ?
+      GROUP BY b.venueId
+    ''',
+      [ownerId, start.toIso8601String()],
+    );
+    return {
+      for (final row in rows)
+        row['venueId'] as String: (row['total'] as num).toInt(),
+    };
+  }
+
+  /// Tất cả lịch đặt của một sân, kèm thông tin khách, sắp theo ngày và giờ.
   static Future<List<VenueBookingEntry>> loadBookingsForVenue(
     String venueId,
   ) async {
     if (_useMockStoreForTesting) {
+      final serviceNames = {
+        for (final service in MockStore.servicesFor(venueId))
+          service.id: service.name,
+      };
       return MockStore.bookings
           .where((booking) => booking.venueId == venueId)
           .map(
@@ -416,11 +456,24 @@ class VenueRepository {
               promotionCode: booking.promotionCode,
               customerName: null,
               customerPhone: null,
+              services: [
+                for (final item in booking.serviceItems)
+                  VenueBookingServiceItem(
+                    name:
+                        item.serviceName ??
+                        serviceNames[item.serviceId] ??
+                        'Dịch vụ đã xóa',
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    subtotal: item.subtotal,
+                  ),
+              ],
             ),
           )
           .toList();
     }
-    final rows = await (await _db).rawQuery(
+    final db = await _db;
+    final rows = await db.rawQuery(
       '''
       SELECT b.id, b.date, b.startTime, b.endTime, b.totalPrice, b.status,
              b.promotionCode,
@@ -432,13 +485,12 @@ class VenueRepository {
     ''',
       [venueId],
     );
+    if (rows.isEmpty) return const [];
 
-    // Dịch vụ khách chọn kèm mỗi lịch đặt, gom theo bookingId.
-    // LEFT JOIN + COALESCE phòng trường hợp dịch vụ không còn trong venue_services.
-    final serviceRows = await (await _db).rawQuery(
+    final serviceRows = await db.rawQuery(
       '''
       SELECT bs.bookingId, bs.quantity, bs.unitPrice, bs.subtotal,
-             COALESCE(vs.name, 'Dịch vụ đã xóa') AS name
+             COALESCE(NULLIF(bs.serviceName, ''), vs.name, 'Dịch vụ đã xóa') AS name
       FROM booking_services bs
       JOIN bookings b ON b.id = bs.bookingId
       LEFT JOIN venue_services vs ON vs.id = bs.serviceId
@@ -458,7 +510,6 @@ class VenueRepository {
         ),
       );
     }
-
     return rows
         .map(
           (row) => VenueBookingEntry(
@@ -671,28 +722,5 @@ class VenueRepository {
       }
     }
     return true;
-  }
-
-  // Số lịch chờ xác nhận (từ hôm nay trở đi) của từng sân thuộc chủ sân.
-  // Sân không có lịch chờ sẽ không xuất hiện trong map.
-  static Future<Map<String, int>> pendingBookingCountsByVenue(
-    String ownerId,
-  ) async {
-    final db = await _db;
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day).toIso8601String();
-    final rows = await db.rawQuery(
-      '''
-      SELECT b.venueId, COUNT(*) AS total
-      FROM bookings b JOIN venues v ON v.id = b.venueId
-      WHERE v.ownerId = ? AND b.date >= ?
-      GROUP BY b.venueId
-    ''',
-      [ownerId, start],
-    );
-    return {
-      for (final row in rows)
-        row['venueId'] as String: (row['total'] as num).toInt(),
-    };
   }
 }

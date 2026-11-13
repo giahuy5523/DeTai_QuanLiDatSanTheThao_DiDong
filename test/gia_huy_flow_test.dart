@@ -16,6 +16,7 @@ import 'package:sportfield_booking/screens/owner/manage_venue_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
 
+import 'mock_accounts.dart';
 import 'test_helpers.dart';
 
 class FakePicker extends ImagePicker {
@@ -143,6 +144,7 @@ void main() {
   final originalBookings = List.of(MockStore.bookings);
   final originalPayments = List.of(MockStore.payments);
   setUp(() {
+    useMockAccounts();
     MockStore.logout();
   });
   tearDown(() {
@@ -288,13 +290,11 @@ void main() {
     await openUpload(tester, picker);
     await uploadField(tester, 'Tên sân', '   ');
     await press(tester, 'Gửi duyệt');
-    expect(find.text('Không được để trống'), findsOneWidget);
+    expect(find.text('Vui lòng nhập tên sân'), findsOneWidget);
     await pick(tester);
     expect(find.text('0 / 8 ảnh'), findsOneWidget);
     expect(
-      find.text(
-        'Không thể chọn ảnh. Vui lòng kiểm tra quyền truy cập và thử lại.',
-      ),
+      find.text('Đã bỏ qua 1 ảnh lỗi hoặc không đúng định dạng.'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -363,14 +363,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final price in ['abc', '-1', '0', 'NaN', 'Infinity']) {
+  for (final price in ['abc', '-10000', '0', 'NaN', 'Infinity']) {
     testWidgets('Upload rejects price $price', (tester) async {
       await openUpload(tester, FakePicker());
       await uploadField(tester, 'Giá thuê / giờ', price);
-      tester.widget<TextField>(find.byType(TextField).last).controller!.text =
-          price;
       await press(tester, 'Gửi duyệt');
-      expect(find.text('Nhập giá lớn hơn 0'), findsOneWidget);
+      expect(
+        find.text(
+          price == '0' ? 'Giá tối thiểu 10.000 đ' : 'Vui lòng nhập giá thuê',
+        ),
+        findsOneWidget,
+      );
       expect(MockStore.venues.length, originalVenues.length);
     });
   }

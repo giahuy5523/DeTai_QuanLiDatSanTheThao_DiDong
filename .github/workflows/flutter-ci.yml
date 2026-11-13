@@ -31,7 +31,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+<<<<<<< HEAD
           flutter-version: "3.47.9"
+=======
+          flutter-version: '3.47.4'
+>>>>>>> a4db3ec138297d5f128e7a784680ac5d50748866
           cache: true
 
       - name: Show Flutter version
@@ -48,4 +52,7 @@ jobs:
 
       - name: Run all tests
         run: flutter test
+<<<<<<< HEAD
 
+=======
+>>>>>>> a4db3ec138297d5f128e7a784680ac5d50748866

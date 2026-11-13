@@ -472,6 +472,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: unitController,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(_maxUnitLength),
+                      ],
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       onChanged: (_) => setDialogState(() => unitError = null),
                       decoration: _fieldDecoration(
