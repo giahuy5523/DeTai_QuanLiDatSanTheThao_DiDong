@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../data/booking_repository.dart' as data_repo;
 import '../../data/mock_store.dart';
 import '../../models/booking.dart';
 import '../../models/payment.dart';
@@ -11,28 +12,81 @@ class BookingDetailScreen extends StatelessWidget {
 
   final String bookingId;
 
+  Future<_BookingDetailData?> _load() async {
+    final booking = await data_repo.BookingRepository.getBookingById(bookingId);
+    if (booking == null) return null;
+    final payment = await data_repo.BookingRepository.getPaymentForBooking(
+      booking.id,
+    );
+    return _BookingDetailData(
+      booking: booking,
+      venue: MockStore.venueById(booking.venueId),
+      payment: payment,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    Booking? booking;
-    Venue? venue;
-    Payment? payment;
-    try {
-      booking = MockStore.bookings
-          .where((item) => item.id == bookingId)
-          .firstOrNull;
-      if (booking != null) {
-        venue = MockStore.venueById(booking.venueId);
-        final record = MockStore.paymentRecordForBooking(booking.id);
-        if (record != null) payment = Payment.fromMap(record);
-      }
-    } catch (_) {
-      return _errorScaffold('Không thể tải chi tiết booking này.');
-    }
+    return FutureBuilder<_BookingDetailData?>(
+      future: _load(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return _messageScaffold('Không thể tải chi tiết booking này.');
+        }
+        final data = snapshot.data;
+        if (data == null) {
+          return _messageScaffold('Không tìm thấy booking trong lịch sử.');
+        }
+        return _BookingDetailView(
+          booking: data.booking,
+          venue: data.venue,
+          payment: data.payment,
+        );
+      },
+    );
+  }
+}
 
-    if (booking == null) {
-      return _errorScaffold('Không tìm thấy booking trong lịch sử.');
-    }
+class _BookingDetailData {
+  const _BookingDetailData({
+    required this.booking,
+    required this.venue,
+    required this.payment,
+  });
 
+  final Booking booking;
+  final Venue? venue;
+  final Payment? payment;
+}
+
+Scaffold _messageScaffold(String message) => Scaffold(
+  appBar: AppBar(title: const Text('Chi tiết booking')),
+  body: Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(message, textAlign: TextAlign.center),
+    ),
+  ),
+);
+
+class _BookingDetailView extends StatelessWidget {
+  const _BookingDetailView({
+    required this.booking,
+    required this.venue,
+    required this.payment,
+  });
+
+  final Booking booking;
+  final Venue? venue;
+  final Payment? payment;
+
+  @override
+  Widget build(BuildContext context) {
     final selectedBooking = booking;
     final selectedVenue = venue;
     final selectedPayment = payment;
@@ -252,15 +306,6 @@ class BookingDetailScreen extends StatelessWidget {
     );
   }
 
-  Scaffold _errorScaffold(String message) => Scaffold(
-    appBar: AppBar(title: const Text('Chi tiết booking')),
-    body: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(message, textAlign: TextAlign.center),
-      ),
-    ),
-  );
 
   Widget _venuePhoto(Venue? venue) {
     if (venue == null) return _photoPlaceholder('Không có dữ liệu sân.');

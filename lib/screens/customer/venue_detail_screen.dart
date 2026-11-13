@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
+import '../../models/service.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
@@ -19,6 +20,33 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   final PageController _imagePageController = PageController();
   bool _showFullInfo = false;
 
+  String? _catalogVenueId;
+  List<VenueService> _services = const [];
+  List<String> _images = const [];
+  List<int> _hours = const [6, 22];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final venue = ModalRoute.of(context)?.settings.arguments;
+    if (venue is Venue && venue.id != _catalogVenueId) {
+      _catalogVenueId = venue.id;
+      _loadCatalog(venue.id);
+    }
+  }
+
+  Future<void> _loadCatalog(String venueId) async {
+    final services = await VenueRepository.loadServicesFor(venueId);
+    final images = await VenueRepository.loadImageUrlsFor(venueId);
+    final hours = await VenueRepository.loadHoursFor(venueId);
+    if (!mounted || _catalogVenueId != venueId) return;
+    setState(() {
+      _services = services;
+      _images = images;
+      _hours = hours;
+    });
+  }
+
   @override
   void dispose() {
     _imagePageController.dispose();
@@ -28,7 +56,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final venue = ModalRoute.of(context)!.settings.arguments as Venue;
-    final services = MockStore.servicesFor(venue.id);
+    final services = _services;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -95,7 +123,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   }
 
   Widget _buildBanner(BuildContext context, Venue venue) {
-    final images = MockStore.imageUrlsOf(venue.id);
+    final images = _images;
     final itemCount = images.isEmpty ? 1 : images.length;
 
     return Column(
@@ -573,7 +601,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             const Divider(height: 22, color: AppTheme.border),
             _buildInfoRow(
               'Giờ mở cửa',
-              '${MockStore.hoursOf(venue.id)[0].toString().padLeft(2, '0')}:00 - ${MockStore.hoursOf(venue.id)[1].toString().padLeft(2, '0')}:00 hàng ngày',
+              '${_hours[0].toString().padLeft(2, '0')}:00 - ${_hours[1].toString().padLeft(2, '0')}:00 hàng ngày',
             ),
             const SizedBox(height: 10),
             _buildInfoRow(

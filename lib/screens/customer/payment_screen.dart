@@ -840,7 +840,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
         (args['total'] as num?)?.toDouble() ??
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
-    final userId = MockStore.currentUser?.id ?? 'customer1';
+    final currentUserId = MockStore.currentUser?.id;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Chưa đăng nhập'),
+          content: const Text(
+            'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để đặt sân.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Đóng'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final userId = currentUserId;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);

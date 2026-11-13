@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:sportfield_booking/data/booking_repository.dart';
-import 'package:sportfield_booking/data/promotion_repository.dart';
 import 'package:sportfield_booking/models/promotion.dart';
 
 /// Khi SQLite lỗi, repository phải báo lỗi rõ ràng.
@@ -46,14 +45,17 @@ void main() {
     );
   });
 
-  test('đọc lịch sử đặt sân báo lỗi SQLite thay vì trả về danh sách rỗng', () async {
-    BookingRepository.setDatabaseForTesting(await closedDatabase());
+  test(
+    'đọc lịch sử đặt sân báo lỗi SQLite thay vì trả về danh sách rỗng',
+    () async {
+      BookingRepository.setDatabaseForTesting(await closedDatabase());
 
-    await expectLater(
-      BookingRepository.getBookingsForUser('user_bat_ky'),
-      throwsA(isA<DatabaseException>()),
-    );
-  });
+      await expectLater(
+        BookingRepository.getBookingsForUser('user_bat_ky'),
+        throwsA(isA<DatabaseException>()),
+      );
+    },
+  );
 
   test('tạo khuyến mãi báo lỗi SQLite thay vì trả về thành công', () async {
     BookingRepository.setDatabaseForTesting(await closedDatabase());
@@ -66,7 +68,7 @@ void main() {
     );
 
     await expectLater(
-      PromotionRepository.createPromotion(promo),
+      BookingRepository.createPromotion(promo),
       throwsA(isA<DatabaseException>()),
     );
   });
