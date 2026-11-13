@@ -522,6 +522,7 @@ void main() {
         home: BookingDetailScreen(bookingId: booking.id),
       ),
     );
+    await tester.pumpAndSettle();
     expect(find.text('Sân bóng đá Thành Công'), findsOneWidget);
     expect(find.text('12 Lý Thường Kiệt, Phường 14'), findsOneWidget);
     expect(find.text('Bóng đá'), findsOneWidget);
@@ -578,6 +579,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.textContaining('Không có dữ liệu dịch vụ tại thời điểm đặt.'),
       250,
@@ -620,6 +622,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text(longServiceName),
       250,
@@ -653,6 +656,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.textContaining('Cảnh báo:'),
       250,
@@ -681,6 +685,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     expect(find.text('Chi tiết booking'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Không xác định'),
