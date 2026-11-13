@@ -172,6 +172,34 @@ void main() {
       expect(payment?.status, 'success');
       expect(payment?.transactionCode, 'TEST-SHARED-SQLITE');
       expect(payment?.amount, 130000);
+      Future<bool> slotIsAvailable() => BookingRepository.isRangeAvailable(
+        venueId: venue.id,
+        date: restoredBooking.date,
+        startTime: restoredBooking.startTime,
+        endTime: restoredBooking.endTime,
+      );
+      expect(await slotIsAvailable(), isFalse);
+      expect(
+        (await restoredAccounts.login(customer.email, customer.password))?.id,
+        customer.id,
+      );
+      expect(await BookingRepository.cancelBooking(booking.id), isTrue);
+      expect(await BookingRepository.cancelBooking(booking.id), isFalse);
+      expect(await slotIsAvailable(), isTrue);
+      final refund = await BookingRepository.getPaymentForBooking(booking.id);
+      expect(refund?.refundStatus, 'processing');
+      expect(await BookingRepository.completeRefund(booking.id), isTrue);
+      expect(await BookingRepository.completeRefund(booking.id), isFalse);
+      expect(
+        (await BookingRepository.getBookingById(booking.id))?.paymentStatus,
+        'refunded',
+      );
+      expect(
+        (await BookingRepository.getPaymentForBooking(
+          booking.id,
+        ))?.refundStatus,
+        'succeeded',
+      );
     } finally {
       BookingRepository.setDatabaseForTesting(null);
       await database?.close();

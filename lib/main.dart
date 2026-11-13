@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'utils/app_routes.dart';
 import 'data/account_service.dart';
@@ -69,24 +71,38 @@ class SportFieldBookingApp extends StatefulWidget {
 class _SportFieldBookingAppState extends State<SportFieldBookingApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   late final AppLifecycleListener _lifecycle;
+  Timer? _sessionTimer;
 
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(
-      onResume: () {
-        if (AccountService.expireSessionIfNeeded()) {
-          _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-            AppRoutes.login,
-            (_) => false,
-          );
-        }
-      },
-    );
+    _lifecycle = AppLifecycleListener(onResume: _checkSession);
+    AccountService.sessionRevision.addListener(_scheduleSessionCheck);
+    _scheduleSessionCheck();
+  }
+
+  void _scheduleSessionCheck() {
+    _sessionTimer?.cancel();
+    if (MockStore.currentUser == null) return;
+    final remaining = AccountService.repository?.sessionTimeRemaining;
+    if (remaining != null) _sessionTimer = Timer(remaining, _checkSession);
+  }
+
+  void _checkSession() {
+    if (AccountService.expireSessionIfNeeded()) {
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.login,
+        (_) => false,
+      );
+    } else {
+      _scheduleSessionCheck();
+    }
   }
 
   @override
   void dispose() {
+    AccountService.sessionRevision.removeListener(_scheduleSessionCheck);
+    _sessionTimer?.cancel();
     _lifecycle.dispose();
     super.dispose();
   }

@@ -78,6 +78,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
   int _todayBookingsCount = 0;
   bool _isLoading = true;
   String? _error;
+  Map<String, int> _pendingByVenue = const {};
 
   @override
   void initState() {
@@ -94,6 +95,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
       setState(() {
         _venues = const [];
         _todayBookingsCount = 0;
+        _pendingByVenue = const {};
         _isLoading = false;
         _error = 'Chưa đăng nhập. Vui lòng đăng nhập lại.';
       });
@@ -104,11 +106,13 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
       final results = await Future.wait([
         VenueRepository.loadVenues(ownerId: ownerId),
         VenueRepository.todayBookingCountForOwner(ownerId),
+        VenueRepository.pendingBookingCountsByVenue(ownerId),
       ]);
       if (!mounted) return;
       setState(() {
         _venues = results[0] as List<Venue>;
         _todayBookingsCount = results[1] as int;
+        _pendingByVenue = results[2] as Map<String, int>;
         _isLoading = false;
         _error = null;
       });
@@ -344,21 +348,77 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
     );
   }
 
-  Widget _buildActionButton(String label, VoidCallback onPressed) {
+  Widget _buildActionButton(
+    String label,
+    VoidCallback onPressed, {
+    int badgeCount = 0,
+  }) {
     return Expanded(
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        onPressed: onPressed,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1, softWrap: false),
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onPressed,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (badgeCount > 0)
+            Positioned(
+              top: -7,
+              right: -5,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  badgeCount > 9 ? '9+' : '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -491,7 +551,11 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                       () => _openUpdateVenue(venue),
                     ),
                     const SizedBox(width: 8),
-                    _buildActionButton('Lịch đặt', () => _openBookings(venue)),
+                    _buildActionButton(
+                      'Lịch đặt',
+                      () => _openBookings(venue),
+                      badgeCount: _pendingByVenue[venue.id] ?? 0,
+                    ),
                     const SizedBox(width: 8),
                     _buildActionButton('Dịch vụ', () => _openServices(venue)),
                   ],

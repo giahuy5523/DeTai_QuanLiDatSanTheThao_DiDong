@@ -12,12 +12,53 @@ import '../../utils/app_theme.dart';
 const _fieldRadius = 14.0;
 const _maxImages = 8;
 const _minImages = 3;
+const _minNameLength = 3;
+const _maxNameLength = 60;
+const _minAddressLength = 5;
+const _maxAddressLength = 120;
+const _minPrice = 10000;
+const _maxPrice = 10000000;
+const _maxPriceDigits = 8;
+const _maxImageBytes = 5 * 1024 * 1024; // 5 MB
+
+String _normalizeSpaces(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+String _formatMoney(num value) {
+  final digits = value.round().toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(digits[i]);
+  }
+  return buffer.toString();
+}
+
+int? _parsePrice(String? raw) =>
+    int.tryParse((raw ?? '').replaceAll(RegExp(r'[^0-9]'), ''));
+
+class _ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return const TextEditingValue();
+    if (digits.length > _maxPriceDigits) return oldValue;
+    final text = _formatMoney(int.parse(digits));
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
 
 // Một ảnh của sân: có thể là ảnh cũ (đường dẫn/URL đã lưu) hoặc ảnh mới chọn.
 class _VenueImage {
   _VenueImage({required this.source, this.bytes});
   final String source; // đường dẫn file, URL hoặc asset
   Uint8List? bytes; // có bytes thì hiển thị bằng Image.memory
+  bool broken = false; // đọc file thất bại
 }
 
 bool _isRemote(String s) =>
@@ -57,7 +98,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     final venue = widget.venue;
     _name = TextEditingController(text: venue.name);
     _address = TextEditingController(text: venue.address);
-    _price = TextEditingController(text: venue.pricePerHour.toStringAsFixed(0));
+    _price = TextEditingController(text: _formatMoney(venue.pricePerHour));
     _sportType = venue.sportType;
     _sports = [venue.sportType];
     // Venue truyền vào được đọc từ SQLite nên imageUrls đã có đủ ảnh.
@@ -97,7 +138,7 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
             ? (await rootBundle.load(img.source)).buffer.asUint8List()
             : await XFile(img.source).readAsBytes();
       } catch (_) {
-        // File không còn tồn tại: để errorBuilder hiện "Ảnh lỗi".
+        img.broken = true;
       }
     }
     if (mounted) setState(() {});
@@ -144,8 +185,20 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
       };
       var overLimit = false;
       var duplicates = 0;
+      var tooLarge = 0;
+      var invalid = 0;
       for (final image in picked) {
-        final bytes = await image.readAsBytes();
+        final Uint8List bytes;
+        try {
+          bytes = await image.readAsBytes();
+        } catch (_) {
+          invalid++;
+          continue;
+        }
+        if (bytes.length > _maxImageBytes) {
+          tooLarge++;
+          continue;
+        }
         if (!seen.add(_fingerprint(bytes))) {
           duplicates++;
           continue;
@@ -154,17 +207,26 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
           overLimit = true;
           break;
         }
-        final codec = await ui.instantiateImageCodec(bytes);
-        codec.dispose();
+        try {
+          final codec = await ui.instantiateImageCodec(bytes);
+          codec.dispose();
+        } catch (_) {
+          invalid++;
+          continue;
+        }
         added.add(_VenueImage(source: image.path, bytes: bytes));
       }
       if (!mounted) return;
       setState(() => _images.addAll(added));
-      if (overLimit) {
-        _message('Chỉ giữ tối đa $_maxImages ảnh.');
-      } else if (duplicates > 0) {
-        _message('Đã bỏ qua $duplicates ảnh trùng.');
-      }
+      final notes = <String>[
+        if (overLimit) 'Chỉ giữ tối đa $_maxImages ảnh.',
+        if (duplicates > 0) 'Đã bỏ qua $duplicates ảnh trùng.',
+        if (tooLarge > 0)
+          'Đã bỏ qua $tooLarge ảnh quá ${_maxImageBytes ~/ (1024 * 1024)} MB.',
+        if (invalid > 0)
+          'Đã bỏ qua $invalid ảnh lỗi hoặc không đúng định dạng.',
+      ];
+      if (notes.isNotEmpty) _message(notes.join(' '));
     } catch (_) {
       if (mounted) {
         _message(
@@ -192,16 +254,20 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
       _message('Vui lòng chọn tối thiểu $_minImages ảnh.');
       return;
     }
+    if (_images.any((img) => img.broken)) {
+      _message('Có ảnh không đọc được. Vui lòng xóa ảnh lỗi và thêm ảnh khác.');
+      return;
+    }
 
     setState(() => _saving = true);
     try {
       final sportTypeId = await VenueRepository.sportTypeIdFor(_sportType);
       final updatedVenue = widget.venue.copyWith(
-        name: _name.text.trim(),
-        address: _address.text.trim(),
+        name: _normalizeSpaces(_name.text),
+        address: _normalizeSpaces(_address.text),
         sportType: _sportType,
         sportTypeId: sportTypeId,
-        pricePerHour: double.parse(_price.text.trim()),
+        pricePerHour: _parsePrice(_price.text)!.toDouble(),
         imageUrls: _images.map((img) => img.source).toList(),
       );
       // saveVenue copy ảnh mới vào thư mục app, ghi DB rồi làm mới cache.
@@ -234,8 +300,43 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     );
   }
 
-  String? _required(String? value) =>
-      value == null || value.trim().isEmpty ? 'Không được để trống' : null;
+  String? _validateName(String? value) {
+    final name = _normalizeSpaces(value ?? '');
+    if (name.isEmpty) return 'Vui lòng nhập tên sân';
+    if (name.length < _minNameLength) {
+      return 'Tên sân tối thiểu $_minNameLength ký tự';
+    }
+    if (name.length > _maxNameLength) {
+      return 'Tên sân tối đa $_maxNameLength ký tự';
+    }
+    if (!RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(name)) {
+      return 'Tên sân phải chứa chữ hoặc số';
+    }
+    return null;
+  }
+
+  String? _validateAddress(String? value) {
+    final address = _normalizeSpaces(value ?? '');
+    if (address.isEmpty) return 'Vui lòng nhập địa chỉ';
+    if (address.length < _minAddressLength) {
+      return 'Địa chỉ quá ngắn (tối thiểu $_minAddressLength ký tự)';
+    }
+    if (address.length > _maxAddressLength) {
+      return 'Địa chỉ tối đa $_maxAddressLength ký tự';
+    }
+    if (!RegExp(r'[\p{L}]', unicode: true).hasMatch(address)) {
+      return 'Địa chỉ phải chứa chữ cái';
+    }
+    return null;
+  }
+
+  String? _validatePrice(String? value) {
+    final price = _parsePrice(value);
+    if (price == null) return 'Vui lòng nhập giá thuê';
+    if (price < _minPrice) return 'Giá tối thiểu ${_formatMoney(_minPrice)} đ';
+    if (price > _maxPrice) return 'Giá tối đa ${_formatMoney(_maxPrice)} đ';
+    return null;
+  }
 
   InputDecoration _decoration({
     required String label,
@@ -446,15 +547,22 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
               controller: _name,
               textInputAction: TextInputAction.next,
               textCapitalization: TextCapitalization.words,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(_maxNameLength),
+              ],
               decoration: _decoration(label: 'Tên sân', hint: 'Nhập tên sân'),
-              validator: _required,
+              validator: _validateName,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _address,
               textInputAction: TextInputAction.next,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(_maxAddressLength),
+              ],
               decoration: _decoration(label: 'Địa chỉ', hint: 'Nhập địa chỉ'),
-              validator: _required,
+              validator: _validateAddress,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -481,18 +589,14 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
             TextFormField(
               controller: _price,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              inputFormatters: [_ThousandsFormatter()],
               decoration: _decoration(
                 label: 'Giá thuê / giờ',
                 hint: 'Nhập giá thuê',
                 suffixText: 'đ',
               ),
-              validator: (value) {
-                final price = double.tryParse(value?.trim() ?? '');
-                return price == null || !price.isFinite || price <= 0
-                    ? 'Nhập giá lớn hơn 0'
-                    : null;
-              },
+              validator: _validatePrice,
             ),
             const SizedBox(height: 24),
             SizedBox(

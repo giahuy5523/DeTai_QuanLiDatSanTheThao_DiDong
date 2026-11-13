@@ -420,6 +420,12 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
           ),
           const SizedBox(height: 14),
 
+          // Dịch vụ khách đã chọn (nếu có)
+          if (booking.services.isNotEmpty) ...[
+            _buildServicesSection(booking.services),
+            const SizedBox(height: 14),
+          ],
+
           // Tổng tiền
           Row(
             children: [
@@ -474,6 +480,56 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
 
           // Nút thao tác
           ..._buildActions(booking),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServicesSection(List<VenueBookingServiceItem> services) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Dịch vụ đã chọn',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final service in services)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${service.name} × ${service.quantity}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _formatMoney(service.subtotal),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

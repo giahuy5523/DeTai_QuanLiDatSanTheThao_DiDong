@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sportfield_booking/data/account_repository.dart';
+import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/data/avatar_storage.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/screens/customer/profile_screen.dart';
 import 'package:sportfield_booking/screens/auth/login_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class ProfilePicker extends ImagePicker {
   XFile? result;
@@ -67,6 +70,30 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> tapAndWaitFor(
+  WidgetTester tester,
+  Finder button,
+  Finder result, {
+  bool Function()? completed,
+}) async {
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pump();
+  // SQLite completes on a real isolate, outside the widget test clock.
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while ((result.evaluate().isEmpty || completed?.call() == false) &&
+      DateTime.now().isBefore(deadline)) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  expect(result, findsOneWidget);
+  if (completed != null) expect(completed(), isTrue);
+  await tester.pumpAndSettle();
+}
+
 Future<void> pick(WidgetTester tester) async {
   await tap(tester, find.bySemanticsLabel('Đổi ảnh đại diện'));
   // Image decoding completes through the engine rather than the fake clock.
@@ -93,18 +120,33 @@ Future<void> pick(WidgetTester tester) async {
 }
 
 void main() {
-  final users = List.of(MockStore.users);
-  setUp(() {
-    MockStore.users
-      ..clear()
-      ..addAll(users);
-    MockStore.login('customer@gmail.com', '123456');
-  });
-  tearDown(() {
-    MockStore.users
-      ..clear()
-      ..addAll(users);
-    MockStore.logout();
+  sqfliteFfiInit();
+  final customer = MockStore.users.singleWhere(
+    (user) => user.email == 'customer@gmail.com',
+  );
+  late AccountRepository repository;
+  setUp(() async {
+    final previousRepository = AccountService.repository;
+    final previousUser = MockStore.currentUser;
+    final previousUsers = List.of(MockStore.users);
+    repository = await AccountRepository.open(
+      seed: [customer],
+      factory: databaseFactoryFfi,
+      path: inMemoryDatabasePath,
+    );
+    addTearDown(() async {
+      AccountService.repository = previousRepository;
+      MockStore.currentUser = previousUser;
+      MockStore.users
+        ..clear()
+        ..addAll(previousUsers);
+      await repository.database.close();
+    });
+    AccountService.repository = repository;
+    expect(
+      await AccountService.login(customer.email, customer.password),
+      isNotNull,
+    );
   });
 
   testWidgets(
@@ -119,16 +161,27 @@ void main() {
       );
       await tester.enterText(find.byType(TextFormField).first, ' Gia Huy ');
       await tester.enterText(find.byType(TextFormField).last, ' 0912345678 ');
-      await tap(tester, find.widgetWithText(ElevatedButton, 'Lưu thay đổi'));
+      await tapAndWaitFor(
+        tester,
+        find.widgetWithText(ElevatedButton, 'Lưu thay đổi'),
+        find.text('Đã cập nhật thông tin cá nhân'),
+      );
       final updated = MockStore.currentUser!;
       expect(updated.name, 'Gia Huy');
       expect(updated.phone, '0912345678');
       expect(updated.id, before.id);
       expect(updated.email, before.email);
       expect(updated.role, before.role);
-      expect(updated.password, before.password);
-      MockStore.logout();
-      expect(MockStore.login(before.email, before.password)?.name, 'Gia Huy');
+      expect(updated.password, isEmpty);
+      await tester.runAsync(() async {
+        await AccountService.logout();
+        final loggedIn = await AccountService.login(
+          customer.email,
+          customer.password,
+        );
+        expect(loggedIn?.name, 'Gia Huy');
+        expect(loggedIn?.phone, '0912345678');
+      });
     },
   );
 
@@ -162,14 +215,34 @@ void main() {
     await pick(tester);
     expect(MockStore.currentUser!.avatarPath, isNull);
     expect(find.byType(Image), findsOneWidget);
-    await tap(tester, find.widgetWithText(ElevatedButton, 'Lưu thay đổi'));
+    await tapAndWaitFor(
+      tester,
+      find.widgetWithText(ElevatedButton, 'Lưu thay đổi'),
+      find.text('Đã cập nhật thông tin cá nhân'),
+    );
     expect(storage.saved, isNotNull);
     expect(MockStore.currentUser!.avatarPath, '/missing/avatar.png');
+    await tester.runAsync(() async {
+      expect(
+        (await repository.restoreSession())?.avatarPath,
+        '/missing/avatar.png',
+      );
+    });
     await tap(tester, find.bySemanticsLabel('Đổi ảnh đại diện'));
     await tap(tester, find.text('Xóa ảnh đại diện'));
     expect(MockStore.currentUser!.avatarPath, isNotNull);
-    await tap(tester, find.widgetWithText(ElevatedButton, 'Lưu thay đổi'));
+    await tapAndWaitFor(
+      tester,
+      find.widgetWithText(ElevatedButton, 'Lưu thay đổi'),
+      find.text('Đã cập nhật thông tin cá nhân'),
+      completed: () => MockStore.currentUser?.avatarPath == null,
+    );
     expect(MockStore.currentUser!.avatarPath, isNull);
+    await tester.runAsync(() async {
+      final persisted = await repository.restoreSession();
+      expect(persisted, isNotNull);
+      expect(persisted?.avatarPath, isNull);
+    });
     expect(storage.removed, contains('/missing/avatar.png'));
   });
 
@@ -225,8 +298,15 @@ void main() {
     await tap(tester, find.text('Ở lại'));
     expect(MockStore.currentUser, isNotNull);
     await tap(tester, find.widgetWithText(OutlinedButton, 'Đăng xuất'));
-    await tap(tester, find.widgetWithText(FilledButton, 'Đăng xuất'));
+    await tapAndWaitFor(
+      tester,
+      find.widgetWithText(FilledButton, 'Đăng xuất'),
+      find.byType(LoginScreen),
+    );
     expect(MockStore.currentUser, isNull);
+    await tester.runAsync(() async {
+      expect(await repository.restoreSession(), isNull);
+    });
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.byType(ProfileScreen), findsNothing);
   });

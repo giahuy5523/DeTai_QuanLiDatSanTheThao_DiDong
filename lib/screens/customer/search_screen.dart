@@ -30,9 +30,9 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
-  static const double _priceMin = 100000;
-  static const double _priceMax = 500000;
+class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver {
+  static const double _priceStep = 50000;
+  static const double _minimumSliderMax = 1000000;
   static const int _firstHour = 6;
   static const int _lastHour = 21;
 
@@ -52,7 +52,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   String _keyword = '';
   int? _sportTypeId; // SportTypes.sport_type_id
-  RangeValues _priceRange = const RangeValues(_priceMin, _priceMax);
+  RangeValues? _priceRange;
   String? _district; // Venues.district
   bool _onlyWithServices = false; // Có bản ghi trong Services của sân
   DateTime? _date; // Lọc theo lịch trống (TimeSlots)
@@ -63,15 +63,27 @@ class _SearchScreenState extends State<SearchScreen> {
   final Map<String, List<VenueService>> _databaseServices = {};
   final Map<String, List<Map<String, Object?>>> _databaseSlots = {};
   bool _hasDatabaseSnapshot = false;
+  int _catalogRequest = 0;
+
+  List<Venue> get _catalog =>
+      _hasDatabaseSnapshot ? _databaseVenues : MockStore.approvedVenues;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _reloadVenues();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reloadVenues();
   }
 
   Future<void> _reloadVenues() async {
     if (!VenueRepository.isInitialized) return;
+    final request = ++_catalogRequest;
+    final availabilityDate = _date ?? DateTime.now();
     try {
       final venues = await VenueRepository.loadVenues(approvedOnly: true);
       final sports = (await VenueRepository.loadSportTypes())
@@ -82,7 +94,6 @@ class _SearchScreenState extends State<SearchScreen> {
           })
           .toList();
       final services = <String, List<VenueService>>{};
-      final availabilityDate = _date ?? DateTime.now();
       final serviceResults = await Future.wait(venues.map((venue) async =>
           MapEntry(venue.id, await VenueRepository.loadServicesFor(venue.id))));
       final slotResults = await Future.wait(venues.map((venue) async =>
@@ -91,7 +102,7 @@ class _SearchScreenState extends State<SearchScreen> {
             availabilityDate,
           ))));
       services.addEntries(serviceResults);
-      if (!mounted) return;
+      if (!mounted || request != _catalogRequest) return;
       setState(() {
         _databaseVenues = venues;
         _databaseSports = sports;
@@ -108,35 +119,16 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  Future<void> _reloadAvailability(DateTime date) async {
-    if (!_hasDatabaseSnapshot) return;
-    try {
-      final results = await Future.wait(_databaseVenues.map((venue) async =>
-          MapEntry(venue.id, await VenueRepository.loadAvailableSlots(
-            venue.id,
-            date,
-          ))));
-      if (!mounted) return;
-      setState(() {
-        _databaseSlots
-          ..clear()
-          ..addEntries(results);
-      });
-    } catch (_) {
-      // Retain the last availability snapshot if a query fails.
-    }
-  }
-
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
   }
 
   // ---------------------------------------------------------------- Logic
 
-  bool get _priceChanged =>
-      _priceRange.start > _priceMin || _priceRange.end < _priceMax;
+  bool get _priceChanged => _priceRange != null;
 
   /// Số bộ lọc nâng cao đang bật (hiển thị trên nút "Bộ lọc").
   int get _advancedCount =>
@@ -153,14 +145,14 @@ class _SearchScreenState extends State<SearchScreen> {
   void _resetFilters() {
     setState(() {
       _sportTypeId = null;
-      _priceRange = const RangeValues(_priceMin, _priceMax);
+      _priceRange = null;
       _district = null;
       _onlyWithServices = false;
       _date = null;
       _hour = null;
       _sort = _SortOption.none;
     });
-    _reloadAvailability(DateTime.now());
+    _reloadVenues();
   }
 
   List<Venue> _filterVenues() {
@@ -168,21 +160,20 @@ class _SearchScreenState extends State<SearchScreen> {
     final checkAvailability = _date != null || _hour != null;
     final date = _date ?? DateTime.now();
 
-    final candidates = _hasDatabaseSnapshot
-        ? _databaseVenues
-        : MockStore.approvedVenues;
-    final list = candidates.where((v) {
+    final priceRange = _priceRange;
+    final list = _catalog.where((v) {
       final services = _hasDatabaseSnapshot
           ? (_databaseServices[v.id] ?? const <VenueService>[])
           : MockStore.servicesFor(v.id);
 
-      // Từ khóa: tên sân, địa chỉ, quận/huyện, thành phố, tên dịch vụ
+      // Từ khóa: tên sân, môn thể thao, địa điểm, tên dịch vụ
       if (query.isNotEmpty) {
         final inVenue =
             _normalizeSearchText(v.name).contains(query) ||
             _normalizeSearchText(v.address).contains(query) ||
             _normalizeSearchText(v.district ?? '').contains(query) ||
-            _normalizeSearchText(v.city ?? '').contains(query);
+            _normalizeSearchText(v.city ?? '').contains(query) ||
+            _normalizeSearchText(v.sportType).contains(query);
 
         final inService = services.any(
           (s) => _normalizeSearchText(s.name).contains(query),
@@ -192,8 +183,11 @@ class _SearchScreenState extends State<SearchScreen> {
 
       if (_sportTypeId != null && v.sportTypeId != _sportTypeId) return false;
 
-      final price = v.pricePerHour.toDouble();
-      if (price < _priceRange.start || price > _priceRange.end) return false;
+      if (priceRange != null &&
+          (v.pricePerHour < priceRange.start ||
+              v.pricePerHour > priceRange.end)) {
+        return false;
+      }
 
       if (_district != null && v.district != _district) return false;
       if (_onlyWithServices && services.isEmpty) return false;
@@ -286,9 +280,9 @@ class _SearchScreenState extends State<SearchScreen> {
       lastDate: today.add(const Duration(days: 60)),
       helpText: 'Chọn ngày muốn đặt sân',
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => _date = picked);
-      await _reloadAvailability(picked);
+      await _reloadVenues();
     }
   }
 
@@ -342,12 +336,18 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _openAdvancedFilters() async {
-    var range = _priceRange;
+    var maxPrice = _minimumSliderMax;
+    for (final venue in _catalog) {
+      if (venue.pricePerHour > maxPrice) maxPrice = venue.pricePerHour;
+    }
+    final previousMax = _priceRange?.end ?? 0;
+    if (previousMax > maxPrice) maxPrice = previousMax;
+    final divisions = (maxPrice / _priceStep).ceil();
+    final fullRange = RangeValues(0, divisions * _priceStep);
+    var range = _priceRange ?? fullRange;
     var district = _district;
     var onlyServices = _onlyWithServices;
-    final districts = (_hasDatabaseSnapshot
-            ? _databaseVenues
-            : MockStore.approvedVenues)
+    final districts = _catalog
         .map((venue) => venue.district)
         .whereType<String>()
         .where((district) => district.isNotEmpty)
@@ -385,7 +385,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     TextButton(
                       onPressed: () => setSheet(() {
-                        range = const RangeValues(_priceMin, _priceMax);
+                        range = fullRange;
                         district = null;
                         onlyServices = false;
                       }),
@@ -408,9 +408,8 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 RangeSlider(
                   values: range,
-                  min: _priceMin,
-                  max: _priceMax,
-                  divisions: 8,
+                  max: fullRange.end,
+                  divisions: divisions,
                   labels: RangeLabels(
                     _formatPrice(range.start),
                     _formatPrice(range.end),
@@ -463,9 +462,9 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
     );
 
-    if (applied == true) {
+    if (applied == true && mounted) {
       setState(() {
-        _priceRange = range;
+        _priceRange = range == fullRange ? null : range;
         _district = district;
         _onlyWithServices = onlyServices;
       });
@@ -488,14 +487,26 @@ class _SearchScreenState extends State<SearchScreen> {
           if (_advancedCount > 0) _buildActiveFilters(),
           _buildResultHeader(results.length),
           Expanded(
-            child: results.isEmpty
-                ? _buildEmptyState()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: results.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 20),
-                    itemBuilder: (context, i) => _buildResultItem(results[i]),
-                  ),
+            child: RefreshIndicator(
+              onRefresh: _reloadVenues,
+              child: results.isEmpty
+                  ? CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _buildEmptyState(),
+                        ),
+                      ],
+                    )
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: results.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 20),
+                      itemBuilder: (context, i) => _buildResultItem(results[i]),
+                    ),
+            ),
           ),
         ],
       ),
@@ -510,7 +521,7 @@ class _SearchScreenState extends State<SearchScreen> {
         controller: _searchController,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Tìm tên sân, địa chỉ, quận, dịch vụ...',
+          hintText: 'Tìm sân, môn thể thao, địa chỉ, dịch vụ...',
           prefixIcon: const Icon(Icons.search),
           suffixIcon: _keyword.isEmpty
               ? null
@@ -625,7 +636,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _clearDate() {
     setState(() => _date = null);
-    _reloadAvailability(DateTime.now());
+    _reloadVenues();
   }
 
   Widget _buildActiveFilters() {
@@ -639,10 +650,10 @@ class _SearchScreenState extends State<SearchScreen> {
           if (_priceChanged)
             InputChip(
               label: Text(
-                '${_formatPrice(_priceRange.start)} – ${_formatPrice(_priceRange.end)}',
+                '${_formatPrice(_priceRange!.start)} – ${_formatPrice(_priceRange!.end)}',
               ),
               onDeleted: () => setState(
-                () => _priceRange = const RangeValues(_priceMin, _priceMax),
+                () => _priceRange = null,
               ),
             ),
           if (_district != null)

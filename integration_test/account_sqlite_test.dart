@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography_flutter/cryptography_flutter.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sportfield_booking/data/account_repository.dart';
 import 'package:sportfield_booking/data/account_service.dart';
+import 'package:sportfield_booking/data/avatar_storage.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/main.dart';
 import 'package:sportfield_booking/models/user.dart';
@@ -22,6 +25,8 @@ void main() {
     );
     final path = '${await getDatabasesPath()}/account_integration_test.db';
     AccountRepository? repository;
+    final avatars = AvatarStorage();
+    String? savedAvatar;
     final seeds = List<AppUser>.of(MockStore.users);
     try {
       await tester.runAsync(() async {
@@ -43,11 +48,11 @@ void main() {
             'password_hash':
                 'AAECAwQFBgcICQoLDA0ODw==:aLUC1xz1FP2qzjEX2wi6iZPxG5S3xXancrLDx+9d6V4=',
           },
-          where: 'user_id = ?',
-          whereArgs: [user.id],
+          where: 'email = ?',
+          whereArgs: [user.email],
         );
         final loggedIn = await AccountService.login(user.email, user.password);
-        expect(loggedIn?.id, user.id);
+        expect(loggedIn?.id, startsWith('user_'));
       });
       await tester.pumpWidget(const SportFieldBookingApp(restoreSession: true));
       await tester.pumpAndSettle();
@@ -67,16 +72,41 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
+        final current = MockStore.currentUser!;
+        savedAvatar = await avatars.save(base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB9sAAAAASUVORK5CYII=',
+        ));
+        await AccountService.updateProfile(
+          userId: current.id,
+          name: current.name,
+          phone: current.phone,
+          avatarPath: savedAvatar,
+        );
         await repository!.database.close();
         MockStore.currentUser = null;
         repository = await AccountRepository.open(seed: seeds, path: path);
         AccountService.repository = repository;
         MockStore.currentUser = await repository!.restoreSession();
+        expect(MockStore.currentUser?.avatarPath, savedAvatar);
+        expect(await File(savedAvatar!).exists(), isTrue);
       });
       await tester.pumpWidget(const SportFieldBookingApp(restoreSession: true));
       await tester.pumpAndSettle();
       expect(MockStore.currentUser?.name, 'Gia Huy SQLite');
       await tester.runAsync(() async {
+        final current = MockStore.currentUser!;
+        await AccountService.updateProfile(
+          userId: current.id,
+          name: current.name,
+          phone: current.phone,
+          avatarPath: null,
+        );
+        await avatars.remove(savedAvatar);
+        expect(await File(savedAvatar!).exists(), isFalse);
+        final account = (await repository!.allUsers()).singleWhere(
+          (user) => user.id == current.id,
+        );
+        expect(account.avatarPath, isNull);
         await AccountService.logout();
         await repository!.database.close();
         repository = await AccountRepository.open(seed: seeds, path: path);
@@ -85,6 +115,7 @@ void main() {
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.runAsync(() async {
+        await avatars.remove(savedAvatar);
         await repository?.database.close();
         await deleteDatabase(path);
       });

@@ -29,3 +29,27 @@ Khi ghi biên bản, thêm commit, thiết bị/API Android, kết quả thực 
 ## Kết quả kiểm thử ghi nhận
 
 Bộ kiểm thử Flutter trên bản sao sạch của phần tích hợp đạt 140/140. Nhật ký kiểm thử nằm trong qa-verified.log của thư mục bàn giao cục bộ. Kiểm thử Android qua ứng dụng và minh chứng Figma được ghi riêng sau khi có kết quả.
+
+## Chạy và đóng gói
+
+Mở thư mục dự án bằng Flutter 3.47.4 và Dart 3.13.3 hoặc phiên bản tương thích với pubspec.lock. Kết nối Pixel 8 rồi chạy:
+
+```powershell
+flutter doctor -v
+flutter devices
+flutter pub get
+flutter analyze
+flutter test
+flutter test integration_test/account_sqlite_test.dart integration_test/shared_database_test.dart -d emulator-5554
+flutter build apk --release
+```
+
+APK nằm tại build/app/outputs/flutter-apk/app-release.apk. Bản build của đồ án dùng cấu hình ký Android hiện tại. Tài khoản mẫu theo vai trò là customer@gmail.com, owner@gmail.com và admin@gmail.com.
+
+## Phạm vi bản tích hợp cuối
+
+- PR #7 giới hạn đăng nhập vào email và mật khẩu, và yêu cầu repository SQLite sẵn sàng trước khi xử lý tài khoản.
+- PR #8 là nền tích hợp của SQLite v3. Bảng tài khoản, phiên, sân, dịch vụ, đặt sân và thanh toán nằm trong cùng sport_venue_database.db. Foreign keys được bật khi mở database.
+- Dữ liệu từ accounts.db cũ được nhập một lần theo giao dịch. Phiên đã đăng xuất và hồ sơ mới không bị ghi đè khi khởi động lại.
+- Màn Owner/Admin giữ thanh toán và hoàn tiền mô phỏng theo nghiệp vụ hiện có. Nhánh Quốc Đạt dùng cấu trúc cột và kiểu ID khác, nên phần tích hợp giữ schema dùng chung của PR #8.
+- Hai PR liên quan là https://github.com/giahuy5523/DeTai_QuanLiDatSanTheThao_DiDong/pull/7 và https://github.com/giahuy5523/DeTai_QuanLiDatSanTheThao_DiDong/pull/8. Kết quả của 457b331 là mốc tham chiếu, cần đọc log của phiên bản cuối khi nghiệm thu.
