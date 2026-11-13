@@ -3,6 +3,9 @@ name: Build Release APK
 # Chạy thủ công trong tab Actions. Tách khỏi Flutter CI để không làm chậm kiểm tra hằng ngày.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "ci/**"
 
 permissions:
   contents: read
