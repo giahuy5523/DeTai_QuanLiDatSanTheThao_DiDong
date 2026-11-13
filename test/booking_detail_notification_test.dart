@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/data/booking_repository.dart' as data_repo;
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:sportfield_booking/models/app_notification.dart';
 import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/promotion.dart';
@@ -15,10 +16,12 @@ import 'package:sportfield_booking/utils/app_theme.dart';
 void main() {
   setUpAll(() {
     data_repo.BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     data_repo.BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
   });
   final originalBookings = List<Booking>.of(MockStore.bookings);
   final originalPayments = MockStore.payments
