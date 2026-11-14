@@ -709,8 +709,11 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
     var updated = false;
     try {
       // Kiểm tra quyền sở hữu sân và trạng thái hợp lệ được làm ngay trong SQL.
+      final ownsVenue = (await VenueRepository.loadVenues(
+        ownerId: user.id,
+      )).any((venue) => venue.id == widget.venueId);
       updated =
-          MockStore.venueById(widget.venueId)?.ownerId == user.id &&
+          ownsVenue &&
           (newStatus == 'cancelled'
               ? await BookingRepository.cancelBooking(
                   booking.id,
