@@ -250,7 +250,20 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     return Chip(label: Text(label));
   }
 
+  final Set<String> _cancelling = {};
+
+  /// Chặn bấm hủy nhiều lần trên cùng một đơn.
   Future<void> _onCancelPressed(String bookingId) async {
+    if (_cancelling.contains(bookingId)) return;
+    _cancelling.add(bookingId);
+    try {
+      await _confirmAndCancel(bookingId);
+    } finally {
+      _cancelling.remove(bookingId);
+    }
+  }
+
+  Future<void> _confirmAndCancel(String bookingId) async {
     final success = await BookingController.cancelBookingAsync(bookingId);
 
     if (!mounted) return;
