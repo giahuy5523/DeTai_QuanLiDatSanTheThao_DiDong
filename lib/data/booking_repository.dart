@@ -526,6 +526,20 @@ class BookingRepository {
   // --------------------------------------------------------------------------
   // 3. TRANSACTION HỦY ĐẶT SÂN VÀ HOÀN TIỀN
   // --------------------------------------------------------------------------
+  /// Thời điểm bắt đầu của đơn (ngày + giờ). Trả về null nếu dữ liệu lỗi.
+  static DateTime? _bookingStartAt(String date, String startTime) {
+    final day = DateTime.tryParse(date);
+    final parts = startTime.split(':');
+    if (day == null || parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return DateTime(day.year, day.month, day.day, hour, minute);
+  }
+
+  /// Quy tắc hủy (đề xuất, chờ nhóm xác nhận): chỉ hủy khi còn ít nhất 2 giờ.
+  static const Duration cancelLeadTime = Duration(hours: 2);
+
   static Future<bool> cancelBooking(
     String bookingId, {
     String cancelReason = 'Khách hàng chủ động hủy',
@@ -547,6 +561,15 @@ class BookingRepository {
       final bookingMap = bookingRows.single;
       final currentStatus = bookingMap['status'] as String;
       if (currentStatus != 'pending' && currentStatus != 'confirmed') {
+        return false;
+      }
+
+      final startAt = _bookingStartAt(
+        bookingMap['date'] as String,
+        bookingMap['startTime'] as String,
+      );
+      if (startAt == null ||
+          !startAt.isAfter(DateTime.now().add(cancelLeadTime))) {
         return false;
       }
 
