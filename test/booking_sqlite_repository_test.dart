@@ -428,7 +428,6 @@ void main() {
     });
 
     test('8. Hủy booking và hoàn lượt promotion (Idempotent)', () async {
-      final date = DateTime.now();
       final b = Booking(
         id: 'b_cancel_promo',
         venueId: 'v1',
@@ -464,7 +463,6 @@ void main() {
     });
 
     test('9. Hủy đơn đã thanh toán online và quy trình hoàn tiền (Refund)', () async {
-      final date = DateTime.now();
       final b = Booking(
         id: 'b_refund_flow',
         venueId: 'v1',
