@@ -14,6 +14,17 @@ Future<void> freshSqliteApp(WidgetTester tester) async {
   });
 }
 
+/// Chờ các thao tác SQLite (I/O thật) xong, rồi dựng lại khung hình.
+Future<void> settleSqlite(WidgetTester tester, {int rounds = 20}) async {
+  for (var i = 0; i < rounds; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
+}
+
 Future<void> start(WidgetTester tester) async {
   await tester.pumpWidget(const SportFieldBookingApp());
   await tester.pumpAndSettle();

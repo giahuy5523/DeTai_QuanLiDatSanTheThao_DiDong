@@ -24,6 +24,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, 'customer@gmail.com');
     await tester.enterText(find.byType(TextFormField).last, '123456');
     await press(tester, 'Đăng nhập');
+    await settleSqlite(tester);
 
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
