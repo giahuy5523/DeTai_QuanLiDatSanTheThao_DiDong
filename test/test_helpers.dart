@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/main.dart';
+import 'package:sportfield_booking/utils/database_helper.dart';
+
+/// Test trên SQLite thật: database sạch, rồi khởi tạo dữ liệu ứng dụng.
+/// Gọi trước `start`. Các lời gọi I/O phải chạy trong `runAsync`.
+Future<void> freshSqliteApp(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await DatabaseHelper.resetForTesting();
+    await AccountService.initialize();
+  });
+}
 
 Future<void> start(WidgetTester tester) async {
   await tester.pumpWidget(const SportFieldBookingApp());
