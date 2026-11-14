@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../data/booking_repository.dart';
-import '../../data/mock_store.dart';
 import '../../data/venue_repository.dart';
 import '../../models/promotion.dart';
 import '../../utils/app_theme.dart';
