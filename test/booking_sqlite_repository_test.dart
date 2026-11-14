@@ -20,10 +20,34 @@ void main() {
   late Directory tempDir;
   late String dbPath;
 
+  test(
+    'Rejects invalid clock times and non-increasing booking ranges',
+    () async {
+      for (final (start, end) in [
+        ('25:30', '26:00'),
+        ('12:75', '14:00'),
+        ('-1:30', '12:00'),
+        ('abc', '14:00'),
+        ('12:00', '12:75'),
+        ('12:00', '12:00'),
+        ('12:00', '11:00'),
+      ]) {
+        expect(
+          await BookingRepository.isRangeAvailable(
+            venueId: 'venue',
+            date: DateTime(2030),
+            startTime: start,
+            endTime: end,
+          ),
+          isFalse,
+          reason: '$start–$end',
+        );
+      }
+    },
+  );
+
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp(
-      'booking_sqlite_test_',
-    );
+    tempDir = await Directory.systemTemp.createTemp('booking_sqlite_test_');
     dbPath = '${tempDir.path}${Platform.pathSeparator}booking_test.db';
     BookingRepository.setUseMockStoreForTesting(false);
     BookingRepository.setDatabaseForTesting(null);
@@ -151,7 +175,9 @@ void main() {
       'id': 'p1',
       'code': 'GIAM10',
       'discountPercent': 10.0,
-      'expiryDate': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+      'expiryDate': DateTime.now()
+          .add(const Duration(days: 30))
+          .toIso8601String(),
       'isActive': 1,
       'usedCount': 0,
     });
@@ -161,12 +187,14 @@ void main() {
     MockStore.payments.clear();
     MockStore.promotions.clear();
     MockStore.notifications.clear();
-    MockStore.promotions.add(Promotion(
-      id: 'p1',
-      code: 'GIAM10',
-      discountPercent: 10.0,
-      expiryDate: DateTime.now().add(const Duration(days: 30)),
-    ));
+    MockStore.promotions.add(
+      Promotion(
+        id: 'p1',
+        code: 'GIAM10',
+        discountPercent: 10.0,
+        expiryDate: DateTime.now().add(const Duration(days: 30)),
+      ),
+    );
     MockStore.currentUser = AppUser(
       id: 'customer1',
       name: 'Khách Hàng 1',
@@ -216,11 +244,19 @@ void main() {
       expect(result.payment?['status'], equals('pending'));
 
       // Kiểm tra trong SQLite
-      final bRows = await db.query('bookings', where: 'id = ?', whereArgs: ['b_cash_1']);
+      final bRows = await db.query(
+        'bookings',
+        where: 'id = ?',
+        whereArgs: ['b_cash_1'],
+      );
       expect(bRows.length, equals(1));
       expect(bRows.first['paymentStatus'], equals('unpaid'));
 
-      final pRows = await db.query('payments', where: 'bookingId = ?', whereArgs: ['b_cash_1']);
+      final pRows = await db.query(
+        'payments',
+        where: 'bookingId = ?',
+        whereArgs: ['b_cash_1'],
+      );
       expect(pRows.length, equals(1));
       expect(pRows.first['status'], equals('pending'));
       expect(pRows.first['method'], equals('cash'));
@@ -255,7 +291,11 @@ void main() {
       expect(result.payment?['status'], equals('success'));
       expect(result.transactionCode, equals('MOMO-123456'));
 
-      final pRows = await db.query('payments', where: 'bookingId = ?', whereArgs: ['b_online_1']);
+      final pRows = await db.query(
+        'payments',
+        where: 'bookingId = ?',
+        whereArgs: ['b_online_1'],
+      );
       expect(pRows.first['status'], equals('success'));
       expect(pRows.first['transactionCode'], equals('MOMO-123456'));
     });
@@ -295,8 +335,13 @@ void main() {
       expect(available, isTrue);
 
       // Có notification paymentFailed
-      final notifs = await BookingRepository.getNotificationsForUser('customer1');
-      expect(notifs.any((n) => n.type == AppNotificationType.paymentFailed), isTrue);
+      final notifs = await BookingRepository.getNotificationsForUser(
+        'customer1',
+      );
+      expect(
+        notifs.any((n) => n.type == AppNotificationType.paymentFailed),
+        isTrue,
+      );
     });
 
     test('4. Ngăn chặn hai booking trùng khung giờ', () async {
@@ -313,7 +358,10 @@ void main() {
         discountAmount: 0.0,
         totalPrice: 200000.0,
       );
-      final res1 = await BookingRepository.processBookingPayment(booking: b1, method: 'cash');
+      final res1 = await BookingRepository.processBookingPayment(
+        booking: b1,
+        method: 'cash',
+      );
       expect(res1.isSuccess, isTrue);
 
       // Đặt trùng một phần (17:00 - 19:00)
@@ -329,44 +377,68 @@ void main() {
         discountAmount: 0.0,
         totalPrice: 200000.0,
       );
-      final res2 = await BookingRepository.processBookingPayment(booking: b2, method: 'cash');
+      final res2 = await BookingRepository.processBookingPayment(
+        booking: b2,
+        method: 'cash',
+      );
       expect(res2.isSuccess, isFalse);
       expect(res2.failureReason, equals('Khung giờ không còn trống.'));
     });
 
-    test('5. Rollback sạch khi vi phạm constraint (Không ghi dữ liệu dở dang)', () async {
-      final date = DateTime.now();
-      final invalidBooking = Booking(
-        id: 'b_invalid_fk',
-        venueId: 'v_non_existent', // Venue không tồn tại
-        userId: 'customer1',
-        date: date,
-        startTime: '06:00',
-        endTime: '08:00',
-        originalAmount: 200000.0,
-        serviceAmount: 0.0,
-        discountAmount: 0.0,
-        totalPrice: 200000.0,
-      );
+    test(
+      '5. Rollback sạch khi vi phạm constraint (Không ghi dữ liệu dở dang)',
+      () async {
+        final date = DateTime.now();
+        final invalidBooking = Booking(
+          id: 'b_invalid_fk',
+          venueId: 'v_non_existent', // Venue không tồn tại
+          userId: 'customer1',
+          date: date,
+          startTime: '06:00',
+          endTime: '08:00',
+          originalAmount: 200000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 200000.0,
+        );
 
-      final result = await BookingRepository.processBookingPayment(
-        booking: invalidBooking,
-        method: 'cash',
-      );
-      expect(result.isSuccess, isFalse);
+        final result = await BookingRepository.processBookingPayment(
+          booking: invalidBooking,
+          method: 'cash',
+        );
+        expect(result.isSuccess, isFalse);
 
-      // Đảm bảo không có record nào bị ghi vào bảng bookings và payments
-      final bRows = await db.query('bookings', where: 'id = ?', whereArgs: ['b_invalid_fk']);
-      expect(bRows.isEmpty, isTrue);
-      final pRows = await db.query('payments', where: 'bookingId = ?', whereArgs: ['b_invalid_fk']);
-      expect(pRows.isEmpty, isTrue);
-    });
+        // Đảm bảo không có record nào bị ghi vào bảng bookings và payments
+        final bRows = await db.query(
+          'bookings',
+          where: 'id = ?',
+          whereArgs: ['b_invalid_fk'],
+        );
+        expect(bRows.isEmpty, isTrue);
+        final pRows = await db.query(
+          'payments',
+          where: 'bookingId = ?',
+          whereArgs: ['b_invalid_fk'],
+        );
+        expect(pRows.isEmpty, isTrue);
+      },
+    );
 
     test('6. Đặt sân có nhiều dịch vụ và lưu snapshot tên dịch vụ', () async {
       final date = DateTime.now();
       final services = [
-        BookingServiceItem(serviceId: 's1', serviceName: 'Áo bib thi đấu', quantity: 2, unitPrice: 20000.0),
-        BookingServiceItem(serviceId: 's2', serviceName: 'Nước suối', quantity: 5, unitPrice: 10000.0),
+        BookingServiceItem(
+          serviceId: 's1',
+          serviceName: 'Áo bib thi đấu',
+          quantity: 2,
+          unitPrice: 20000.0,
+        ),
+        BookingServiceItem(
+          serviceId: 's2',
+          serviceName: 'Nước suối',
+          quantity: 5,
+          unitPrice: 10000.0,
+        ),
       ];
       final b = Booking(
         id: 'b_services_1',
@@ -382,14 +454,29 @@ void main() {
         serviceItems: services,
       );
 
-      final result = await BookingRepository.processBookingPayment(booking: b, method: 'cash');
+      final result = await BookingRepository.processBookingPayment(
+        booking: b,
+        method: 'cash',
+      );
       expect(result.isSuccess, isTrue);
 
       // Kiểm tra snapshot tên dịch vụ trong bảng booking_services
-      final sRows = await db.query('booking_services', where: 'bookingId = ?', whereArgs: ['b_services_1']);
+      final sRows = await db.query(
+        'booking_services',
+        where: 'bookingId = ?',
+        whereArgs: ['b_services_1'],
+      );
       expect(sRows.length, equals(2));
-      expect(sRows.any((r) => r['serviceName'] == 'Áo bib thi đấu' && r['quantity'] == 2), isTrue);
-      expect(sRows.any((r) => r['serviceName'] == 'Nước suối' && r['quantity'] == 5), isTrue);
+      expect(
+        sRows.any(
+          (r) => r['serviceName'] == 'Áo bib thi đấu' && r['quantity'] == 2,
+        ),
+        isTrue,
+      );
+      expect(
+        sRows.any((r) => r['serviceName'] == 'Nước suối' && r['quantity'] == 5),
+        isTrue,
+      );
 
       // Đọc lại qua getBookingById
       final fetched = await BookingRepository.getBookingById('b_services_1');
@@ -415,15 +502,26 @@ void main() {
         promotionCode: 'GIAM10',
       );
 
-      final result = await BookingRepository.processBookingPayment(booking: b, method: 'cash');
+      final result = await BookingRepository.processBookingPayment(
+        booking: b,
+        method: 'cash',
+      );
       expect(result.isSuccess, isTrue);
 
       // Kiểm tra promotion_usages và usedCount
-      final usages = await db.query('promotion_usages', where: 'bookingId = ?', whereArgs: ['b_promo_1']);
+      final usages = await db.query(
+        'promotion_usages',
+        where: 'bookingId = ?',
+        whereArgs: ['b_promo_1'],
+      );
       expect(usages.length, equals(1));
       expect(usages.first['isReversed'], equals(0));
 
-      final promo = await db.query('promotions', where: 'id = ?', whereArgs: ['p1']);
+      final promo = await db.query(
+        'promotions',
+        where: 'id = ?',
+        whereArgs: ['p1'],
+      );
       expect(promo.first['usedCount'], equals(1));
     });
 
@@ -445,21 +543,39 @@ void main() {
       await BookingRepository.processBookingPayment(booking: b, method: 'cash');
 
       // Hủy lần 1
-      final cancel1 = await BookingRepository.cancelBooking('b_cancel_promo', cancelReason: 'Khách đổi lịch');
+      final cancel1 = await BookingRepository.cancelBooking(
+        'b_cancel_promo',
+        cancelReason: 'Khách đổi lịch',
+      );
       expect(cancel1, isTrue);
 
       // Kiểm tra promotion đã hoàn
-      final promoAfter1 = await db.query('promotions', where: 'id = ?', whereArgs: ['p1']);
+      final promoAfter1 = await db.query(
+        'promotions',
+        where: 'id = ?',
+        whereArgs: ['p1'],
+      );
       expect(promoAfter1.first['usedCount'], equals(0)); // Giảm từ 1 về 0
 
-      final usage = await db.query('promotion_usages', where: 'bookingId = ?', whereArgs: ['b_cancel_promo']);
+      final usage = await db.query(
+        'promotion_usages',
+        where: 'bookingId = ?',
+        whereArgs: ['b_cancel_promo'],
+      );
       expect(usage.first['isReversed'], equals(1));
 
       // Hủy lần 2 (Idempotent - không trừ âm lượt dùng)
       final cancel2 = await BookingRepository.cancelBooking('b_cancel_promo');
       expect(cancel2, isFalse); // Từ chối hủy booking đã cancelled
-      final promoAfter2 = await db.query('promotions', where: 'id = ?', whereArgs: ['p1']);
-      expect(promoAfter2.first['usedCount'], equals(0)); // Vẫn là 0, không bị âm
+      final promoAfter2 = await db.query(
+        'promotions',
+        where: 'id = ?',
+        whereArgs: ['p1'],
+      );
+      expect(
+        promoAfter2.first['usedCount'],
+        equals(0),
+      ); // Vẫn là 0, không bị âm
     });
 
     test('9. Hủy đơn đã thanh toán online và quy trình hoàn tiền (Refund)', () async {
@@ -477,36 +593,55 @@ void main() {
       );
       await BookingRepository.processBookingPayment(booking: b, method: 'momo');
 
-      // 1. Hủy booking -> Chuyển payment sang refundStatus = 'processing'
-      final cancelRes = await BookingRepository.cancelBooking('b_refund_flow');
-      expect(cancelRes, isTrue);
+        // 1. Hủy booking -> Chuyển payment sang refundStatus = 'processing'
+        final cancelRes = await BookingRepository.cancelBooking(
+          'b_refund_flow',
+        );
+        expect(cancelRes, isTrue);
 
-      var payment = await BookingRepository.getPaymentForBooking('b_refund_flow');
-      expect(payment?.refundStatus, equals('processing'));
-      expect(payment?.refundAmount, equals(100000.0));
+        var payment = await BookingRepository.getPaymentForBooking(
+          'b_refund_flow',
+        );
+        expect(payment?.refundStatus, equals('processing'));
+        expect(payment?.refundAmount, equals(100000.0));
 
-      // Có thông báo refundProcessing
-      var notifs = await BookingRepository.getNotificationsForUser('customer1');
-      expect(notifs.any((n) => n.type == AppNotificationType.refundProcessing), isTrue);
+        // Có thông báo refundProcessing
+        var notifs = await BookingRepository.getNotificationsForUser(
+          'customer1',
+        );
+        expect(
+          notifs.any((n) => n.type == AppNotificationType.refundProcessing),
+          isTrue,
+        );
 
-      // 2. Xác nhận hoàn tiền thành công -> paymentStatus = 'refunded', status = 'refunded'
-      final completeRes = await BookingRepository.completeRefund('b_refund_flow');
-      expect(completeRes, isTrue);
+        // 2. Xác nhận hoàn tiền thành công -> paymentStatus = 'refunded', status = 'refunded'
+        final completeRes = await BookingRepository.completeRefund(
+          'b_refund_flow',
+        );
+        expect(completeRes, isTrue);
 
-      final fetchedBooking = await BookingRepository.getBookingById('b_refund_flow');
-      expect(fetchedBooking?.paymentStatus, equals('refunded'));
+        final fetchedBooking = await BookingRepository.getBookingById(
+          'b_refund_flow',
+        );
+        expect(fetchedBooking?.paymentStatus, equals('refunded'));
 
-      payment = await BookingRepository.getPaymentForBooking('b_refund_flow');
-      expect(payment?.status, equals('refunded'));
-      expect(payment?.refundStatus, equals('succeeded'));
+        payment = await BookingRepository.getPaymentForBooking('b_refund_flow');
+        expect(payment?.status, equals('refunded'));
+        expect(payment?.refundStatus, equals('succeeded'));
 
-      notifs = await BookingRepository.getNotificationsForUser('customer1');
-      expect(notifs.any((n) => n.type == AppNotificationType.refundSucceeded), isTrue);
+        notifs = await BookingRepository.getNotificationsForUser('customer1');
+        expect(
+          notifs.any((n) => n.type == AppNotificationType.refundSucceeded),
+          isTrue,
+        );
 
-      // 3. Ngăn hoàn tiền lại lần nữa
-      final completeAgain = await BookingRepository.completeRefund('b_refund_flow');
-      expect(completeAgain, isFalse);
-    });
+        // 3. Ngăn hoàn tiền lại lần nữa
+        final completeAgain = await BookingRepository.completeRefund(
+          'b_refund_flow',
+        );
+        expect(completeAgain, isFalse);
+      },
+    );
 
     test(
       '10. Khôi phục booking, payment và refund sau khi đóng mở lại SQLite',
@@ -558,11 +693,13 @@ void main() {
 
         await reopenDatabase();
 
-        var restoredBooking =
-            await BookingRepository.getBookingById('b_restart_flow');
+        var restoredBooking = await BookingRepository.getBookingById(
+          'b_restart_flow',
+        );
 
-        var restoredPayment =
-            await BookingRepository.getPaymentForBooking('b_restart_flow');
+        var restoredPayment = await BookingRepository.getPaymentForBooking(
+          'b_restart_flow',
+        );
 
         expect(restoredBooking, isNotNull);
         expect(restoredPayment, isNotNull);
@@ -570,18 +707,21 @@ void main() {
         expect(restoredPayment?.amount, equals(100000.0));
 
         // 2. Hủy booking đã thanh toán.
-        final cancelResult =
-            await BookingRepository.cancelBooking('b_restart_flow');
+        final cancelResult = await BookingRepository.cancelBooking(
+          'b_restart_flow',
+        );
 
         expect(cancelResult, isTrue);
 
         await reopenDatabase();
 
-        restoredBooking =
-            await BookingRepository.getBookingById('b_restart_flow');
+        restoredBooking = await BookingRepository.getBookingById(
+          'b_restart_flow',
+        );
 
-        restoredPayment =
-            await BookingRepository.getPaymentForBooking('b_restart_flow');
+        restoredPayment = await BookingRepository.getPaymentForBooking(
+          'b_restart_flow',
+        );
 
         final cancelledRows = await db.query(
           'bookings',
@@ -596,8 +736,9 @@ void main() {
         expect(restoredPayment?.refundStatus, equals('processing'));
         expect(restoredPayment?.refundAmount, equals(100000.0));
 
-        var notifications =
-            await BookingRepository.getNotificationsForUser('customer1');
+        var notifications = await BookingRepository.getNotificationsForUser(
+          'customer1',
+        );
 
         expect(
           notifications.any(
@@ -608,21 +749,25 @@ void main() {
         );
 
         // 3. Hoàn tiền thành công.
-        final refundResult =
-            await BookingRepository.completeRefund('b_restart_flow');
+        final refundResult = await BookingRepository.completeRefund(
+          'b_restart_flow',
+        );
 
         expect(refundResult, isTrue);
 
         await reopenDatabase();
 
-        restoredBooking =
-            await BookingRepository.getBookingById('b_restart_flow');
+        restoredBooking = await BookingRepository.getBookingById(
+          'b_restart_flow',
+        );
 
-        restoredPayment =
-            await BookingRepository.getPaymentForBooking('b_restart_flow');
+        restoredPayment = await BookingRepository.getPaymentForBooking(
+          'b_restart_flow',
+        );
 
-        notifications =
-            await BookingRepository.getNotificationsForUser('customer1');
+        notifications = await BookingRepository.getNotificationsForUser(
+          'customer1',
+        );
 
         expect(restoredBooking, isNotNull);
         expect(restoredBooking?.paymentStatus, equals('refunded'));
@@ -660,7 +805,9 @@ void main() {
         'isRead': 0,
       });
 
-      final notifs = await BookingRepository.getNotificationsForUser('customer1');
+      final notifs = await BookingRepository.getNotificationsForUser(
+        'customer1',
+      );
       expect(notifs.isNotEmpty, isTrue);
 
       final firstNotif = notifs.first;
@@ -668,8 +815,12 @@ void main() {
 
       await BookingRepository.markNotificationAsRead(firstNotif.id);
 
-      final updatedNotifs = await BookingRepository.getNotificationsForUser('customer1');
-      final updatedFirst = updatedNotifs.firstWhere((n) => n.id == firstNotif.id);
+      final updatedNotifs = await BookingRepository.getNotificationsForUser(
+        'customer1',
+      );
+      final updatedFirst = updatedNotifs.firstWhere(
+        (n) => n.id == firstNotif.id,
+      );
       expect(updatedFirst.isRead, isTrue);
     });
 
@@ -692,7 +843,9 @@ void main() {
       final venueBookings = await BookingRepository.getBookingsForVenue('v1');
       expect(venueBookings.isNotEmpty, isTrue);
 
-      final ownerBookings = await BookingRepository.getBookingsForOwner('owner1');
+      final ownerBookings = await BookingRepository.getBookingsForOwner(
+        'owner1',
+      );
       expect(ownerBookings.isNotEmpty, isTrue);
       expect(ownerBookings.any((item) => item.id == 'b_query_test'), isTrue);
     });
@@ -701,156 +854,198 @@ void main() {
     // CÁC TEST MỚI BỔ SUNG THEO YÊU CẦU:
     // ------------------------------------------------------------------------
 
-    test('Test A – Race condition: Hai yêu cầu đặt cùng khung giờ đồng thời qua Future.wait', () async {
-      final date = DateTime.now();
-      final b1 = Booking(
-        id: 'b_race_1',
-        venueId: 'v1',
-        userId: 'customer1',
-        date: date,
-        startTime: '19:00',
-        endTime: '21:00',
-        originalAmount: 200000.0,
-        serviceAmount: 0.0,
-        discountAmount: 0.0,
-        totalPrice: 200000.0,
-      );
-      final b2 = Booking(
-        id: 'b_race_2',
-        venueId: 'v1',
-        userId: 'customer1',
-        date: date,
-        startTime: '19:00',
-        endTime: '21:00',
-        originalAmount: 200000.0,
-        serviceAmount: 0.0,
-        discountAmount: 0.0,
-        totalPrice: 200000.0,
-      );
+    test(
+      'Test A – Race condition: Hai yêu cầu đặt cùng khung giờ đồng thời qua Future.wait',
+      () async {
+        final date = DateTime.now();
+        final b1 = Booking(
+          id: 'b_race_1',
+          venueId: 'v1',
+          userId: 'customer1',
+          date: date,
+          startTime: '19:00',
+          endTime: '21:00',
+          originalAmount: 200000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 200000.0,
+        );
+        final b2 = Booking(
+          id: 'b_race_2',
+          venueId: 'v1',
+          userId: 'customer1',
+          date: date,
+          startTime: '19:00',
+          endTime: '21:00',
+          originalAmount: 200000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 200000.0,
+        );
 
-      final results = await Future.wait([
-        BookingRepository.processBookingPayment(booking: b1, method: 'cash'),
-        BookingRepository.processBookingPayment(booking: b2, method: 'cash'),
-      ]);
+        final results = await Future.wait([
+          BookingRepository.processBookingPayment(booking: b1, method: 'cash'),
+          BookingRepository.processBookingPayment(booking: b2, method: 'cash'),
+        ]);
 
-      final successes = results.where((r) => r.isSuccess).toList();
-      final failures = results.where((r) => !r.isSuccess).toList();
+        final successes = results.where((r) => r.isSuccess).toList();
+        final failures = results.where((r) => !r.isSuccess).toList();
 
-      // Chỉ đúng một yêu cầu thành công
-      expect(successes.length, equals(1));
-      expect(failures.length, equals(1));
-      expect(failures.first.failureReason, equals('Khung giờ không còn trống.'));
+        // Chỉ đúng một yêu cầu thành công
+        expect(successes.length, equals(1));
+        expect(failures.length, equals(1));
+        expect(
+          failures.first.failureReason,
+          equals('Khung giờ không còn trống.'),
+        );
 
-      // SQLite chỉ lưu đúng 1 booking
-      final bookedRows = await db.query(
-        'bookings',
-        where: 'venueId = ? AND date = ? AND startTime = ?',
-        whereArgs: ['v1', date.toIso8601String(), '19:00'],
-      );
-      expect(bookedRows.length, equals(1));
-    });
+        // SQLite chỉ lưu đúng 1 booking
+        final bookedRows = await db.query(
+          'bookings',
+          where: 'venueId = ? AND date = ? AND startTime = ?',
+          whereArgs: ['v1', date.toIso8601String(), '19:00'],
+        );
+        expect(bookedRows.length, equals(1));
+      },
+    );
 
-    test('Test B – failRefund: Thất bại hoàn tiền không đổi paymentStatus thành refunded', () async {
-      final date = DateTime.now();
-      final b = Booking(
-        id: 'b_fail_refund_test',
-        venueId: 'v1',
-        userId: 'customer1',
-        date: date,
-        startTime: '21:00',
-        endTime: '22:00',
-        originalAmount: 100000.0,
-        serviceAmount: 0.0,
-        discountAmount: 0.0,
-        totalPrice: 100000.0,
-      );
-      await BookingRepository.processBookingPayment(booking: b, method: 'momo');
+    test(
+      'Test B – failRefund: Thất bại hoàn tiền không đổi paymentStatus thành refunded',
+      () async {
+        final date = DateTime.now();
+        final b = Booking(
+          id: 'b_fail_refund_test',
+          venueId: 'v1',
+          userId: 'customer1',
+          date: date,
+          startTime: '21:00',
+          endTime: '22:00',
+          originalAmount: 100000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 100000.0,
+        );
+        await BookingRepository.processBookingPayment(
+          booking: b,
+          method: 'momo',
+        );
 
-      // Hủy để sang trạng thái processing
-      final cancelSuccess = await BookingRepository.cancelBooking('b_fail_refund_test');
-      expect(cancelSuccess, isTrue);
+        // Hủy để sang trạng thái processing
+        final cancelSuccess = await BookingRepository.cancelBooking(
+          'b_fail_refund_test',
+        );
+        expect(cancelSuccess, isTrue);
 
-      // Gọi failRefund
-      final failSuccess = await BookingRepository.failRefund('b_fail_refund_test');
-      expect(failSuccess, isTrue);
+        // Gọi failRefund
+        final failSuccess = await BookingRepository.failRefund(
+          'b_fail_refund_test',
+        );
+        expect(failSuccess, isTrue);
 
-      // Xác nhận refundStatus = failed, booking.paymentStatus vẫn là paid, payments.status không là refunded
-      final payment = await BookingRepository.getPaymentForBooking('b_fail_refund_test');
-      expect(payment?.refundStatus, equals('failed'));
-      expect(payment?.status, equals('success')); // Vẫn là success ban đầu, không bị chuyển thành refunded
+        // Xác nhận refundStatus = failed, booking.paymentStatus vẫn là paid, payments.status không là refunded
+        final payment = await BookingRepository.getPaymentForBooking(
+          'b_fail_refund_test',
+        );
+        expect(payment?.refundStatus, equals('failed'));
+        expect(
+          payment?.status,
+          equals('success'),
+        ); // Vẫn là success ban đầu, không bị chuyển thành refunded
 
-      final fetchedBooking = await BookingRepository.getBookingById('b_fail_refund_test');
-      expect(fetchedBooking?.paymentStatus, equals('paid')); // Không bị chuyển thành refunded
-    });
+        final fetchedBooking = await BookingRepository.getBookingById(
+          'b_fail_refund_test',
+        );
+        expect(
+          fetchedBooking?.paymentStatus,
+          equals('paid'),
+        ); // Không bị chuyển thành refunded
+      },
+    );
 
-    test('Test C – Cache rollback: Giao dịch SQLite thất bại không làm bẩn MockStore cache', () async {
-      final initialBookingsCount = MockStore.bookings.length;
-      final initialPaymentsCount = MockStore.payments.length;
+    test(
+      'Test C – Cache rollback: Giao dịch SQLite thất bại không làm bẩn MockStore cache',
+      () async {
+        final initialBookingsCount = MockStore.bookings.length;
+        final initialPaymentsCount = MockStore.payments.length;
 
-      final invalidBooking = Booking(
-        id: 'b_fail_cache_rollback',
-        venueId: 'v_non_existent', // Venue không tồn tại dẫn đến lỗi trước khi insert
-        userId: 'customer1',
-        date: DateTime.now(),
-        startTime: '04:00',
-        endTime: '05:00',
-        originalAmount: 100000.0,
-        serviceAmount: 0.0,
-        discountAmount: 0.0,
-        totalPrice: 100000.0,
-      );
+        final invalidBooking = Booking(
+          id: 'b_fail_cache_rollback',
+          venueId:
+              'v_non_existent', // Venue không tồn tại dẫn đến lỗi trước khi insert
+          userId: 'customer1',
+          date: DateTime.now(),
+          startTime: '04:00',
+          endTime: '05:00',
+          originalAmount: 100000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 100000.0,
+        );
 
-      final result = await BookingRepository.processBookingPayment(
-        booking: invalidBooking,
-        method: 'cash',
-      );
-      expect(result.isSuccess, isFalse);
+        final result = await BookingRepository.processBookingPayment(
+          booking: invalidBooking,
+          method: 'cash',
+        );
+        expect(result.isSuccess, isFalse);
 
-      // Xác nhận MockStore không tăng thêm booking hay payment nào
-      expect(MockStore.bookings.length, equals(initialBookingsCount));
-      expect(MockStore.payments.length, equals(initialPaymentsCount));
-      expect(MockStore.bookings.any((b) => b.id == 'b_fail_cache_rollback'), isFalse);
-    });
+        // Xác nhận MockStore không tăng thêm booking hay payment nào
+        expect(MockStore.bookings.length, equals(initialBookingsCount));
+        expect(MockStore.payments.length, equals(initialPaymentsCount));
+        expect(
+          MockStore.bookings.any((b) => b.id == 'b_fail_cache_rollback'),
+          isFalse,
+        );
+      },
+    );
 
-    test('Test D – refreshCache: Khôi phục cache MockStore đồng bộ hoàn toàn với SQLite', () async {
-      // 1. Chèn trực tiếp một booking và payment vào SQLite mà không qua MockStore
-      await db.insert('bookings', {
-        'id': 'b_direct_sqlite',
-        'venueId': 'v1',
-        'userId': 'customer1',
-        'date': '2026-11-09T08:00:00.000',
-        'startTime': '08:00',
-        'endTime': '10:00',
-        'totalPrice': 200000.0,
-        'originalAmount': 200000.0,
-        'serviceAmount': 0.0,
-        'discountAmount': 0.0,
-        'status': 'confirmed',
-        'paymentStatus': 'paid',
-        'paymentId': 'p_direct_sqlite',
-        'createdAt': '2026-11-08T10:00:00.000',
-      });
-      await db.insert('payments', {
-        'id': 'p_direct_sqlite',
-        'bookingId': 'b_direct_sqlite',
-        'method': 'momo',
-        'amount': 200000.0,
-        'status': 'success',
-        'createdAt': '2026-11-08T10:00:00.000',
-      });
+    test(
+      'Test D – refreshCache: Khôi phục cache MockStore đồng bộ hoàn toàn với SQLite',
+      () async {
+        // 1. Chèn trực tiếp một booking và payment vào SQLite mà không qua MockStore
+        await db.insert('bookings', {
+          'id': 'b_direct_sqlite',
+          'venueId': 'v1',
+          'userId': 'customer1',
+          'date': '2026-11-09T08:00:00.000',
+          'startTime': '08:00',
+          'endTime': '10:00',
+          'totalPrice': 200000.0,
+          'originalAmount': 200000.0,
+          'serviceAmount': 0.0,
+          'discountAmount': 0.0,
+          'status': 'confirmed',
+          'paymentStatus': 'paid',
+          'paymentId': 'p_direct_sqlite',
+          'createdAt': '2026-11-08T10:00:00.000',
+        });
+        await db.insert('payments', {
+          'id': 'p_direct_sqlite',
+          'bookingId': 'b_direct_sqlite',
+          'method': 'momo',
+          'amount': 200000.0,
+          'status': 'success',
+          'createdAt': '2026-11-08T10:00:00.000',
+        });
 
-      // 2. Làm lệch MockStore
-      MockStore.bookings.clear();
-      expect(MockStore.bookings.isEmpty, isTrue);
+        // 2. Làm lệch MockStore
+        MockStore.bookings.clear();
+        expect(MockStore.bookings.isEmpty, isTrue);
 
-      // 3. Gọi refreshCache
-      await BookingRepository.refreshCache();
+        // 3. Gọi refreshCache
+        await BookingRepository.refreshCache();
 
-      // 4. Kiểm tra MockStore đã được nạp lại đầy đủ từ SQLite
-      expect(MockStore.bookings.isNotEmpty, isTrue);
-      expect(MockStore.bookings.any((b) => b.id == 'b_direct_sqlite'), isTrue);
-      expect(MockStore.payments.any((p) => p['id'] == 'p_direct_sqlite'), isTrue);
-    });
+        // 4. Kiểm tra MockStore đã được nạp lại đầy đủ từ SQLite
+        expect(MockStore.bookings.isNotEmpty, isTrue);
+        expect(
+          MockStore.bookings.any((b) => b.id == 'b_direct_sqlite'),
+          isTrue,
+        );
+        expect(
+          MockStore.payments.any((p) => p['id'] == 'p_direct_sqlite'),
+          isTrue,
+        );
+      },
+    );
 
     // ------------------------------------------------------------------------
     // GIAI ĐOẠN 3C: TÍCH HỢP TOÀN DIỆN & KIỂM THỬ KHÁCH HÀNG / THANH TOÁN
@@ -888,7 +1083,10 @@ void main() {
 
         // Kiểm tra không tạo trùng lặp trong MockStore
         expect(MockStore.bookings.length, equals(initialMockCount + 1));
-        expect(MockStore.bookings.where((b) => b.id == 'b_cash_e2e_3c').length, equals(1));
+        expect(
+          MockStore.bookings.where((b) => b.id == 'b_cash_e2e_3c').length,
+          equals(1),
+        );
       });
 
       test('2. Customer thanh toán online thành công (momo/vnpay)', () async {
@@ -918,242 +1116,306 @@ void main() {
         expect(result.payment?['transactionCode'], equals('TXN-ONLINE-SUCC-1'));
 
         // Kiểm tra SQLite
-        final paymentDb = await BookingRepository.getPaymentForBooking('b_online_succ_3c');
+        final paymentDb = await BookingRepository.getPaymentForBooking(
+          'b_online_succ_3c',
+        );
         expect(paymentDb?.status, equals('success'));
         expect(paymentDb?.amount, equals(200000.0));
       });
 
-      test('3. Customer thanh toán online thất bại (simulateFailure = true)', () async {
-        final booking = Booking(
-          id: 'b_online_fail_3c',
-          venueId: 'v1',
-          userId: 'customer1',
-          date: DateTime.parse('2026-11-20T00:00:00.000'),
-          startTime: '18:00',
-          endTime: '20:00',
-          originalAmount: 200000.0,
-          serviceAmount: 0.0,
-          discountAmount: 0.0,
-          totalPrice: 200000.0,
-        );
+      test(
+        '3. Customer thanh toán online thất bại (simulateFailure = true)',
+        () async {
+          final booking = Booking(
+            id: 'b_online_fail_3c',
+            venueId: 'v1',
+            userId: 'customer1',
+            date: DateTime.parse('2026-11-20T00:00:00.000'),
+            startTime: '18:00',
+            endTime: '20:00',
+            originalAmount: 200000.0,
+            serviceAmount: 0.0,
+            discountAmount: 0.0,
+            totalPrice: 200000.0,
+          );
 
-        final result = await BookingRepository.processBookingPayment(
-          booking: booking,
-          method: 'vnpay',
-          simulateFailure: true,
-        );
+          final result = await BookingRepository.processBookingPayment(
+            booking: booking,
+            method: 'vnpay',
+            simulateFailure: true,
+          );
 
-        expect(result.isSuccess, isFalse);
-        expect(result.booking?.status, equals('cancelled'));
-        expect(result.payment?['status'], equals('failed'));
+          expect(result.isSuccess, isFalse);
+          expect(result.booking?.status, equals('cancelled'));
+          expect(result.payment?['status'], equals('failed'));
 
-        // Slot phải được giải phóng vì status = cancelled
-        final slotFree = await BookingRepository.isRangeAvailable(
-          venueId: 'v1',
-          date: DateTime.parse('2026-11-20T00:00:00.000'),
-          startTime: '18:00',
-          endTime: '20:00',
-        );
-        expect(slotFree, isTrue);
-      });
+          // Slot phải được giải phóng vì status = cancelled
+          final slotFree = await BookingRepository.isRangeAvailable(
+            venueId: 'v1',
+            date: DateTime.parse('2026-11-20T00:00:00.000'),
+            startTime: '18:00',
+            endTime: '20:00',
+          );
+          expect(slotFree, isTrue);
+        },
+      );
 
-      test('4. Hai khách cùng đặt một slot, chỉ một người thành công', () async {
-        final b1 = Booking(
-          id: 'b_slot_race_1',
-          venueId: 'v1',
-          userId: 'customer1',
-          date: DateTime.parse('2026-11-21T00:00:00.000'),
-          startTime: '08:00',
-          endTime: '10:00',
-          originalAmount: 200000.0,
-          serviceAmount: 0.0,
-          discountAmount: 0.0,
-          totalPrice: 200000.0,
-        );
+      test(
+        '4. Hai khách cùng đặt một slot, chỉ một người thành công',
+        () async {
+          final b1 = Booking(
+            id: 'b_slot_race_1',
+            venueId: 'v1',
+            userId: 'customer1',
+            date: DateTime.parse('2026-11-21T00:00:00.000'),
+            startTime: '08:00',
+            endTime: '10:00',
+            originalAmount: 200000.0,
+            serviceAmount: 0.0,
+            discountAmount: 0.0,
+            totalPrice: 200000.0,
+          );
 
-        final b2 = Booking(
-          id: 'b_slot_race_2',
-          venueId: 'v1',
-          userId: 'customer1',
-          date: DateTime.parse('2026-11-21T00:00:00.000'),
-          startTime: '09:00', // Trùng chồng lấn với 08:00-10:00
-          endTime: '11:00',
-          originalAmount: 200000.0,
-          serviceAmount: 0.0,
-          discountAmount: 0.0,
-          totalPrice: 200000.0,
-        );
+          final b2 = Booking(
+            id: 'b_slot_race_2',
+            venueId: 'v1',
+            userId: 'customer1',
+            date: DateTime.parse('2026-11-21T00:00:00.000'),
+            startTime: '09:00', // Trùng chồng lấn với 08:00-10:00
+            endTime: '11:00',
+            originalAmount: 200000.0,
+            serviceAmount: 0.0,
+            discountAmount: 0.0,
+            totalPrice: 200000.0,
+          );
 
-        final res1 = await BookingRepository.processBookingPayment(booking: b1, method: 'cash');
-        final res2 = await BookingRepository.processBookingPayment(booking: b2, method: 'cash');
+          final res1 = await BookingRepository.processBookingPayment(
+            booking: b1,
+            method: 'cash',
+          );
+          final res2 = await BookingRepository.processBookingPayment(
+            booking: b2,
+            method: 'cash',
+          );
 
-        expect(res1.isSuccess, isTrue);
-        expect(res2.isSuccess, isFalse);
-        expect(res2.isSlotAvailable, isFalse);
-      });
+          expect(res1.isSuccess, isTrue);
+          expect(res2.isSuccess, isFalse);
+          expect(res2.isSlotAvailable, isFalse);
+        },
+      );
 
-      test('5. Bootstrap gọi refreshCache đúng thứ tự và nạp đầy đủ vào MockStore', () async {
-        // Chèn trực tiếp vào db
-        await db.insert('bookings', {
-          'id': 'b_bootstrap_test',
-          'venueId': 'v1',
-          'userId': 'customer1',
-          'date': '2026-11-22T00:00:00.000',
-          'startTime': '08:00',
-          'endTime': '10:00',
-          'totalPrice': 200000.0,
-          'originalAmount': 200000.0,
-          'serviceAmount': 0.0,
-          'discountAmount': 0.0,
-          'status': 'confirmed',
-          'paymentStatus': 'paid',
-          'paymentId': 'pay_bootstrap_test',
-          'createdAt': '2026-11-08T10:00:00.000',
-        });
+      test(
+        '5. Bootstrap gọi refreshCache đúng thứ tự và nạp đầy đủ vào MockStore',
+        () async {
+          // Chèn trực tiếp vào db
+          await db.insert('bookings', {
+            'id': 'b_bootstrap_test',
+            'venueId': 'v1',
+            'userId': 'customer1',
+            'date': '2026-11-22T00:00:00.000',
+            'startTime': '08:00',
+            'endTime': '10:00',
+            'totalPrice': 200000.0,
+            'originalAmount': 200000.0,
+            'serviceAmount': 0.0,
+            'discountAmount': 0.0,
+            'status': 'confirmed',
+            'paymentStatus': 'paid',
+            'paymentId': 'pay_bootstrap_test',
+            'createdAt': '2026-11-08T10:00:00.000',
+          });
 
-        // Xóa MockStore để giả lập app khởi động mới
-        MockStore.bookings.clear();
-        expect(MockStore.bookings.isEmpty, isTrue);
+          // Xóa MockStore để giả lập app khởi động mới
+          MockStore.bookings.clear();
+          expect(MockStore.bookings.isEmpty, isTrue);
 
-        await BookingRepository.refreshCache();
+          await BookingRepository.refreshCache();
 
-        expect(MockStore.bookings.any((b) => b.id == 'b_bootstrap_test'), isTrue);
-      });
-      test('6. Owner xác nhận, hoàn thành và hủy booking qua SQLite Repository', () async {
-        final bOwner = Booking(
-          id: 'b_owner_flow',
-          venueId: 'v1',
-          userId: 'customer1',
-          date: DateTime.now().add(const Duration(days: 10)),
-          startTime: '09:00',
-          endTime: '11:00',
-          totalPrice: 200000.0,
-          originalAmount: 200000.0,
-          serviceAmount: 0.0,
-          discountAmount: 0.0,
-          status: 'pending',
-        );
-        final res = await BookingRepository.processBookingPayment(booking: bOwner, method: 'cash');
-        expect(res.isSuccess, isTrue);
+          expect(
+            MockStore.bookings.any((b) => b.id == 'b_bootstrap_test'),
+            isTrue,
+          );
+        },
+      );
+      test(
+        '6. Owner xác nhận, hoàn thành và hủy booking qua SQLite Repository',
+        () async {
+          final bOwner = Booking(
+            id: 'b_owner_flow',
+            venueId: 'v1',
+            userId: 'customer1',
+            date: DateTime.now().add(const Duration(days: 10)),
+            startTime: '09:00',
+            endTime: '11:00',
+            totalPrice: 200000.0,
+            originalAmount: 200000.0,
+            serviceAmount: 0.0,
+            discountAmount: 0.0,
+            status: 'pending',
+          );
+          final res = await BookingRepository.processBookingPayment(
+            booking: bOwner,
+            method: 'cash',
+          );
+          expect(res.isSuccess, isTrue);
 
-        // Đảm bảo đơn ở trạng thái pending trước khi xác nhận
-        await db.update('bookings', {'status': 'pending'}, where: 'id = ?', whereArgs: ['b_owner_flow']);
-        MockStore.bookings.firstWhere((b) => b.id == 'b_owner_flow').status = 'pending';
+          // Đảm bảo đơn ở trạng thái pending trước khi xác nhận
+          await db.update(
+            'bookings',
+            {'status': 'pending'},
+            where: 'id = ?',
+            whereArgs: ['b_owner_flow'],
+          );
+          MockStore.bookings.firstWhere((b) => b.id == 'b_owner_flow').status =
+              'pending';
 
-        // Chủ sân khác cố tình can thiệp -> thất bại
-        final wrongOwner = await BookingRepository.updateBookingStatusByOwner(
-          bookingId: 'b_owner_flow',
-          newStatus: 'confirmed',
-          ownerId: 'wrong_owner',
-        );
-        expect(wrongOwner, isFalse);
+          // Chủ sân khác cố tình can thiệp -> thất bại
+          final wrongOwner = await BookingRepository.updateBookingStatusByOwner(
+            bookingId: 'b_owner_flow',
+            newStatus: 'confirmed',
+            ownerId: 'wrong_owner',
+          );
+          expect(wrongOwner, isFalse);
 
-        // Đúng chủ sân 'owner1' xác nhận -> thành công
-        final confirmOk = await BookingRepository.updateBookingStatusByOwner(
-          bookingId: 'b_owner_flow',
-          newStatus: 'confirmed',
-          ownerId: 'owner1',
-        );
-        expect(confirmOk, isTrue);
+          // Đúng chủ sân 'owner1' xác nhận -> thành công
+          final confirmOk = await BookingRepository.updateBookingStatusByOwner(
+            bookingId: 'b_owner_flow',
+            newStatus: 'confirmed',
+            ownerId: 'owner1',
+          );
+          expect(confirmOk, isTrue);
 
-        // Kiểm tra trong SQLite
-        final dbB1 = await BookingRepository.getBookingById('b_owner_flow');
-        expect(dbB1?.status, 'confirmed');
+          // Kiểm tra trong SQLite
+          final dbB1 = await BookingRepository.getBookingById('b_owner_flow');
+          expect(dbB1?.status, 'confirmed');
 
-        // Chủ sân đánh dấu hoàn thành -> thành công
-        final completeOk = await BookingRepository.updateBookingStatusByOwner(
-          bookingId: 'b_owner_flow',
-          newStatus: 'completed',
-          ownerId: 'owner1',
-        );
-        expect(completeOk, isTrue);
-        final dbB2 = await BookingRepository.getBookingById('b_owner_flow');
-        expect(dbB2?.status, 'completed');
-      });
+          // Chủ sân đánh dấu hoàn thành -> thành công
+          final completeOk = await BookingRepository.updateBookingStatusByOwner(
+            bookingId: 'b_owner_flow',
+            newStatus: 'completed',
+            ownerId: 'owner1',
+          );
+          expect(completeOk, isTrue);
+          final dbB2 = await BookingRepository.getBookingById('b_owner_flow');
+          expect(dbB2?.status, 'completed');
+        },
+      );
 
-      test('7. Admin CRUD và bật/tắt promotion qua SQLite Repository', () async {
-        final newPromo = Promotion(
-          id: 'p_admin_test',
-          code: 'ADMIN20',
-          discountPercent: 20.0,
-          expiryDate: DateTime.now().add(const Duration(days: 30)),
-          isActive: true,
-        );
+      test(
+        '7. Admin CRUD và bật/tắt promotion qua SQLite Repository',
+        () async {
+          final newPromo = Promotion(
+            id: 'p_admin_test',
+            code: 'ADMIN20',
+            discountPercent: 20.0,
+            expiryDate: DateTime.now().add(const Duration(days: 30)),
+            isActive: true,
+          );
 
-        // Tạo mới
-        final createOk = await BookingRepository.createPromotion(newPromo);
-        expect(createOk, isTrue);
-        expect(MockStore.promotions.any((p) => p.code == 'ADMIN20'), isTrue);
+          // Tạo mới
+          final createOk = await BookingRepository.createPromotion(newPromo);
+          expect(createOk, isTrue);
+          expect(MockStore.promotions.any((p) => p.code == 'ADMIN20'), isTrue);
 
-        // Trùng code -> thất bại
-        final dupOk = await BookingRepository.createPromotion(newPromo);
-        expect(dupOk, isFalse);
+          // Trùng code -> thất bại
+          final dupOk = await BookingRepository.createPromotion(newPromo);
+          expect(dupOk, isFalse);
 
-        // Bật / tắt
-        final toggleOk = await BookingRepository.togglePromotionActive('p_admin_test', false);
-        expect(toggleOk, isTrue);
-        final pAfterToggle = MockStore.promotions.firstWhere((p) => p.id == 'p_admin_test');
-        expect(pAfterToggle.isActive, isFalse);
+          // Bật / tắt
+          final toggleOk = await BookingRepository.togglePromotionActive(
+            'p_admin_test',
+            false,
+          );
+          expect(toggleOk, isTrue);
+          final pAfterToggle = MockStore.promotions.firstWhere(
+            (p) => p.id == 'p_admin_test',
+          );
+          expect(pAfterToggle.isActive, isFalse);
 
-        // Chỉnh sửa
-        final updatedPromo = Promotion(
-          id: 'p_admin_test',
-          code: 'ADMIN25',
-          discountPercent: 25.0,
-          expiryDate: DateTime.now().add(const Duration(days: 45)),
-          isActive: true,
-        );
-        final updateOk = await BookingRepository.updatePromotion(updatedPromo);
-        expect(updateOk, isTrue);
-        final pAfterUpdate = MockStore.promotions.firstWhere((p) => p.id == 'p_admin_test');
-        expect(pAfterUpdate.code, 'ADMIN25');
-        expect(pAfterUpdate.discountPercent, 25.0);
+          // Chỉnh sửa
+          final updatedPromo = Promotion(
+            id: 'p_admin_test',
+            code: 'ADMIN25',
+            discountPercent: 25.0,
+            expiryDate: DateTime.now().add(const Duration(days: 45)),
+            isActive: true,
+          );
+          final updateOk = await BookingRepository.updatePromotion(
+            updatedPromo,
+          );
+          expect(updateOk, isTrue);
+          final pAfterUpdate = MockStore.promotions.firstWhere(
+            (p) => p.id == 'p_admin_test',
+          );
+          expect(pAfterUpdate.code, 'ADMIN25');
+          expect(pAfterUpdate.discountPercent, 25.0);
 
-        // Xóa promotion chưa sử dụng -> xóa hẳn
-        final deleteOk = await BookingRepository.deletePromotion('p_admin_test');
-        expect(deleteOk, isTrue);
-        expect(MockStore.promotions.any((p) => p.id == 'p_admin_test'), isFalse);
-      });
+          // Xóa promotion chưa sử dụng -> xóa hẳn
+          final deleteOk = await BookingRepository.deletePromotion(
+            'p_admin_test',
+          );
+          expect(deleteOk, isTrue);
+          expect(
+            MockStore.promotions.any((p) => p.id == 'p_admin_test'),
+            isFalse,
+          );
+        },
+      );
 
-      test('8. Promotion đã sử dụng không bị xóa mất lịch sử mà chỉ vô hiệu hóa', () async {
-        final promoUsed = Promotion(
-          id: 'p_used_test',
-          code: 'USED50',
-          discountPercent: 50.0,
-          expiryDate: DateTime.now().add(const Duration(days: 30)),
-          isActive: true,
-          usedCount: 1,
-        );
-        await BookingRepository.createPromotion(promoUsed);
+      test(
+        '8. Promotion đã sử dụng không bị xóa mất lịch sử mà chỉ vô hiệu hóa',
+        () async {
+          final promoUsed = Promotion(
+            id: 'p_used_test',
+            code: 'USED50',
+            discountPercent: 50.0,
+            expiryDate: DateTime.now().add(const Duration(days: 30)),
+            isActive: true,
+            usedCount: 1,
+          );
+          await BookingRepository.createPromotion(promoUsed);
 
-        // Xóa promotion đã used
-        final delUsedOk = await BookingRepository.deletePromotion('p_used_test');
-        expect(delUsedOk, isTrue);
+          // Xóa promotion đã used
+          final delUsedOk = await BookingRepository.deletePromotion(
+            'p_used_test',
+          );
+          expect(delUsedOk, isTrue);
 
-        // Kiểm tra trong SQLite vẫn còn record và isActive = 0
-        final dbRows = await db.query('promotions', where: 'id = ?', whereArgs: ['p_used_test']);
-        expect(dbRows.isNotEmpty, isTrue);
-        expect(dbRows.single['isActive'], 0);
-        expect(dbRows.single['usedCount'], 1);
-      });
+          // Kiểm tra trong SQLite vẫn còn record và isActive = 0
+          final dbRows = await db.query(
+            'promotions',
+            where: 'id = ?',
+            whereArgs: ['p_used_test'],
+          );
+          expect(dbRows.isNotEmpty, isTrue);
+          expect(dbRows.single['isActive'], 0);
+          expect(dbRows.single['usedCount'], 1);
+        },
+      );
 
-      test('9. Dữ liệu promotion và booking vẫn tồn tại sau khi refreshCache', () async {
-        final pPersist = Promotion(
-          id: 'p_persist_test',
-          code: 'PERSIST30',
-          discountPercent: 30.0,
-          expiryDate: DateTime.now().add(const Duration(days: 15)),
-          isActive: true,
-        );
-        await BookingRepository.createPromotion(pPersist);
+      test(
+        '9. Dữ liệu promotion và booking vẫn tồn tại sau khi refreshCache',
+        () async {
+          final pPersist = Promotion(
+            id: 'p_persist_test',
+            code: 'PERSIST30',
+            discountPercent: 30.0,
+            expiryDate: DateTime.now().add(const Duration(days: 15)),
+            isActive: true,
+          );
+          await BookingRepository.createPromotion(pPersist);
 
-        // Xóa MockStore để giả lập app khởi động lại
-        MockStore.promotions.clear();
-        expect(MockStore.promotions.isEmpty, isTrue);
+          // Xóa MockStore để giả lập app khởi động lại
+          MockStore.promotions.clear();
+          expect(MockStore.promotions.isEmpty, isTrue);
 
-        await BookingRepository.refreshCache();
-        expect(MockStore.promotions.any((p) => p.code == 'PERSIST30'), isTrue);
-      });
+          await BookingRepository.refreshCache();
+          expect(
+            MockStore.promotions.any((p) => p.code == 'PERSIST30'),
+            isTrue,
+          );
+        },
+      );
     });
   });
 }

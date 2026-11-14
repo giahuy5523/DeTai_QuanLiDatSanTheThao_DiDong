@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:sportfield_booking/data/booking_repository.dart';
+import 'package:sportfield_booking/data/promotion_repository.dart';
 import 'package:sportfield_booking/models/promotion.dart';
 
 /// Khi SQLite lỗi, repository phải báo lỗi rõ ràng.
@@ -65,7 +66,7 @@ void main() {
     );
 
     await expectLater(
-      BookingRepository.createPromotion(promo),
+      PromotionRepository.createPromotion(promo),
       throwsA(isA<DatabaseException>()),
     );
   });

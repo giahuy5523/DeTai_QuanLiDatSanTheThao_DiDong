@@ -821,7 +821,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _handlePayment() async {
     if (!_agreed || _isProcessing) return;
+    try {
+      await _submitPayment();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể xử lý thanh toán. Vui lòng thử lại.'),
+        ),
+      );
+    }
+  }
 
+  Future<void> _submitPayment() async {
     final rawArgs = ModalRoute.of(context)?.settings.arguments;
     final args = rawArgs is Map<String, dynamic>
         ? rawArgs
@@ -915,6 +928,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       startTime: startTime,
       endTime: endTime,
     );
+    if (!mounted) return;
 
     if (!isAvailable) {
       setState(() => _isProcessing = false);
