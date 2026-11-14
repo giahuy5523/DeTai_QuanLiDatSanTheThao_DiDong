@@ -33,7 +33,14 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, 'customer@gmail.com');
     await tester.enterText(find.byType(TextFormField).last, '123456');
     await press(tester, 'Đăng nhập');
-    await settleSqlite(tester);
+    // Đăng nhập xong app còn đọc thêm dữ liệu từ SQLite trước khi chuyển màn.
+    for (var i = 0; i < 200 && find.byType(HomeScreen).evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
 
     expect(
       find.text('Email hoặc mật khẩu không đúng.'),
