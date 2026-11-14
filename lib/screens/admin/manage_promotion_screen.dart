@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../data/booking_repository.dart';
-import '../../data/mock_store.dart';
 import '../../data/venue_repository.dart';
 import '../../models/promotion.dart';
 import '../../utils/app_theme.dart';
@@ -33,7 +32,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
 
   Future<void> _load() async {
     try {
-      final promotions = List<Promotion>.of(MockStore.promotions);
+      final promotions = await BookingRepository.loadAllPromotions();
       // Số sân chờ duyệt chỉ để hiển thị trên drawer: lỗi ở đây không chặn màn.
       var pending = _pendingVenueCount;
       try {
@@ -201,7 +200,7 @@ class _ManagePromotionScreenState extends State<ManagePromotionScreen> {
               setModalState(() => saving = true);
               try {
                 // Kiểm tra trùng mã trong SQLite (không phân biệt hoa thường).
-                final isDuplicate = MockStore.promotions.any(
+                final isDuplicate = _promotions.any(
                   (item) =>
                       item.code.toUpperCase() == normalizedCode &&
                       item.id != editingId,

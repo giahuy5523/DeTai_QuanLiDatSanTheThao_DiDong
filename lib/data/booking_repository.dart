@@ -9,6 +9,21 @@ import '../utils/database_helper.dart';
 import 'mock_store.dart';
 import 'promotion_repository.dart';
 
+/// Một khoản hoàn tiền đang chờ admin xác nhận kết quả.
+class PendingRefund {
+  const PendingRefund({
+    required this.bookingId,
+    required this.userId,
+    required this.refundAmount,
+    this.cancelledAt,
+  });
+
+  final String bookingId;
+  final String userId;
+  final double refundAmount;
+  final DateTime? cancelledAt;
+}
+
 /// SQLite Repository managing persistence and transactions for Booking,
 /// Payment, PromotionUsage, and AppNotification.
 class BookingRepository {
@@ -177,6 +192,21 @@ class BookingRepository {
           isSuccess: false,
           isSlotAvailable: false,
           failureReason: 'Khung giờ đặt sân không hợp lệ.',
+        );
+      }
+      // Không cho đặt ngày đã qua (theo ngày, trước mọi thao tác ghi).
+      final checkNow = DateTime.now();
+      final bookingDay = DateTime(
+        booking.date.year,
+        booking.date.month,
+        booking.date.day,
+      );
+      final checkToday = DateTime(checkNow.year, checkNow.month, checkNow.day);
+      if (bookingDay.isBefore(checkToday)) {
+        return const BookingPaymentResult(
+          isSuccess: false,
+          isSlotAvailable: false,
+          failureReason: 'Không thể đặt sân cho ngày đã qua.',
         );
       }
       final expectedOriginal = pricePerHour * ((to - from) / 60);
@@ -528,6 +558,20 @@ class BookingRepository {
   // --------------------------------------------------------------------------
   // 3. TRANSACTION HỦY ĐẶT SÂN VÀ HOÀN TIỀN
   // --------------------------------------------------------------------------
+  /// Thời điểm bắt đầu của đơn (ngày + giờ). Trả về null nếu dữ liệu lỗi.
+  static DateTime? _bookingStartAt(String date, String startTime) {
+    final day = DateTime.tryParse(date);
+    final parts = startTime.split(':');
+    if (day == null || parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return DateTime(day.year, day.month, day.day, hour, minute);
+  }
+
+  /// Quy tắc hủy (đề xuất, chờ nhóm xác nhận): chỉ hủy khi còn ít nhất 2 giờ.
+  static const Duration cancelLeadTime = Duration(hours: 2);
+
   static Future<bool> cancelBooking(
     String bookingId, {
     String cancelReason = 'Khách hàng chủ động hủy',
@@ -549,6 +593,15 @@ class BookingRepository {
       final bookingMap = bookingRows.single;
       final currentStatus = bookingMap['status'] as String;
       if (currentStatus != 'pending' && currentStatus != 'confirmed') {
+        return false;
+      }
+
+      final startAt = _bookingStartAt(
+        bookingMap['date'] as String,
+        bookingMap['startTime'] as String,
+      );
+      if (startAt == null ||
+          !startAt.isAfter(DateTime.now().add(cancelLeadTime))) {
         return false;
       }
 
@@ -685,6 +738,50 @@ class BookingRepository {
       });
       return true;
     });
+  }
+
+  /// Các khoản đang ở trạng thái `processing`, chờ admin xác nhận.
+  static Future<List<PendingRefund>> getPendingRefunds() async {
+    final db = await _db;
+    if (db == null) {
+      final result = <PendingRefund>[];
+      for (final p in MockStore.payments) {
+        if (p['refundStatus'] != 'processing') continue;
+        final bookingId = p['bookingId'] as String;
+        final booking = MockStore.bookings
+            .where((b) => b.id == bookingId)
+            .firstOrNull;
+        result.add(
+          PendingRefund(
+            bookingId: bookingId,
+            userId: booking?.userId ?? '',
+            refundAmount: (p['refundAmount'] as num?)?.toDouble() ?? 0,
+            cancelledAt: booking?.cancelledAt,
+          ),
+        );
+      }
+      return result;
+    }
+
+    final rows = await db.rawQuery('''
+      SELECT p.bookingId, p.refundAmount, b.userId, b.cancelledAt
+      FROM payments p
+      JOIN bookings b ON b.id = p.bookingId
+      WHERE p.refundStatus = 'processing'
+      ORDER BY b.cancelledAt ASC
+    ''');
+    return rows
+        .map(
+          (r) => PendingRefund(
+            bookingId: r['bookingId'] as String,
+            userId: r['userId'] as String,
+            refundAmount: (r['refundAmount'] as num).toDouble(),
+            cancelledAt: r['cancelledAt'] == null
+                ? null
+                : DateTime.parse(r['cancelledAt'] as String),
+          ),
+        )
+        .toList();
   }
 
   static Future<bool> completeRefund(String bookingId) async {
@@ -873,6 +970,50 @@ class BookingRepository {
   // --------------------------------------------------------------------------
   // 3.2 QUẢN LÝ KHUYẾN MÃI: ủy quyền sang PromotionRepository (giữ API cũ)
   // --------------------------------------------------------------------------
+  /// Tất cả khuyến mãi (cả đang tắt), dùng cho màn quản lý khuyến mãi.
+  static Future<List<Promotion>> loadAllPromotions() async {
+    final db = await _db;
+    if (db == null) return List<Promotion>.of(MockStore.promotions);
+    final rows = await db.query('promotions', orderBy: 'code COLLATE NOCASE');
+    return rows
+        .map(
+          (row) => Promotion(
+            id: row['id'] as String,
+            code: row['code'] as String,
+            discountPercent: (row['discountPercent'] as num).toDouble(),
+            expiryDate: DateTime.parse(row['expiryDate'] as String),
+            isActive: row['isActive'] == 1,
+            usedCount: row['usedCount'] as int? ?? 0,
+          ),
+        )
+        .toList();
+  }
+
+  /// Khuyến mãi đang bật, dùng để kiểm tra mã ở màn đặt sân.
+  static Future<List<Promotion>> loadActivePromotions() async {
+    final db = await _db;
+    if (db == null) {
+      return MockStore.promotions.where((p) => p.isActive).toList();
+    }
+    final rows = await db.query(
+      'promotions',
+      where: 'isActive = 1',
+      orderBy: 'code COLLATE NOCASE',
+    );
+    return rows
+        .map(
+          (row) => Promotion(
+            id: row['id'] as String,
+            code: row['code'] as String,
+            discountPercent: (row['discountPercent'] as num).toDouble(),
+            expiryDate: DateTime.parse(row['expiryDate'] as String),
+            isActive: true,
+            usedCount: row['usedCount'] as int? ?? 0,
+          ),
+        )
+        .toList();
+  }
+
   static Future<bool> createPromotion(Promotion promotion) =>
       PromotionRepository.createPromotion(promotion);
 

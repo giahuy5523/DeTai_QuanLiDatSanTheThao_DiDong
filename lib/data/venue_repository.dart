@@ -667,6 +667,32 @@ class VenueRepository {
     return slots;
   }
 
+  static Future<List<String>> loadImageUrlsFor(String venueId) async {
+    if (_useMockStoreForTesting) return MockStore.imageUrlsOf(venueId);
+    final rows = await (await _db).query(
+      'venue_images',
+      columns: ['imageUrl'],
+      where: 'venueId = ?',
+      whereArgs: [venueId],
+      orderBy: 'sortOrder, id',
+    );
+    return rows.map((row) => row['imageUrl'] as String).toList();
+  }
+
+  static Future<List<int>> loadHoursFor(String venueId) async {
+    if (_useMockStoreForTesting) return MockStore.hoursOf(venueId);
+    final rows = await (await _db).query(
+      'venue_hours',
+      columns: ['openHour', 'closeHour'],
+      where: 'venueId = ?',
+      whereArgs: [venueId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return const [6, 22];
+    final row = rows.first;
+    return [row['openHour'] as int, row['closeHour'] as int];
+  }
+
   static int _minutes(String value) {
     final parts = value.split(':');
     if (parts.length != 2) return -1;

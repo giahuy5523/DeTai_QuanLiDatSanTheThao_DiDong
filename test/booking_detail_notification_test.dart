@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/data/booking_repository.dart' as data_repo;
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:sportfield_booking/models/app_notification.dart';
 import 'package:sportfield_booking/models/booking.dart';
 import 'package:sportfield_booking/models/promotion.dart';
@@ -15,10 +16,12 @@ import 'package:sportfield_booking/utils/app_theme.dart';
 void main() {
   setUpAll(() {
     data_repo.BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
   });
 
   tearDownAll(() {
     data_repo.BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
   });
   final originalBookings = List<Booking>.of(MockStore.bookings);
   final originalPayments = MockStore.payments
@@ -522,6 +525,7 @@ void main() {
         home: BookingDetailScreen(bookingId: booking.id),
       ),
     );
+    await tester.pumpAndSettle();
     expect(find.text('Sân bóng đá Thành Công'), findsOneWidget);
     expect(find.text('12 Lý Thường Kiệt, Phường 14'), findsOneWidget);
     expect(find.text('Bóng đá'), findsOneWidget);
@@ -578,6 +582,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.textContaining('Không có dữ liệu dịch vụ tại thời điểm đặt.'),
       250,
@@ -620,6 +625,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text(longServiceName),
       250,
@@ -653,6 +659,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.textContaining('Cảnh báo:'),
       250,
@@ -681,6 +688,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
     );
+    await tester.pumpAndSettle();
     expect(find.text('Chi tiết booking'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Không xác định'),

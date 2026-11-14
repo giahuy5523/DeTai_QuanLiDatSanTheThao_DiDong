@@ -4,6 +4,9 @@ import '../../data/booking_repository.dart' as data_repo;
 import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/venue_image.dart';
+import '../../data/venue_repository.dart';
+import '../../models/booking.dart';
+import '../../models/venue.dart';
 
 // ============================================================================
 // Compatibility facade for legacy MockStore-based tests.
@@ -65,7 +68,9 @@ class BookingHistoryScreen extends StatefulWidget {
 }
 
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
-  late Future _bookingsFuture;
+  late Future<List<Booking>> _bookingsFuture;
+  Map<String, Venue> _venues = const {};
+  Map<String, List<String>> _venueImages = const {};
 
   @override
   void initState() {
@@ -75,7 +80,23 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
   void _loadBookings() {
     final userId = MockStore.currentUser?.id ?? '';
-    _bookingsFuture = data_repo.BookingRepository.getBookingsForUser(userId);
+    _bookingsFuture = _loadHistory(userId);
+  }
+
+  Future<List<Booking>> _loadHistory(String userId) async {
+    final bookings = await data_repo.BookingRepository.getBookingsForUser(
+      userId,
+    );
+    final venues = await VenueRepository.loadVenues();
+    final images = <String, List<String>>{};
+    for (final venueId in bookings.map((b) => b.venueId).toSet()) {
+      images[venueId] = await VenueRepository.loadImageUrlsFor(venueId);
+    }
+    if (mounted) {
+      _venues = {for (final venue in venues) venue.id: venue};
+      _venueImages = images;
+    }
+    return bookings;
   }
 
   @override
@@ -103,7 +124,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final booking = bookings[index];
-              final venue = MockStore.venueById(booking.venueId);
+              final venue = _venues[booking.venueId];
               final canCancel =
                   booking.status == 'pending' || booking.status == 'confirmed';
 
@@ -180,7 +201,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   }
 
   Widget _buildVenuePhoto(String venueId, String venueName) {
-    final images = MockStore.imageUrlsOf(venueId);
+    final images = _venueImages[venueId] ?? const <String>[];
     if (images.isEmpty) {
       return _missingVenueImage('Chưa có ảnh cho sân $venueName.');
     }
@@ -229,7 +250,20 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     return Chip(label: Text(label));
   }
 
+  final Set<String> _cancelling = {};
+
+  /// Chặn bấm hủy nhiều lần trên cùng một đơn.
   Future<void> _onCancelPressed(String bookingId) async {
+    if (_cancelling.contains(bookingId)) return;
+    _cancelling.add(bookingId);
+    try {
+      await _confirmAndCancel(bookingId);
+    } finally {
+      _cancelling.remove(bookingId);
+    }
+  }
+
+  Future<void> _confirmAndCancel(String bookingId) async {
     final bool success;
     try {
       success = await BookingController.cancelBookingAsync(bookingId);
@@ -260,8 +294,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           content: Text(
             success
                 ? 'Đã hủy đơn đặt sân thành công.'
-                : MockStore.lastCancellationError ??
-                      'Không thể hủy đơn này. Vui lòng kiểm tra trạng thái đơn.',
+                : 'Không thể hủy đơn này. Vui lòng kiểm tra trạng thái đơn.',
           ),
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,

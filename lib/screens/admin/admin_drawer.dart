@@ -70,6 +70,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
         ),
       ),
       child: SafeArea(
+        child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -99,6 +100,12 @@ class _AdminDrawerState extends State<AdminDrawer> {
                     selected: widget.selectedIndex == 2,
                     onTap: () => _goTo(context, AppRoutes.managePromotion),
                   ),
+                  _DrawerItem(
+                    label: 'Hoàn tiền',
+                    icon: Icons.payments_outlined,
+                    selected: widget.selectedIndex == 3,
+                    onTap: () => _goTo(context, AppRoutes.manageRefund),
+                  ),
                 ],
               ),
             ),
@@ -114,7 +121,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 onTap: () => _logout(context),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
             const Padding(
               padding: EdgeInsets.fromLTRB(28, 0, 24, 20),
               child: Text(
@@ -123,6 +130,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
