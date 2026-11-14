@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import '../data/account_service.dart';
 import '../data/mock_store.dart';
 import '../models/venue.dart';
-import '../models/booking.dart';
 
 import '../screens/admin/approve_venue_screen.dart';
 import '../screens/admin/manage_promotion_screen.dart';
@@ -9,6 +9,7 @@ import '../screens/admin/statistics_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/customer/booking_history_screen.dart';
+import '../screens/customer/booking_detail_screen.dart';
 import '../screens/customer/booking_screen.dart';
 import '../screens/customer/booking_confirmation_screen.dart';
 import '../screens/customer/customer_shell.dart';
@@ -19,6 +20,7 @@ import '../screens/customer/payment_screen.dart';
 import '../screens/customer/profile_screen.dart';
 import '../screens/customer/search_screen.dart';
 import '../screens/customer/venue_detail_screen.dart';
+import '../screens/customer/notification_screen.dart';
 import '../screens/owner/manage_service_screen.dart';
 import '../screens/owner/manage_venue_screen.dart';
 import '../screens/owner/upload_venue_screen.dart';
@@ -38,6 +40,8 @@ class AppRoutes {
   static const booking = '/booking';
   static const payment = '/payment';
   static const bookingHistory = '/booking-history';
+  static const bookingDetail = '/booking-detail';
+  static const notifications = '/notifications';
   static const profile = '/profile';
   static const uploadVenue = '/upload-venue';
   static const manageVenue = '/manage-venue';
@@ -62,6 +66,10 @@ class AppRoutes {
       booking: (_) => const BookingScreen(),
       payment: (_) => const PaymentScreen(),
       bookingHistory: (_) => const BookingHistoryScreen(),
+      bookingDetail: (context) => BookingDetailScreen(
+        bookingId: ModalRoute.of(context)!.settings.arguments as String,
+      ),
+      notifications: (_) => const NotificationScreen(),
       profile: (_) => const ProfileScreen(),
       uploadVenue: (_) => const UploadVenueScreen(),
       manageVenue: (_) => const ManageVenueScreen(),
@@ -76,6 +84,15 @@ class AppRoutes {
     return builders.map(
       (name, builder) => MapEntry(name, (context) {
         if (name == login || name == register) return builder(context);
+        if (AccountService.expireSessionIfNeeded()) {
+          final navigator = Navigator.of(context);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (navigator.mounted && MockStore.currentUser == null) {
+              navigator.pushNamedAndRemoveUntil(login, (_) => false);
+            }
+          });
+          return const _RouteError('Phiên đăng nhập đã hết hạn.');
+        }
         final role = MockStore.currentUser?.role;
         final ownerRoutes = {uploadVenue, manageVenue, manageService};
         final adminRoutes = {approveVenue, managePromotion, statistics};
@@ -103,12 +120,19 @@ class AppRoutes {
           return const _RouteError('Thông tin sân không hợp lệ.');
         }
 
+        if (name == bookingDetail) {
+          if (args is! String ||
+              !MockStore.bookings.any(
+                (booking) =>
+                    booking.id == args &&
+                    booking.userId == MockStore.currentUser?.id,
+              )) {
+            return const _RouteError('Không tìm thấy booking trong lịch sử.');
+          }
+        }
+
         // Kiểm tra tham số truyền vào Màn hình Xác nhận & Thanh toán
         if (name == bookingConfirmation || name == payment) {
-          if (args is Booking) {
-            return builder(context);
-          }
-
           if (args is! Map<String, dynamic> ||
               args['venue'] is! Venue ||
               args['date'] is! DateTime ||

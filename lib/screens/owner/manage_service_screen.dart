@@ -1,20 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
 import '../../models/service.dart';
-
-const _kGreen = Color(0xFF118C5F);
-const _kGreenDark = Color(0xFF0A6B49);
-const _kRed = Color(0xFFEF4444);
-const _kBackground = Color(0xFFF5F7FB);
-const _kInk = Color(0xFF10231B);
-const _kMuted = Color(0xFF64748B);
-const _kPlaceholder = Color(0xFFEFF4F0);
-const _kFieldBorder = Color(0xFFA7EBD0);
+import '../../utils/app_theme.dart';
 
 const _quickUnits = ['chai', 'bộ', 'giờ', 'lần'];
 
-/// 30000 -> "30.000"
+// 30000 -> "30.000"
 String _formatMoney(num value) {
   final digits = value.round().toString();
   final buffer = StringBuffer();
@@ -25,7 +17,61 @@ String _formatMoney(num value) {
   return buffer.toString();
 }
 
-/// Tự thêm dấu chấm ngăn cách hàng nghìn khi nhập giá.
+const _maxNameLength = 50;
+const _maxUnitLength = 15;
+const _minPrice = 1000;
+const _maxPriceDigits = 9;
+const _maxPrice = 100000000; // 100 triệu
+
+// "  Thuê   vợt " -> "Thuê vợt"
+String _normalizeSpaces(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+String? _validateName(
+  String raw,
+  List<VenueService> existing, {
+  String? editingId,
+}) {
+  final name = _normalizeSpaces(raw);
+  if (name.isEmpty) return 'Vui lòng nhập tên dịch vụ';
+  if (name.length < 2) return 'Tên dịch vụ tối thiểu 2 ký tự';
+  if (name.length > _maxNameLength) {
+    return 'Tên dịch vụ tối đa $_maxNameLength ký tự';
+  }
+  if (!RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(name)) {
+    return 'Tên dịch vụ phải chứa chữ hoặc số';
+  }
+  final duplicated = existing.any(
+    (s) =>
+        s.id != editingId &&
+        _normalizeSpaces(s.name).toLowerCase() == name.toLowerCase(),
+  );
+  if (duplicated) return 'Dịch vụ này đã tồn tại';
+  return null;
+}
+
+String? _validatePrice(String raw) {
+  final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return 'Vui lòng nhập giá';
+  final value = int.tryParse(digits);
+  if (value == null || value <= 0) return 'Giá phải lớn hơn 0';
+  if (value < _minPrice) return 'Giá tối thiểu ${_formatMoney(_minPrice)} đ';
+  if (value > _maxPrice) return 'Giá tối đa ${_formatMoney(_maxPrice)} đ';
+  return null;
+}
+
+String? _validateUnit(String raw) {
+  final unit = _normalizeSpaces(raw);
+  if (unit.isEmpty) return 'Vui lòng nhập đơn vị';
+  if (unit.length > _maxUnitLength) {
+    return 'Đơn vị tối đa $_maxUnitLength ký tự';
+  }
+  if (!RegExp(r'^\p{L}[\p{L} ]*$', unicode: true).hasMatch(unit)) {
+    return 'Đơn vị chỉ gồm chữ cái';
+  }
+  return null;
+}
+
+// Tự thêm dấu chấm ngăn cách hàng nghìn khi nhập giá.
 class _ThousandsFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -34,24 +80,12 @@ class _ThousandsFormatter extends TextInputFormatter {
   ) {
     final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return const TextEditingValue();
+    if (digits.length > _maxPriceDigits) return oldValue;
     final text = _formatMoney(int.parse(digits));
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
-  }
-}
-
-IconData _iconForUnit(String unit) {
-  switch (unit.toLowerCase()) {
-    case 'chai':
-      return Icons.local_drink_outlined;
-    case 'bộ':
-      return Icons.checkroom_outlined;
-    case 'giờ':
-      return Icons.schedule_outlined;
-    default:
-      return Icons.room_service_outlined;
   }
 }
 
@@ -65,35 +99,63 @@ class ManageServiceScreen extends StatefulWidget {
 }
 
 class _ManageServiceScreenState extends State<ManageServiceScreen> {
-  List<VenueService> get _services =>
-      MockStore.servicesByVenue[widget.venueId] ?? [];
+  // Toàn bộ dữ liệu đến từ SQLite (bảng venues, venue_services).
+  List<VenueService> _services = const [];
+  String? _venueName;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServices();
+  }
+
+  Future<void> _loadServices() async {
+    try {
+      final services = await VenueRepository.loadServicesFor(widget.venueId);
+      final venueName = await VenueRepository.venueNameFor(widget.venueId);
+      if (!mounted) return;
+      setState(() {
+        _services = services;
+        _venueName = venueName;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải danh sách dịch vụ. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _loadServices();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final venue = MockStore.venueById(widget.venueId);
     final services = _services;
-
     return Scaffold(
-      backgroundColor: _kBackground,
       appBar: AppBar(
-        backgroundColor: _kGreen,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-        ),
         title: Text(
-          venue == null
+          _venueName == null
               ? 'Quản lý dịch vụ kèm theo'
-              : 'Dịch vụ - ${venue.name}',
+              : 'Dịch vụ - $_venueName',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _editService(),
-        backgroundColor: _kGreen,
+        onPressed: _isLoading || _error != null ? null : () => _editService(),
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -103,29 +165,62 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      body: services.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _buildError(_error!)
+          : services.isEmpty
           ? _buildEmpty()
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-              itemCount: services.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 0),
-                    child: Text(
-                      '${services.length} dịch vụ',
-                      style: const TextStyle(
-                        color: _kGreenDark,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+          : RefreshIndicator(
+              onRefresh: _loadServices,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                itemCount: services.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, i) {
+                  if (i == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 0),
+                      child: Text(
+                        '${services.length} dịch vụ',
+                        style: const TextStyle(
+                          color: AppTheme.primaryDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  );
-                }
-                return _buildServiceCard(services[i - 1]);
-              },
+                    );
+                  }
+                  return _buildServiceCard(services[i - 1]);
+                },
+              ),
             ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(140, 48)),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -140,13 +235,13 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: _kPlaceholder,
+                color: AppTheme.primaryLight,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: const Icon(
                 Icons.room_service_outlined,
                 size: 40,
-                color: _kGreen,
+                color: AppTheme.primary,
               ),
             ),
             const SizedBox(height: 16),
@@ -155,14 +250,14 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: _kInk,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             const Text(
               'Nhấn "Thêm dịch vụ" để tạo dịch vụ kèm theo cho sân.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _kMuted),
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -171,73 +266,103 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
   }
 
   Widget _buildServiceCard(VenueService service) {
+    return Card(
+      key: ValueKey(service.id),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _serviceImage(service.name),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_formatMoney(service.price)} đ / ${service.unit}',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _SmallButton(
+                        label: 'Sửa',
+                        color: AppTheme.primary,
+                        onPressed: () => _editService(service: service),
+                      ),
+                      const SizedBox(width: 8),
+                      _SmallButton(
+                        label: 'Xóa',
+                        color: AppTheme.error,
+                        onPressed: () => _deleteService(service),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _serviceImage(String serviceName) {
+    final normalized = serviceName.toLowerCase();
+    final asset = normalized.contains('nước')
+        ? 'assets/services/water.jpg'
+        : normalized.contains('vợt')
+        ? 'assets/services/racket.jpg'
+        : normalized.contains('giày')
+        ? 'assets/services/shoes.jpg'
+        : null;
+    if (asset == null) {
+      return _missingServiceImage('Chưa có ảnh cho dịch vụ: $serviceName');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.asset(
+        asset,
+        width: 72,
+        height: 72,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _missingServiceImage('Thiếu ảnh: $asset'),
+      ),
+    );
+  }
+
+  Widget _missingServiceImage(String message) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: 72,
+      height: 72,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: _kPlaceholder,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              _iconForUnit(service.unit),
-              color: _kGreen.withValues(alpha: 0.6),
-              size: 30,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  service.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _kInk,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${_formatMoney(service.price)} đ / ${service.unit}',
-                  style: const TextStyle(
-                    color: _kGreen,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _SmallButton(
-                      label: 'Sửa',
-                      color: _kGreen,
-                      onPressed: () => _editService(service: service),
-                    ),
-                    const SizedBox(width: 8),
-                    _SmallButton(
-                      label: 'Xóa',
-                      color: _kRed,
-                      onPressed: () => _deleteService(service),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 8, color: AppTheme.textSecondary),
       ),
     );
   }
@@ -248,27 +373,16 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     String? suffix,
     String? errorText,
   }) {
-    OutlineInputBorder border(Color color, [double width = 1]) =>
-        OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: color, width: width),
-        );
-
     return InputDecoration(
       labelText: label,
       hintText: hint,
       suffixText: suffix,
       errorText: errorText,
-      errorBorder: border(_kRed),
-      focusedErrorBorder: border(_kRed, 1.6),
-      filled: true,
-      fillColor: Colors.white,
-      labelStyle: const TextStyle(color: _kMuted),
-      hintStyle: const TextStyle(color: _kMuted),
-      suffixStyle: const TextStyle(color: _kMuted, fontSize: 16),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      enabledBorder: border(_kFieldBorder),
-      focusedBorder: border(_kGreen, 1.6),
+      suffixStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppTheme.error, width: 1.6),
+      ),
     );
   }
 
@@ -291,7 +405,11 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: _kBackground,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
+              backgroundColor: AppTheme.background,
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
@@ -302,7 +420,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               title: Text(
                 service == null ? 'Thêm dịch vụ' : 'Sửa dịch vụ',
                 style: const TextStyle(
-                  color: _kInk,
+                  color: AppTheme.textPrimary,
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
@@ -314,6 +432,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                   children: [
                     TextField(
                       controller: nameController,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(_maxNameLength),
+                      ],
                       textCapitalization: TextCapitalization.sentences,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       onChanged: (_) {
@@ -330,8 +451,8 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: priceController,
-                      keyboardType: TextInputType.number,
                       inputFormatters: [_ThousandsFormatter()],
+                      keyboardType: TextInputType.number,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       onChanged: (_) {
                         if (priceError != null) {
@@ -348,6 +469,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: unitController,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(_maxUnitLength),
+                      ],
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       onChanged: (_) => setDialogState(() => unitError = null),
                       decoration: _fieldDecoration(
@@ -359,37 +483,45 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     const SizedBox(height: 16),
                     const Text(
                       'Chọn nhanh đơn vị',
-                      style: TextStyle(color: _kMuted, fontSize: 14),
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Row(
                       children: [
-                        for (final u in _quickUnits)
-                          ChoiceChip(
-                            label: Text(u),
-                            selected: unitController.text.trim() == u,
-                            showCheckmark: false,
-                            backgroundColor: Colors.white,
-                            selectedColor: _kGreen,
-                            side: BorderSide.none,
-                            shape: const StadiumBorder(),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
+                        for (var i = 0; i < _quickUnits.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: SizedBox(
+                                width: double.infinity,
+                                child: Text(
+                                  _quickUnits[i],
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              selected:
+                                  unitController.text.trim() == _quickUnits[i],
+                              showCheckmark: false,
+                              selectedColor: AppTheme.primary,
+                              labelPadding: EdgeInsets.zero,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              labelStyle: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    unitController.text.trim() == _quickUnits[i]
+                                    ? Colors.white
+                                    : AppTheme.textSecondary,
+                              ),
+                              onSelected: (_) => setDialogState(() {
+                                unitController.text = _quickUnits[i];
+                                unitError = null;
+                              }),
                             ),
-                            labelStyle: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: unitController.text.trim() == u
-                                  ? Colors.white
-                                  : _kMuted,
-                            ),
-                            onSelected: (_) => setDialogState(() {
-                              unitController.text = u;
-                              unitError = null;
-                            }),
                           ),
+                        ],
                       ],
                     ),
                   ],
@@ -401,7 +533,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     Expanded(
                       child: _DialogButton(
                         label: 'Hủy',
-                        color: _kRed,
+                        color: AppTheme.error,
                         onPressed: () => Navigator.pop(dialogContext, false),
                       ),
                     ),
@@ -409,32 +541,27 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
                     Expanded(
                       child: _DialogButton(
                         label: service == null ? 'Thêm' : 'Lưu',
-                        color: _kGreen,
+                        color: AppTheme.primary,
                         onPressed: () {
-                          final name = nameController.text.trim();
-                          final price = double.tryParse(
-                            priceController.text
-                                .trim()
-                                .replaceAll('.', '')
-                                .replaceAll(',', ''),
+                          final newNameError = _validateName(
+                            nameController.text,
+                            _services,
+                            editingId: service?.id,
                           );
-                          final unit = unitController.text.trim();
-                          final nameInvalid = name.isEmpty;
-                          final priceInvalid =
-                              price == null || !price.isFinite || price <= 0;
-                          final unitInvalid = unit.isEmpty;
+                          final newPriceError = _validatePrice(
+                            priceController.text,
+                          );
+                          final newUnitError = _validateUnit(
+                            unitController.text,
+                          );
 
-                          if (nameInvalid || priceInvalid || unitInvalid) {
+                          if (newNameError != null ||
+                              newPriceError != null ||
+                              newUnitError != null) {
                             setDialogState(() {
-                              nameError = nameInvalid
-                                  ? 'Vui lòng nhập tên dịch vụ'
-                                  : null;
-                              priceError = priceInvalid
-                                  ? 'Vui lòng nhập giá hợp lệ'
-                                  : null;
-                              unitError = unitInvalid
-                                  ? 'Vui lòng nhập đơn vị'
-                                  : null;
+                              nameError = newNameError;
+                              priceError = newPriceError;
+                              unitError = newUnitError;
                             });
                             return;
                           }
@@ -451,9 +578,9 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
       },
     );
 
-    final name = nameController.text.trim();
+    final name = _normalizeSpaces(nameController.text);
     final priceText = priceController.text.trim();
-    final unit = unitController.text.trim();
+    final unit = _normalizeSpaces(unitController.text);
 
     await dialogRoute?.completed;
     nameController.dispose();
@@ -463,38 +590,29 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     if (result != true || !mounted) return;
 
     // Đã được kiểm tra hợp lệ ngay trong dialog.
-    final price = double.parse(
-      priceText.replaceAll('.', '').replaceAll(',', ''),
+    final price = int.parse(
+      priceText.replaceAll(RegExp(r'[^0-9]'), ''),
+    ).toDouble();
+
+    final saved = VenueService(
+      id: service?.id ?? 's${DateTime.now().microsecondsSinceEpoch}',
+      venueId: widget.venueId,
+      name: name,
+      price: price,
+      unit: unit,
     );
 
-    setState(() {
-      final list = MockStore.servicesByVenue[widget.venueId] ??= [];
-      final normalizedUnit = unit; // đã validate không rỗng trong dialog
-
-      if (service == null) {
-        list.add(
-          VenueService(
-            id: 's${DateTime.now().microsecondsSinceEpoch}',
-            venueId: widget.venueId,
-            name: name,
-            price: price,
-            unit: normalizedUnit,
-          ),
-        );
-      } else {
-        final index = list.indexWhere((item) => item.id == service.id);
-        if (index >= 0) {
-          list[index] = VenueService(
-            id: service.id,
-            venueId: widget.venueId,
-            name: name,
-            price: price,
-            unit: normalizedUnit,
-          );
-        }
+    try {
+      await VenueRepository.saveService(saved);
+      await _loadServices();
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể lưu dịch vụ. Vui lòng thử lại.', success: false);
       }
-    });
+      return;
+    }
 
+    if (!mounted) return;
     _showSnack(
       service == null ? 'Đã thêm dịch vụ.' : 'Đã cập nhật dịch vụ.',
       success: true,
@@ -505,12 +623,15 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: _kBackground,
+        backgroundColor: AppTheme.background,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
           'Xóa dịch vụ',
-          style: TextStyle(color: _kInk, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         content: Text('Bạn có chắc muốn xóa "${service.name}"?'),
         actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -520,7 +641,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               Expanded(
                 child: _DialogButton(
                   label: 'Hủy',
-                  color: _kMuted,
+                  color: AppTheme.textSecondary,
                   onPressed: () => Navigator.pop(dialogContext, false),
                 ),
               ),
@@ -528,7 +649,7 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
               Expanded(
                 child: _DialogButton(
                   label: 'Xóa',
-                  color: _kRed,
+                  color: AppTheme.error,
                   onPressed: () => Navigator.pop(dialogContext, true),
                 ),
               ),
@@ -540,23 +661,27 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    setState(() {
-      MockStore.servicesByVenue[widget.venueId]?.removeWhere(
-        (item) => item.id == service.id,
-      );
-    });
+    try {
+      await VenueRepository.deleteService(service.id);
+      await _loadServices();
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Không thể xóa dịch vụ. Vui lòng thử lại.', success: false);
+      }
+      return;
+    }
 
-    _showSnack('Đã xóa "${service.name}".', success: false);
+    if (!mounted) return;
+    _showSnack('Đã xóa "${service.name}".', success: true);
   }
 
-  /// success = true: nền xanh + icon check; false: nền đỏ + icon cancel.
   void _showSnack(String message, {required bool success}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: success ? _kGreen : _kRed,
+          backgroundColor: success ? AppTheme.success : AppTheme.error,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -584,7 +709,6 @@ class _ManageServiceScreenState extends State<ManageServiceScreen> {
   }
 }
 
-/// Nút nhỏ (Sửa / Xóa) trên thẻ dịch vụ.
 class _SmallButton extends StatelessWidget {
   final String label;
   final Color color;
@@ -602,11 +726,9 @@ class _SmallButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
         minimumSize: const Size(54, 34),
         padding: const EdgeInsets.symmetric(horizontal: 18),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
       ),
       child: Text(label),
@@ -614,7 +736,6 @@ class _SmallButton extends StatelessWidget {
   }
 }
 
-/// Nút lớn trong dialog (Hủy / Thêm / Lưu).
 class _DialogButton extends StatelessWidget {
   final String label;
   final Color color;
@@ -632,9 +753,7 @@ class _DialogButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       ),
       child: Text(label),

@@ -1,9 +1,11 @@
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/booking_repository.dart';
 import 'package:sportfield_booking/screens/owner/upload_venue_screen.dart';
 import 'package:sportfield_booking/screens/customer/home_screen.dart';
 import 'package:sportfield_booking/screens/customer/venue_list_screen.dart';
@@ -13,6 +15,7 @@ import 'package:sportfield_booking/screens/owner/manage_venue_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
 import 'package:sportfield_booking/utils/app_theme.dart';
 
+import 'mock_accounts.dart';
 import 'test_helpers.dart';
 
 class FakePicker extends ImagePicker {
@@ -127,10 +130,20 @@ Future<void> pick(WidgetTester tester) async {
 }
 
 void main() {
+  setUpAll(() {
+    BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
+  });
+
+  tearDownAll(() {
+    BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
+  });
   final originalVenues = List.of(MockStore.venues);
   final originalBookings = List.of(MockStore.bookings);
   final originalPayments = List.of(MockStore.payments);
   setUp(() {
+    useMockAccounts();
     MockStore.logout();
   });
   tearDown(() {
@@ -276,13 +289,11 @@ void main() {
     await openUpload(tester, picker);
     await uploadField(tester, 'Tên sân', '   ');
     await press(tester, 'Gửi duyệt');
-    expect(find.text('Không được để trống'), findsOneWidget);
+    expect(find.text('Vui lòng nhập tên sân'), findsOneWidget);
     await pick(tester);
     expect(find.text('0 / 8 ảnh'), findsOneWidget);
     expect(
-      find.text(
-        'Không thể chọn ảnh. Vui lòng kiểm tra quyền truy cập và thử lại.',
-      ),
+      find.text('Đã bỏ qua 1 ảnh lỗi hoặc không đúng định dạng.'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -351,14 +362,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final price in ['abc', '-1', '0', 'NaN', 'Infinity']) {
+  for (final price in ['abc', '-10000', '0', 'NaN', 'Infinity']) {
     testWidgets('Upload rejects price $price', (tester) async {
       await openUpload(tester, FakePicker());
       await uploadField(tester, 'Giá thuê / giờ', price);
-      tester.widget<TextField>(find.byType(TextField).last).controller!.text =
-          price;
       await press(tester, 'Gửi duyệt');
-      expect(find.text('Nhập giá lớn hơn 0'), findsOneWidget);
+      expect(
+        find.text(
+          price == '0' ? 'Giá tối thiểu 10.000 đ' : 'Vui lòng nhập giá thuê',
+        ),
+        findsOneWidget,
+      );
       expect(MockStore.venues.length, originalVenues.length);
     });
   }
@@ -411,6 +425,7 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey('end_19:00')));
       await press(tester, 'Tiếp tục');
       await press(tester, 'Chọn phương thức thanh toán');
+      expect(find.text('Tiền thuê sân'), findsOneWidget);
 
       await tapVisible(tester, find.text('Ví MoMo'));
       await tester.pumpAndSettle();

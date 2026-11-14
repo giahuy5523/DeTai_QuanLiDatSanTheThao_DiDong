@@ -1,11 +1,23 @@
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/booking_repository.dart';
 import 'package:sportfield_booking/models/booking.dart';
+import 'package:sportfield_booking/models/promotion.dart';
 import 'package:sportfield_booking/screens/owner/venue_bookings_screen.dart';
 import 'test_helpers.dart';
 
 void main() {
+  setUpAll(() {
+    BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
+  });
+
+  tearDownAll(() {
+    BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
+  });
   for (final action in ['Xác nhận', 'Hoàn thành', 'Hủy đặt']) {
     testWidgets(
       'Owner $action preserves booking details and payment consistency',
@@ -14,6 +26,16 @@ void main() {
         final savedPayments = List.of(MockStore.payments);
         final promo = MockStore.promotions.firstWhere((p) => p.code == 'SAN10');
         final savedUsage = promo.usedCount;
+        final savedUsageHistory = promo.usageHistory
+            .map(
+              (usage) => PromotionUsage(
+                promotionId: usage.promotionId,
+                userId: usage.userId,
+                bookingId: usage.bookingId,
+                isReversed: usage.isReversed,
+              ),
+            )
+            .toList();
         addTearDown(() {
           MockStore.bookings
             ..clear()
@@ -22,6 +44,9 @@ void main() {
             ..clear()
             ..addAll(savedPayments);
           promo.usedCount = savedUsage;
+          promo.usageHistory
+            ..clear()
+            ..addAll(savedUsageHistory);
           MockStore.logout();
         });
         MockStore.bookings.clear();
@@ -56,9 +81,13 @@ void main() {
         if (action == 'Hủy đặt') {
           await tapVisible(tester, find.text('Đồng ý'));
           expect(booking.status, 'cancelled');
+          expect(booking.paymentStatus, 'paid');
+          expect(payment['status'], 'success');
+          expect(payment['refundStatus'], 'processing');
+          expect(promo.usedCount, savedUsage);
+          expect(MockStore.completeRefund(booking.id), isTrue);
           expect(booking.paymentStatus, 'refunded');
           expect(payment['status'], 'refunded');
-          expect(promo.usedCount, savedUsage);
           expect(MockStore.cancelBooking(booking.id), isFalse);
           expect(promo.usedCount, savedUsage);
         } else {

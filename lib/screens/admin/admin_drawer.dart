@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
 import '../../data/account_service.dart';
+import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 
-class AdminDrawer extends StatelessWidget {
+class AdminDrawer extends StatefulWidget {
   final int selectedIndex;
   final VoidCallback? onReturn;
 
@@ -18,29 +18,35 @@ class AdminDrawer extends StatelessWidget {
     this.pendingVenueCount = 0,
   });
 
-  static const _bg = Color(0xFFF5F7FA);
-  static const _primary = Color(0xFF0F8B5F);
-  static const _primaryDark = Color(0xFF065F46);
-  static const _selectedBg = Color(0xFFA7F3D0);
-  static const _textDark = Color(0xFF10241C);
-  static const _textMuted = Color(0xFF64748B);
-  static const _divider = Color(0xFFB7F0D8);
-  static const _badge = Color(0xFFFFB547);
-  static const _danger = Color(0xFFEF4444);
+  @override
+  State<AdminDrawer> createState() => _AdminDrawerState();
+}
+
+class _AdminDrawerState extends State<AdminDrawer> {
+  bool _loggingOut = false;
 
   Future<void> _goTo(BuildContext context, String route) async {
-    Navigator.pop(context);
-    if (ModalRoute.of(context)?.settings.name == route) return;
-    await Navigator.pushNamed(context, route);
+    if (_loggingOut) return;
+    final navigator = Navigator.of(context);
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final onReturn = widget.onReturn;
+    navigator.pop();
+    if (currentRoute == route) return;
+    await navigator.pushNamed(route);
     onReturn?.call();
   }
 
   Future<void> _logout(BuildContext context) async {
+    if (_loggingOut) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    _loggingOut = true;
     try {
       await AccountService.logout();
     } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      _loggingOut = false;
+      if (messenger.mounted) {
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Không thể đăng xuất. Vui lòng thử lại.'),
           ),
@@ -48,18 +54,14 @@ class AdminDrawer extends StatelessWidget {
       }
       return;
     }
-    if (!context.mounted) return;
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (route) => false,
-    );
+    if (!navigator.mounted) return;
+    navigator.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: _bg,
+      backgroundColor: AppTheme.background,
       elevation: 0,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
@@ -81,20 +83,20 @@ class AdminDrawer extends StatelessWidget {
                   _DrawerItem(
                     label: 'Tổng quan',
                     icon: Icons.dashboard_outlined,
-                    selected: selectedIndex == 0,
+                    selected: widget.selectedIndex == 0,
                     onTap: () => _goTo(context, AppRoutes.statistics),
                   ),
                   _DrawerItem(
                     label: 'Duyệt sân',
                     icon: Icons.approval,
-                    selected: selectedIndex == 1,
-                    badgeCount: pendingVenueCount,
+                    selected: widget.selectedIndex == 1,
+                    badgeCount: widget.pendingVenueCount,
                     onTap: () => _goTo(context, AppRoutes.approveVenue),
                   ),
                   _DrawerItem(
                     label: 'Quản lý khuyến mãi',
                     icon: Icons.discount_outlined,
-                    selected: selectedIndex == 2,
+                    selected: widget.selectedIndex == 2,
                     onTap: () => _goTo(context, AppRoutes.managePromotion),
                   ),
                 ],
@@ -108,7 +110,7 @@ class AdminDrawer extends StatelessWidget {
               child: _DrawerItem(
                 label: 'Đăng xuất',
                 icon: Icons.logout,
-                color: _danger,
+                color: AppTheme.error,
                 onTap: () => _logout(context),
               ),
             ),
@@ -117,7 +119,7 @@ class AdminDrawer extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(28, 0, 24, 20),
               child: Text(
                 'Phiên bản 1.0.0',
-                style: TextStyle(fontSize: 12, color: _textMuted),
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               ),
             ),
           ],
@@ -134,7 +136,7 @@ class AdminDrawer extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 36,
-            backgroundColor: _primary,
+            backgroundColor: AppTheme.primary,
             child: Text(
               'QT',
               style: TextStyle(
@@ -150,13 +152,13 @@ class AdminDrawer extends StatelessWidget {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: _textDark,
+              color: AppTheme.textPrimary,
             ),
           ),
           SizedBox(height: 6),
           Text(
             'Quản trị hệ thống',
-            style: TextStyle(fontSize: 14, color: _textMuted),
+            style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -171,7 +173,7 @@ class _SoftDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 26),
-      child: Divider(height: 1, thickness: 1, color: AdminDrawer._divider),
+      child: Divider(height: 1, thickness: 1, color: AppTheme.border),
     );
   }
 }
@@ -196,7 +198,7 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color fg =
-        color ?? (selected ? AdminDrawer._primaryDark : AdminDrawer._textDark);
+        color ?? (selected ? AppTheme.primaryDark : AppTheme.textPrimary);
     final FontWeight weight = (selected || color != null)
         ? FontWeight.w800
         : FontWeight.w500;
@@ -204,7 +206,7 @@ class _DrawerItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Material(
-        color: selected ? AdminDrawer._selectedBg : Colors.transparent,
+        color: selected ? AppTheme.primaryLight : Colors.transparent,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -233,7 +235,7 @@ class _DrawerItem extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AdminDrawer._badge,
+                      color: AppTheme.accent,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -242,7 +244,7 @@ class _DrawerItem extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: AdminDrawer._textDark,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                   ),

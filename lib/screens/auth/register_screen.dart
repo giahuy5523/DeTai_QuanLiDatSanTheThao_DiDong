@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../data/mock_store.dart';
 import '../../data/account_service.dart';
 import '../../models/user.dart';
 import '../../utils/auth_validation.dart';
@@ -40,7 +39,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       await AccountService.register(
         AppUser(
-          id: 'user${DateTime.now().microsecondsSinceEpoch}',
+          id: '', // SQLite assigns the ID when registration succeeds.
           name: _name.text.trim(),
           email: email,
           phone: _phone.text.trim(),
@@ -89,9 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _email,
             icon: Icons.mail_outline,
             keyboardType: TextInputType.emailAddress,
-            validator: (v) =>
-                AuthValidation.email(v) ??
-                (MockStore.emailExists(v!) ? 'Email đã được sử dụng' : null),
+            validator: AuthValidation.email,
           ),
           const SizedBox(height: 7),
           const Text(
