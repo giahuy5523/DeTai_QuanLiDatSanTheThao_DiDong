@@ -294,7 +294,19 @@ class VenueRepository {
     }
   }
 
-  static Future<void> saveVenue(Venue venue) async {
+  static Future<void> saveVenue(
+    Venue venue, {
+    int? openHour,
+    int? closeHour,
+  }) async {
+    if ((openHour == null) != (closeHour == null)) {
+      throw ArgumentError('Phải truyền đồng thời giờ mở cửa và giờ đóng cửa.');
+    }
+    if (openHour != null &&
+        (openHour < 0 || openHour > 23 ||
+            closeHour! < 1 || closeHour > 24 || openHour >= closeHour)) {
+      throw ArgumentError('Khung giờ hoạt động không hợp lệ.');
+    }
     if (_useMockStoreForTesting) {
       if (!MockStore.updateVenue(venue)) MockStore.addVenue(venue);
       return;
@@ -355,11 +367,29 @@ class VenueRepository {
           'sortOrder': index + 1,
         });
       }
-      await txn.insert('venue_hours', {
-        'venueId': venue.id,
-        'openHour': MockStore.hoursOf(venue.id)[0],
-        'closeHour': MockStore.hoursOf(venue.id)[1],
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      final currentHours = await txn.query(
+        'venue_hours',
+        columns: ['openHour', 'closeHour'],
+        where: 'venueId = ?',
+        whereArgs: [venue.id],
+        limit: 1,
+      );
+      final defaults = MockStore.hoursOf(venue.id);
+      final currentOpen = currentHours.isEmpty
+          ? defaults[0]
+          : currentHours.first['openHour'] as int;
+      final currentClose = currentHours.isEmpty
+          ? defaults[1]
+          : currentHours.first['closeHour'] as int;
+      await txn.insert(
+        'venue_hours',
+        {
+          'venueId': venue.id,
+          'openHour': openHour ?? currentOpen,
+          'closeHour': closeHour ?? currentClose,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     });
     await refreshCache();
   }

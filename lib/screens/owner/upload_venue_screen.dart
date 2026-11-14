@@ -77,6 +77,8 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
   bool _loadingSports = true;
   String? _sportError;
   String? _sportType;
+  int _openHour = 6;
+  int _closeHour = 22;
 
   String _fingerprint(Uint8List bytes) =>
       '${bytes.length}:${Object.hashAll(bytes)}';
@@ -309,6 +311,10 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     if (_saving) return;
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_openHour >= _closeHour) {
+      _message('Giờ đóng cửa phải sau giờ mở cửa.');
+      return;
+    }
     if (_images.length < _minImages) {
       _message('Vui lòng chọn tối thiểu $_minImages ảnh khác nhau.');
       return;
@@ -339,7 +345,11 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
 
     setState(() => _saving = true);
     try {
-      await VenueRepository.saveVenue(venue);
+      await VenueRepository.saveVenue(
+        venue,
+        openHour: _openHour,
+        closeHour: _closeHour,
+      );
     } catch (_) {
       if (mounted) {
         _message('Không thể lưu sân vào cơ sở dữ liệu. Vui lòng thử lại.');
@@ -633,6 +643,38 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
     );
   }
 
+  Widget _buildHoursFields() {
+    String formatHour(int hour) => '${hour.toString().padLeft(2, '0')}:00';
+
+    return Column(
+      children: [
+        DropdownButtonFormField<int>(
+            initialValue: _openHour,
+            decoration: _decoration(label: 'Mở cửa', hint: 'Chọn giờ mở cửa'),
+            items: [
+              for (var hour = 0; hour < 24; hour++)
+                DropdownMenuItem(value: hour, child: Text(formatHour(hour))),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _openHour = value);
+            },
+          ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<int>(
+            initialValue: _closeHour,
+            decoration: _decoration(label: 'Đóng cửa', hint: 'Chọn giờ đóng cửa'),
+            items: [
+              for (var hour = 1; hour <= 24; hour++)
+                DropdownMenuItem(value: hour, child: Text(formatHour(hour))),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _closeHour = value);
+            },
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Nền Scaffold, AppBar và các nút lấy từ AppTheme.lightTheme.
@@ -689,6 +731,8 @@ class _UploadVenueScreenState extends State<UploadVenueScreen> {
               ),
               validator: _validatePrice,
             ),
+            const SizedBox(height: 12),
+            _buildHoursFields(),
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

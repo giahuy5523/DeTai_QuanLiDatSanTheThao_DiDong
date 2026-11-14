@@ -85,6 +85,9 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   late final TextEditingController _price;
   late final List<_VenueImage> _images;
   late String _sportType;
+  int _openHour = 6;
+  int _closeHour = 22;
+  bool _loadingHours = true;
   bool _picking = false;
   bool _saving = false;
 
@@ -105,6 +108,23 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
     _images = venue.imageUrls.map((s) => _VenueImage(source: s)).toList();
     _loadExistingBytes();
     _loadSportTypes();
+    _loadVenueHours();
+  }
+
+  Future<void> _loadVenueHours() async {
+    try {
+      final hours = await VenueRepository.loadHoursFor(widget.venue.id);
+      if (mounted) {
+        setState(() {
+          _openHour = hours[0];
+          _closeHour = hours[1];
+        });
+      }
+    } catch (_) {
+      // Keep the repository's default hours if the saved hours cannot be read.
+    } finally {
+      if (mounted) setState(() => _loadingHours = false);
+    }
   }
 
   // Đọc danh sách loại thể thao từ bảng sport_types.
@@ -247,9 +267,13 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
   }
 
   Future<void> _save() async {
-    if (_saving) return;
+    if (_saving || _loadingHours) return;
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_openHour >= _closeHour) {
+      _message('Giờ đóng cửa phải sau giờ mở cửa.');
+      return;
+    }
     if (_images.length < _minImages) {
       _message('Vui lòng chọn tối thiểu $_minImages ảnh.');
       return;
@@ -271,7 +295,11 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
         imageUrls: _images.map((img) => img.source).toList(),
       );
       // saveVenue copy ảnh mới vào thư mục app, ghi DB rồi làm mới cache.
-      await VenueRepository.saveVenue(updatedVenue);
+      await VenueRepository.saveVenue(
+        updatedVenue,
+        openHour: _openHour,
+        closeHour: _closeHour,
+      );
     } catch (_) {
       if (mounted) {
         _message('Không thể lưu thay đổi vào cơ sở dữ liệu. Vui lòng thử lại.');
@@ -313,6 +341,45 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
       return 'Tên sân phải chứa chữ hoặc số';
     }
     return null;
+  }
+
+  Widget _buildHoursFields() {
+    String formatHour(int hour) => '${hour.toString().padLeft(2, '0')}:00';
+
+    return Column(
+      children: [
+        DropdownButtonFormField<int>(
+            initialValue: _openHour,
+            decoration: _decoration(label: 'Mở cửa', hint: 'Chọn giờ mở cửa'),
+            items: [
+              for (var hour = 0; hour < 24; hour++)
+                DropdownMenuItem(value: hour, child: Text(formatHour(hour))),
+            ],
+            onChanged: _loadingHours
+                ? null
+                : (value) {
+                    if (value != null) setState(() => _openHour = value);
+                  },
+          ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<int>(
+            initialValue: _closeHour,
+            decoration: _decoration(
+              label: 'Đóng cửa',
+              hint: 'Chọn giờ đóng cửa',
+            ),
+            items: [
+              for (var hour = 1; hour <= 24; hour++)
+                DropdownMenuItem(value: hour, child: Text(formatHour(hour))),
+            ],
+            onChanged: _loadingHours
+                ? null
+                : (value) {
+                    if (value != null) setState(() => _closeHour = value);
+                  },
+          ),
+      ],
+    );
   }
 
   String? _validateAddress(String? value) {
@@ -598,11 +665,13 @@ class _VenueUpdateScreenState extends State<VenueUpdateScreen> {
               ),
               validator: _validatePrice,
             ),
+            const SizedBox(height: 12),
+            _buildHoursFields(),
             const SizedBox(height: 24),
             SizedBox(
               height: 56,
               child: ElevatedButton(
-                onPressed: _picking || _saving ? null : _save,
+                onPressed: _picking || _saving || _loadingHours ? null : _save,
                 style: ElevatedButton.styleFrom(
                   disabledBackgroundColor: AppTheme.primary.withValues(
                     alpha: 0.4,
