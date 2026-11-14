@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/account_service.dart';
+import '../../data/booking_repository.dart';
+import '../../data/venue_repository.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 
@@ -24,6 +26,35 @@ class AdminDrawer extends StatefulWidget {
 
 class _AdminDrawerState extends State<AdminDrawer> {
   bool _loggingOut = false;
+  static int _cachedPendingVenueCount = 0;
+  static int _cachedPendingRefundCount = 0;
+  late int _pendingVenueCount = widget.pendingVenueCount > 0
+      ? widget.pendingVenueCount
+      : _cachedPendingVenueCount;
+  int _pendingRefundCount = _cachedPendingRefundCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBadgeCounts();
+  }
+
+  Future<void> _loadBadgeCounts() async {
+    try {
+      final venues = await VenueRepository.loadVenues();
+      final refunds = await BookingRepository.getPendingRefunds();
+      final pendingVenues = venues.where((v) => v.status == 'pending').length;
+      if (!mounted) return;
+      _cachedPendingVenueCount = pendingVenues;
+      _cachedPendingRefundCount = refunds.length;
+      setState(() {
+        _pendingVenueCount = pendingVenues;
+        _pendingRefundCount = refunds.length;
+      });
+    } catch (_) {
+      // Keep the last known counts if a refresh fails.
+    }
+  }
 
   Future<void> _goTo(BuildContext context, String route) async {
     if (_loggingOut) return;
@@ -91,7 +122,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                       label: 'Duyệt sân',
                       icon: Icons.approval,
                       selected: widget.selectedIndex == 1,
-                      badgeCount: widget.pendingVenueCount,
+                      badgeCount: _pendingVenueCount,
                       onTap: () => _goTo(context, AppRoutes.approveVenue),
                     ),
                     _DrawerItem(
@@ -104,6 +135,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                       label: 'Hoàn tiền',
                       icon: Icons.payments_outlined,
                       selected: widget.selectedIndex == 3,
+                      badgeCount: _pendingRefundCount,
                       onTap: () => _goTo(context, AppRoutes.manageRefund),
                     ),
                   ],

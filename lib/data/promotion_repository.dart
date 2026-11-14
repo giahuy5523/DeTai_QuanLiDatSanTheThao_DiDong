@@ -10,6 +10,7 @@ class PromotionRepository {
   PromotionRepository._();
 
   static Database? _database;
+
   /// Chỉ dùng trong test (widget test không có SQLite driver). Production
   /// luôn đi qua SQLite: nếu database không mở được, lỗi được ném ra,
   /// không chuyển sang MockStore.
@@ -135,7 +136,9 @@ class PromotionRepository {
       if (updated == 0) return false;
 
       afterCommit.add(() {
-        final idx = MockStore.promotions.indexWhere((p) => p.id == promotion.id);
+        final idx = MockStore.promotions.indexWhere(
+          (p) => p.id == promotion.id,
+        );
         if (idx != -1) {
           MockStore.promotions[idx] = promotion;
         }

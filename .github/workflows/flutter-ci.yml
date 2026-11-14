@@ -8,11 +8,13 @@ on:
       - master
       - develop
       - "feature/**"
+      - "review/**"
   pull_request:
     branches:
       - main
       - master
       - develop
+      - "integration/**"
   workflow_dispatch:
 
 permissions:

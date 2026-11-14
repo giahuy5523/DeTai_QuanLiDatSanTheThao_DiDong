@@ -250,8 +250,33 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     return Chip(label: Text(label));
   }
 
+  final Set<String> _cancelling = {};
+
+  /// Chặn bấm hủy nhiều lần trên cùng một đơn.
   Future<void> _onCancelPressed(String bookingId) async {
-    final success = await BookingController.cancelBookingAsync(bookingId);
+    if (_cancelling.contains(bookingId)) return;
+    _cancelling.add(bookingId);
+    try {
+      await _confirmAndCancel(bookingId);
+    } finally {
+      _cancelling.remove(bookingId);
+    }
+  }
+
+  Future<void> _confirmAndCancel(String bookingId) async {
+    final bool success;
+    try {
+      success = await BookingController.cancelBookingAsync(bookingId);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể lưu hủy đơn. Vui lòng thử lại.'),
+          ),
+        );
+      }
+      return;
+    }
 
     if (!mounted) return;
 

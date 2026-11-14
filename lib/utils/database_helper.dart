@@ -556,7 +556,7 @@ class DatabaseHelper {
             'password': password,
             'role': role,
             'avatar_path': avatar,
-          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }, conflictAlgorithm: ConflictAlgorithm.abort);
           await txn.insert('Users', {
             'user_id': id,
             'full_name': name,
@@ -565,7 +565,7 @@ class DatabaseHelper {
             'password_hash': 'migration-pending',
             'role': role,
             'avatar_path': avatar,
-          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }, conflictAlgorithm: ConflictAlgorithm.abort);
         }
       } else if (columns.containsAll({
         'user_id',
@@ -595,7 +595,7 @@ class DatabaseHelper {
                 ? row['avatar_path']
                 : null,
             'is_active': columns.contains('is_active') ? row['is_active'] : 1,
-          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }, conflictAlgorithm: ConflictAlgorithm.abort);
         }
       } else {
         throw StateError(

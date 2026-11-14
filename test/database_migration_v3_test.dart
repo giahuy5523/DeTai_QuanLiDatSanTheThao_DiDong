@@ -525,7 +525,7 @@ void main() {
       () async {
         final legacyPath = p.join(
           await databaseFactory.getDatabasesPath(),
-          'accounts.db',
+          'test_legacy_accounts_${DateTime.now().microsecondsSinceEpoch}.db',
         );
         final legacyDb = await databaseFactory.openDatabase(
           legacyPath,
@@ -593,7 +593,7 @@ void main() {
         // Target database
         final targetPath = p.join(
           await databaseFactory.getDatabasesPath(),
-          'test_target_import.db',
+          'test_target_import_${DateTime.now().microsecondsSinceEpoch}.db',
         );
         final targetDb = await databaseFactory.openDatabase(
           targetPath,
@@ -644,7 +644,10 @@ void main() {
         });
 
         // Thực hiện import
-        await DatabaseHelper.importLegacyAccountDatabase(targetDb);
+        await AccountRepository.importLegacyAccountDatabase(
+          targetDb,
+          legacyPath: legacyPath,
+        );
 
         final existingUser = await targetDb.query(
           'Users',
@@ -745,7 +748,10 @@ void main() {
               .millisecondsSinceEpoch,
         }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-        await DatabaseHelper.importLegacyAccountDatabase(targetDb);
+        await AccountRepository.importLegacyAccountDatabase(
+          targetDb,
+          legacyPath: legacyPath,
+        );
 
         final preservedUser = await targetDb.query(
           'Users',
@@ -760,9 +766,9 @@ void main() {
         expect(preservedSession.single['user_id'], 'current_user');
 
         final migrationMarker = await targetDb.query(
-          'app_migrations',
-          where: 'migration_key = ?',
-          whereArgs: ['legacy_accounts_db_v1_imported'],
+          'account_migrations',
+          where: 'name = ?',
+          whereArgs: ['standalone_accounts_v1'],
         );
         expect(migrationMarker.length, 1);
 

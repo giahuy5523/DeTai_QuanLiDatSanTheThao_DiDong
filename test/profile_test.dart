@@ -8,7 +8,6 @@ import 'package:sportfield_booking/data/account_repository.dart';
 import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/data/avatar_storage.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
-import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/screens/customer/profile_screen.dart';
 import 'package:sportfield_booking/screens/auth/login_screen.dart';
 import 'package:sportfield_booking/utils/app_routes.dart';
