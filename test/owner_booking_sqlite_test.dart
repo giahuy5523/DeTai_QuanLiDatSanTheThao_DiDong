@@ -54,6 +54,17 @@ void main() {
         whereArgs: [_bookingId],
       )).single;
 
+  /// Đơn vừa được thanh toán sẽ ở trạng thái confirmed; các test chủ sân
+  /// cần bắt đầu từ pending để kiểm tra việc chuyển trạng thái.
+  Future<void> markPending() async {
+    await env.db.update(
+      'bookings',
+      {'status': 'pending'},
+      where: 'id = ?',
+      whereArgs: [_bookingId],
+    );
+  }
+
   Future<int> promoUsed() async =>
       (await env.db.query(
             'promotions',
@@ -80,6 +91,7 @@ void main() {
       booking: promoBooking(),
       method: 'momo',
     );
+    await markPending();
 
     expect(
       await BookingRepository.updateBookingStatusByOwner(
@@ -113,6 +125,7 @@ void main() {
       booking: promoBooking(),
       method: 'momo',
     );
+    await markPending();
 
     expect(
       await BookingRepository.updateBookingStatusByOwner(
