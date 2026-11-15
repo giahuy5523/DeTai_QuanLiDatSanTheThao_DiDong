@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/models/venue.dart';
 import 'package:sportfield_booking/screens/customer/search_screen.dart';
+import 'test_helpers.dart';
 
 void main() {
   testWidgets('catalog searches sport names and applies only selected prices', (
@@ -26,6 +27,7 @@ void main() {
       ]);
 
     await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
+    await settleSqlite(tester);
     expect(find.text('Phoenix Arena'), findsOneWidget);
     expect(find.text('Pending Court'), findsNothing);
 

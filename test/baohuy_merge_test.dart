@@ -768,6 +768,7 @@ void main() {
     tester,
   ) async {
     await openRoute(tester, AppRoutes.search);
+    await settleSqlite(tester);
     final search = find.byType(TextField);
     await tester.enterText(search, 'not-an-existing-venue');
     await tester.pumpAndSettle();
