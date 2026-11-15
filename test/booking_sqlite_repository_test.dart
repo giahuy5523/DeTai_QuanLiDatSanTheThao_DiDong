@@ -526,12 +526,11 @@ void main() {
     });
 
     test('8. Hủy booking và hoàn lượt promotion (Idempotent)', () async {
-      final date = DateTime.now();
       final b = Booking(
         id: 'b_cancel_promo',
         venueId: 'v1',
         userId: 'customer1',
-        date: date,
+        date: DateTime.now().add(const Duration(days: 1)),
         startTime: '12:00',
         endTime: '13:00',
         originalAmount: 100000.0,
@@ -582,12 +581,11 @@ void main() {
     test(
       '9. Hủy đơn đã thanh toán online và quy trình hoàn tiền (Refund)',
       () async {
-        final date = DateTime.now();
         final b = Booking(
           id: 'b_refund_flow',
           venueId: 'v1',
           userId: 'customer1',
-          date: date,
+          date: DateTime.now().add(const Duration(days: 1)),
           startTime: '13:00',
           endTime: '14:00',
           originalAmount: 100000.0,
@@ -657,7 +655,7 @@ void main() {
           id: 'b_restart_flow',
           venueId: 'v1',
           userId: 'customer1',
-          date: DateTime.now(),
+          date: DateTime.now().add(const Duration(days: 1)),
           startTime: '15:00',
           endTime: '16:00',
           originalAmount: 100000.0,
@@ -919,7 +917,7 @@ void main() {
     test(
       'Test B – failRefund: Thất bại hoàn tiền không đổi paymentStatus thành refunded',
       () async {
-        final date = DateTime.now();
+        final date = DateTime.now().add(const Duration(days: 2));
         final b = Booking(
           id: 'b_fail_refund_test',
           venueId: 'v1',

@@ -2,11 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sportfield_booking/data/account_service.dart';
 import 'package:sportfield_booking/data/mock_store.dart';
+import 'package:sportfield_booking/data/booking_repository.dart';
+import 'package:sportfield_booking/data/venue_repository.dart';
 import 'package:sportfield_booking/models/user.dart';
 import 'mock_accounts.dart';
 import 'test_helpers.dart';
 
 void main() {
+  setUpAll(() {
+    BookingRepository.setUseMockStoreForTesting(true);
+    VenueRepository.setUseMockStoreForTesting(true);
+  });
+
+  tearDownAll(() {
+    BookingRepository.setUseMockStoreForTesting(false);
+    VenueRepository.setUseMockStoreForTesting(false);
+  });
+
   testWidgets('Login shows only email and password', (tester) async {
     await start(tester);
 

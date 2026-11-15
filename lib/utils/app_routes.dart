@@ -5,6 +5,7 @@ import '../models/venue.dart';
 
 import '../screens/admin/approve_venue_screen.dart';
 import '../screens/admin/manage_promotion_screen.dart';
+import '../screens/admin/manage_refund_screen.dart';
 import '../screens/admin/statistics_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
@@ -49,6 +50,7 @@ class AppRoutes {
   static const approveVenue = '/approve-venue';
   static const managePromotion = '/manage-promotion';
   static const statistics = '/statistics';
+  static const manageRefund = '/manage-refund';
 
   static Map<String, WidgetBuilder> get routes {
     final builders = <String, WidgetBuilder>{
@@ -68,6 +70,7 @@ class AppRoutes {
       bookingHistory: (_) => const BookingHistoryScreen(),
       bookingDetail: (context) => BookingDetailScreen(
         bookingId: ModalRoute.of(context)!.settings.arguments as String,
+        customerId: MockStore.currentUser!.id,
       ),
       notifications: (_) => const NotificationScreen(),
       profile: (_) => const ProfileScreen(),
@@ -79,6 +82,7 @@ class AppRoutes {
       approveVenue: (_) => const ApproveVenueScreen(),
       managePromotion: (_) => const ManagePromotionScreen(),
       statistics: (_) => const StatisticsScreen(),
+      manageRefund: (_) => const ManageRefundScreen(),
     };
 
     return builders.map(
@@ -95,7 +99,12 @@ class AppRoutes {
         }
         final role = MockStore.currentUser?.role;
         final ownerRoutes = {uploadVenue, manageVenue, manageService};
-        final adminRoutes = {approveVenue, managePromotion, statistics};
+        final adminRoutes = {
+          approveVenue,
+          managePromotion,
+          statistics,
+          manageRefund,
+        };
         final requiredRole = ownerRoutes.contains(name)
             ? 'owner'
             : adminRoutes.contains(name)
@@ -120,15 +129,8 @@ class AppRoutes {
           return const _RouteError('Thông tin sân không hợp lệ.');
         }
 
-        if (name == bookingDetail) {
-          if (args is! String ||
-              !MockStore.bookings.any(
-                (booking) =>
-                    booking.id == args &&
-                    booking.userId == MockStore.currentUser?.id,
-              )) {
-            return const _RouteError('Không tìm thấy booking trong lịch sử.');
-          }
+        if (name == bookingDetail && (args is! String || args.isEmpty)) {
+          return const _RouteError('Không tìm thấy booking trong lịch sử.');
         }
 
         // Kiểm tra tham số truyền vào Màn hình Xác nhận & Thanh toán

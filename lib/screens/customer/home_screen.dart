@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart' as data_repo;
 import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
@@ -16,6 +17,24 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  int _unreadCount = 0;
+
+  Future<void> _refreshUnreadCount() async {
+    final userId = MockStore.currentUser?.id ?? '';
+    if (userId.isEmpty) {
+      if (mounted) setState(() => _unreadCount = 0);
+      return;
+    }
+    final notifications =
+        await data_repo.BookingRepository.getNotificationsForUser(userId);
+    if (!mounted) return;
+    setState(() {
+      _unreadCount = notifications.where((n) => !n.isRead).length;
+    });
+  }
+
+  void _onNotificationsChanged() => _refreshUnreadCount();
+
   String? _sport;
   List<Venue> _databaseVenues = const [];
   List<String> _databaseSports = const [];
@@ -24,6 +43,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    MockStore.notificationRevision.addListener(_onNotificationsChanged);
+    _refreshUnreadCount();
     WidgetsBinding.instance.addObserver(this);
     _reloadVenues();
   }
@@ -31,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    MockStore.notificationRevision.removeListener(_onNotificationsChanged);
     super.dispose();
   }
 
@@ -97,9 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: ValueListenableBuilder<int>(
                           valueListenable: MockStore.notificationRevision,
                           builder: (context, _, _) {
-                            final unread = MockStore.unreadNotificationCount(
-                              MockStore.currentUser?.id ?? '',
-                            );
+                            final unread = _unreadCount;
                             return Material(
                               color: Colors.black.withValues(alpha: 0.24),
                               shape: const CircleBorder(),

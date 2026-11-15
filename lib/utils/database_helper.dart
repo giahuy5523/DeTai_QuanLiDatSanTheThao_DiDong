@@ -24,6 +24,14 @@ class DatabaseHelper {
     );
   }
 
+  /// Chỉ dùng trong test: đóng kết nối và xóa file để mỗi test bắt đầu sạch.
+  static Future<void> resetForTesting() async {
+    final db = _database;
+    _database = null;
+    if (db != null) await db.close();
+    await deleteDatabase(join(await getDatabasesPath(), databaseName));
+  }
+
   /// Helper kiểm tra xem cột đã tồn tại trong bảng hay chưa qua PRAGMA table_info
   static Future<bool> columnExists(
     DatabaseExecutor db,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
+import '../../models/service.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
@@ -7,8 +9,44 @@ import '../../widgets/venue_image.dart';
 
 /// Màn hình xác nhận thông tin đặt sân.
 /// Luồng: Chọn sân -> Xác nhận thông tin -> Chọn phương thức thanh toán.
-class BookingConfirmationScreen extends StatelessWidget {
+class BookingConfirmationScreen extends StatefulWidget {
   const BookingConfirmationScreen({super.key});
+
+  @override
+  State<BookingConfirmationScreen> createState() =>
+      _BookingConfirmationScreenState();
+}
+
+class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
+  String? _catalogVenueId;
+  List<VenueService> _services = const [];
+  List<String> _images = const [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final rawArgs = ModalRoute.of(context)?.settings.arguments;
+    final args = rawArgs is Map<String, dynamic> ? rawArgs : <String, dynamic>{};
+    final venue =
+        args['venue'] as Venue? ??
+        (MockStore.venues.isNotEmpty
+            ? MockStore.venues.first
+            : Venue.mockList().first);
+    if (_catalogVenueId != venue.id) {
+      _catalogVenueId = venue.id;
+      _loadCatalog(venue.id);
+    }
+  }
+
+  Future<void> _loadCatalog(String venueId) async {
+    final services = await VenueRepository.loadServicesFor(venueId);
+    final images = await VenueRepository.loadImageUrlsFor(venueId);
+    if (!mounted || _catalogVenueId != venueId) return;
+    setState(() {
+      _services = services;
+      _images = images;
+    });
+  }
 
   String _nextHour(String start) {
     final parts = start.split(':');
@@ -71,9 +109,9 @@ class BookingConfirmationScreen extends StatelessWidget {
     final promoCode = args['promoCode'] as String?;
 
     final currentUser = MockStore.currentUser;
-    final selectedServices = MockStore.servicesFor(
-      venue.id,
-    ).where((s) => serviceIds.contains(s.id)).toList();
+    final selectedServices = _services
+        .where((s) => serviceIds.contains(s.id))
+        .toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -236,7 +274,7 @@ class BookingConfirmationScreen extends StatelessWidget {
   }
 
   Widget _buildVenuePhoto(Venue venue) {
-    final images = MockStore.imageUrlsOf(venue.id);
+    final images = _images;
     if (images.isEmpty) {
       return _missingVenueImage('Chưa có ảnh cho sân ${venue.name}.');
     }

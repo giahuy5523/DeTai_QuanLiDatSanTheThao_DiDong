@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../data/booking_repository.dart';
+import '../../data/venue_repository.dart';
 import '../../data/mock_store.dart';
 import '../../models/booking.dart';
+import '../../models/promotion.dart';
+import '../../models/service.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
@@ -14,6 +17,38 @@ class PaymentScreen extends StatefulWidget {
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
+  String? _catalogVenueId;
+  List<VenueService> _services = const [];
+  List<Promotion> _promotions = const [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final rawArgs = ModalRoute.of(context)?.settings.arguments;
+    final args = rawArgs is Map<String, dynamic>
+        ? rawArgs
+        : <String, dynamic>{};
+    final venue =
+        args['venue'] as Venue? ??
+        (MockStore.venues.isNotEmpty
+            ? MockStore.venues.first
+            : Venue.mockList().first);
+    if (_catalogVenueId != venue.id) {
+      _catalogVenueId = venue.id;
+      _loadCatalog(venue.id);
+    }
+  }
+
+  Future<void> _loadCatalog(String venueId) async {
+    final services = await VenueRepository.loadServicesFor(venueId);
+    final promotions = await BookingRepository.loadActivePromotions();
+    if (!mounted || _catalogVenueId != venueId) return;
+    setState(() {
+      _services = services;
+      _promotions = promotions;
+    });
+  }
+
   String _method = 'momo';
   bool _agreed = false;
   bool _isProcessing = false;
@@ -87,7 +122,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     final courtPrice =
         (args['courtPrice'] as num?)?.toDouble() ?? venue.pricePerHour;
-    final services = MockStore.servicesFor(venue.id);
+    final services = _services;
     final serviceItems = <BookingServiceItem>[];
     for (final serviceId in serviceIds) {
       final service = services
@@ -116,9 +151,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
 
-    final selectedServices = MockStore.servicesFor(
-      venue.id,
-    ).where((s) => serviceIds.contains(s.id)).toList();
+    final selectedServices = _services
+        .where((s) => serviceIds.contains(s.id))
+        .toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -824,7 +859,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final serviceQuantities = Map<String, int>.from(
       args['serviceQuantities'] as Map? ?? const <String, int>{},
     );
-    final availableServices = MockStore.servicesFor(venue.id);
+    final availableServices = _services;
     final serviceItems = <BookingServiceItem>[];
     for (final serviceId in serviceIds) {
       final service = availableServices
@@ -853,8 +888,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
         (args['total'] as num?)?.toDouble() ??
         (courtPrice + serviceTotal - discountAmount);
     final promoCode = args['promoCode'] as String?;
-    final userId = MockStore.currentUser?.id;
-    if (userId == null) return;
+    final currentUserId = MockStore.currentUser?.id;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Chưa đăng nhập'),
+          content: const Text(
+            'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để đặt sân.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Đóng'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final userId = currentUserId;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -885,6 +938,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
+    final quotedServiceTotal = (args['serviceTotal'] as num?)?.toDouble();
+    final hasMissingService = serviceIds.any(
+      (id) =>
+          (serviceQuantities[id] ?? 0) > 0 &&
+          !serviceItems.any((item) => item.serviceId == id),
+    );
+    if (hasMissingService ||
+        (quotedServiceTotal != null &&
+            (quotedServiceTotal - serviceTotal).abs() > 0.01) ||
+        (total - (courtPrice + serviceTotal - discountAmount)).abs() > 0.01) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Giá hoặc dịch vụ đã thay đổi. Vui lòng quay lại chọn sân và xác nhận lại.',
+          ),
+        ),
+      );
+      return;
+    }
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final bookingId = 'b$timestamp';
     final paymentId = 'pay$timestamp';
@@ -893,7 +966,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final matchingPromotion =
         normalizedPromoCode == null || normalizedPromoCode.isEmpty
         ? null
-        : MockStore.promotions
+        : _promotions
               .where(
                 (p) =>
                     p.code.trim().toUpperCase() == normalizedPromoCode &&
