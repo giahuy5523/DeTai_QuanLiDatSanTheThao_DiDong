@@ -114,15 +114,37 @@ void main() {
         );
         await repo.register(user);
         final raw = (await repo.database.query('Users')).single;
+        final userId = raw['user_id'] as String;
+        expect(userId, isNot(user.id));
+        final accounts = repo;
+        await Future.wait([
+          for (final (email, phone) in [
+            ('second@example.com', '0900000002'),
+            ('third@example.com', '0900000003'),
+          ])
+            accounts.register(
+              AppUser(
+                id: user.id,
+                name: 'New customer',
+                email: email,
+                phone: phone,
+                password: user.password,
+              ),
+            ),
+        ]);
+        expect(
+          (await repo.allUsers()).map((account) => account.id).toSet(),
+          hasLength(3),
+        );
         expect(raw['password_hash'], isNot(user.password));
         expect(raw['password_hash'].toString(), isNot(contains(user.password)));
         expect(await repo.login(user.email, 'incorrect'), isNull);
         expect(
           (await repo.login(' HUY@EXAMPLE.COM ', user.password))?.id,
-          user.id,
+          userId,
         );
         await repo.updateProfile(
-          userId: user.id,
+          userId: userId,
           name: 'Huy đã sửa',
           phone: '0912345678',
           avatarPath: '/app/avatars/portrait.png',
@@ -138,7 +160,24 @@ void main() {
         expect(restored?.phone, '0912345678');
         expect(restored?.avatarPath, '/app/avatars/portrait.png');
         expect(restored?.password, isEmpty);
-        await expectLater(repo.register(user), throwsArgumentError);
+        await expectLater(
+          repo.register(
+            AppUser(
+              id: user.id,
+              name: user.name,
+              email: ' HUY@EXAMPLE.COM ',
+              phone: '0900000004',
+              password: user.password,
+            ),
+          ),
+          throwsA(
+            isA<ArgumentError>().having(
+              (error) => error.message,
+              'message',
+              'Email đã được sử dụng',
+            ),
+          ),
+        );
         await expectLater(
           repo.register(
             AppUser(
@@ -162,7 +201,7 @@ void main() {
         expect(await repo.restoreSession(), isNull);
         expect(
           await repo.updateProfile(
-            userId: user.id,
+            userId: userId,
             name: 'Unauthorized',
             phone: '0912345678',
             avatarPath: null,
@@ -170,10 +209,19 @@ void main() {
           isNull,
         );
         await repo.login(user.email, user.password);
+        await repo.deleteExpiredSession();
+        expect((await repo.restoreSession())?.id, userId);
         await repo.database.update('Session', {'expires_at': 0});
+        await repo.deleteExpiredSession();
+        expect(await repo.database.query('Session'), isEmpty);
         expect(await repo.restoreSession(), isNull);
         await repo.login(user.email, user.password);
-        await repo.database.update('Users', {'is_active': 0});
+        await repo.database.update(
+          'Users',
+          {'is_active': 0},
+          where: 'user_id = ?',
+          whereArgs: [userId],
+        );
         expect(await repo.restoreSession(), isNull);
         expect(await repo.login(user.email, user.password), isNull);
       } finally {

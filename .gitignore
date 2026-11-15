@@ -24,3 +24,9 @@ Thumbs.db
 *.env
 *.jks
 key.properties
+*.keystore
+.env.*
+*.apk
+*.aab
+*.p12
+*.pfx

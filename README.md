@@ -1,87 +1,59 @@
-# SportField Booking - Nhóm 01
+﻿# SportField Booking — Nhóm 01
 
-Ứng dụng quản lý và đặt sân thể thao cho đồ án môn **Phát triển ứng dụng di động (Flutter/Dart)**.
+SportField là ứng dụng Android quản lý và đặt sân thể thao cho đồ án môn Phát triển ứng dụng di động. Thành viên gồm Gia Huy, Nguyễn Quốc Đạt, Nguyễn Đình Bảo Huy và Trần Thanh Sơn.
 
-## Thành viên
-- Gia Huy
-- Nguyễn Quốc Đạt
-- Nguyễn Đình Bảo Huy
-- Trần Thanh Sơn
+Ứng dụng dùng Flutter/Dart, SQLite qua sqflite, Android Gradle và Kotlin. Database cục bộ `sport_venue_database.db` (schema v3) lưu tài khoản, hồ sơ, phiên, sân, dịch vụ, booking, thanh toán, khuyến mãi và thông báo. Mật khẩu tài khoản được băm PBKDF2-HMAC-SHA256. Thanh toán và hoàn tiền là mô phỏng, dữ liệu nằm trên thiết bị.
 
-## Phạm vi giao diện hiện tại
-Ứng dụng Flutter/Dart có giao diện Customer, Owner và Admin. Tài khoản, hồ sơ và phiên đăng nhập dùng SQLite; sân, booking, thanh toán mô phỏng và khuyến mãi vẫn dùng MockStore trong bộ nhớ.
+| Vai trò | Chức năng chính |
+| --- | --- |
+| Customer | Đăng ký, đăng nhập bằng email, sửa hồ sơ và ảnh đại diện, tìm sân đã duyệt, đặt khung giờ, chọn dịch vụ, áp mã giảm giá, thanh toán, xem lịch sử và thông báo hoàn tiền. |
+| Owner | Đăng ký sân, cập nhật thông tin sân, xem và quản lý lịch đặt, thêm/sửa/xóa dịch vụ. |
+| Admin | Duyệt hoặc từ chối sân, quản lý khuyến mãi, xem thống kê và xác nhận kết quả hoàn tiền. |
 
-Các nhóm chức năng:
+Customer và Owner có thể hủy booking hợp lệ khi còn ít nhất 2 giờ trước giờ bắt đầu, bao gồm đúng mốc 2 giờ.
 
-### Khách hàng
-- Đăng ký tài khoản
-- Đăng nhập
-- Xem danh sách và tìm kiếm sân
-- Xem chi tiết sân
-- Đặt sân: chọn ngày/khung giờ
-- Chọn dịch vụ kèm theo sân
-- Áp dụng mã khuyến mãi
-- Thanh toán mô phỏng
-- Hủy đặt sân
-- Xem lịch sử đặt sân
-- Quản lý thông tin cá nhân
+Tài khoản seed để demo cục bộ gồm `customer@gmail.com`, `owner@gmail.com` và `admin@gmail.com`. Mật khẩu seed công khai cho cả ba là `123456`.
 
-### Chủ sân
-- Đăng ký tài khoản
-- Đăng nhập
-- Đăng ký sân mới (kiểm tra tối thiểu 3 ảnh ở mức UI mô phỏng)
-- Quản lý thông tin & lịch đặt sân
-- Quản lý dịch vụ kèm theo sân
+## Chạy và kiểm thử
 
-### Quản trị viên
-- Đăng nhập
-- Duyệt sân mới: duyệt/từ chối
-- Quản lý khuyến mãi: thêm/sửa/xóa
-- Thống kê lượt đặt sân toàn hệ thống
+Cài Flutter **3.47.4** (bản dùng để nghiệm thu), Android SDK Platform 36, Android Build Tools, Platform Tools và JDK 17. Mở emulator hoặc kết nối thiết bị Android đã bật USB debugging.
 
-## Dữ liệu
-Khi chạy `lib/main.dart` trên Android, ứng dụng khởi tạo `accounts.db`, lưu tài khoản và hồ sơ vào SQLite, khôi phục phiên hợp lệ (tối đa 30 ngày). Đăng xuất xóa phiên khỏi database. Mật khẩu được băm PBKDF2-HMAC-SHA256 với salt riêng; không lưu mật khẩu thô vào database.
-
-Tài khoản demo (mật khẩu chung `123456`):
-- Khách hàng: `customer@gmail.com`
-- Chủ sân: `owner@gmail.com`
-- Admin: `admin@gmail.com`
-
-Đăng ký hỗ trợ Khách hàng và Chủ sân, kiểm tra email trùng, số điện thoại 10 chữ số bắt đầu bằng 0 và xác nhận mật khẩu. Chạy `flutter test` để kiểm tra các luồng tài khoản.
-
-SQLite hiện chỉ áp dụng cho tài khoản. `AccountService` đồng bộ hồ sơ sang MockStore để giữ ID liên kết với dữ liệu sân và booking hiện có. Các nghiệp vụ còn lại chưa lưu bền vững. `assets/db/database.sql` là thiết kế database toàn hệ thống, không phải schema đang chạy cho tài khoản. Chi tiết: [tích hợp tài khoản SQLite](docs/huong_dan/Tich_hop_ho_so_SQLite.md).
-
-SĐT + mật khẩu, Google, Apple, sinh trắc học và quên mật khẩu chưa hỗ trợ trong bản SQLite. Thanh toán và hoàn tiền là mô phỏng.
-
-## Chạy project
-Môi trường tối thiểu: Flutter 3.41, Dart 3.11 (do `image_picker`). Máy phát triển đã kiểm tra với Flutter 3.47.4 / Dart 3.13.3.
-
-Màn đăng ký sân chọn ảnh thật từ máy bằng `image_picker`, xem trước/xóa ảnh và yêu cầu tối thiểu 3 ảnh khác đường dẫn. Sân gửi duyệt được thêm vào dữ liệu giả của phiên chạy; chưa upload Storage. Danh sách khách hàng chỉ hiển thị sân đã duyệt.
-
-Tài liệu kỹ thuật: [phân tích yêu cầu và Use Case](docs/gia_huy/README.md), [hướng dẫn kiểm thử thủ công](docs/gia_huy/test_thu_cong.md).
-
-```bash
+```sh
+flutter doctor
+flutter doctor --android-licenses
 flutter pub get
+flutter devices
 flutter run
-```
-
-Nếu project được clone về từ GitHub và thiếu thư mục nền tảng (`android`, `ios`, ...), chạy một lần:
-
-```bash
-flutter create .
-flutter pub get
-flutter run
-```
-
-## Kiểm tra và bàn giao
-
-```bash
 flutter analyze
 flutter test
-flutter test integration_test/account_sqlite_test.dart -d emulator-5554
 flutter build apk --debug
 ```
 
-Integration test tài khoản tạo database `account_integration_test.db` riêng và dọn sau khi chạy; không xóa `accounts.db`. Unit/widget test cũ giữ MockStore để kiểm tra nghiệp vụ, còn `account_repository_test.dart` dùng SQLite thật qua FFI.
+APK debug nằm ở `build/app/outputs/flutter-apk/app-debug.apk`. Nếu cần chạy integration test SQLite trên Android, dùng emulator thử nghiệm có dữ liệu riêng. `integration_test/sqlite_customer_flow_test.dart` đặt lại database của ứng dụng trước khi chạy.
 
-Mỗi thành viên làm branch riêng, tạo Pull Request để nhóm trưởng review. Không push trực tiếp vào main.
+## Ký và build APK release
+
+Cấu hình Android dùng tên **SportField**, application ID `com.sportfield.booking`, version `1.0.0+1` (versionName `1.0.0`, versionCode `1`).
+
+1. Lưu keystore release của nhóm ngoài repository và lấy alias, mật khẩu qua kênh riêng. Dùng cùng khóa ký để thiết bị chấp nhận cài cập nhật lên bản đã phát hành.
+2. Tạo `android/key.properties` trên máy build. Thay các giá trị mẫu bằng thông tin thật trên máy đó. Trên Windows, dùng dấu `/` trong đường dẫn hoặc escape dấu gạch chéo ngược theo cú pháp Java Properties.
+
+```properties
+storeFile=C:/private-keys/sportfield-release.jks
+storePassword=YOUR_LOCAL_STORE_PASSWORD
+keyAlias=sportfield
+keyPassword=YOUR_LOCAL_KEY_PASSWORD
+```
+
+3. Chạy build và xác minh bằng `apksigner` và `aapt` trong Android SDK Build Tools. Trên Windows, gọi `apksigner.bat` nếu cần.
+
+```sh
+flutter pub get
+flutter build apk --release
+apksigner verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+aapt dump badging build/app/outputs/flutter-apk/app-release.apk
+```
+
+Đối chiếu fingerprint SHA-256 của chứng chỉ với chứng chỉ release nhóm đã lưu. Dùng `Get-FileHash build/app/outputs/flutter-apk/app-release.apk -Algorithm SHA256` trong PowerShell để lấy mã băm của file APK. Sao lưu keystore và mật khẩu qua kho lưu trữ riêng của nhóm. Giữ `android/key.properties`, khóa ký và mật khẩu ngoài Git.
+
+Tài liệu bổ sung: [phân tích yêu cầu](docs/gia_huy/README.md) và [kiểm thử thủ công](docs/gia_huy/test_thu_cong.md).

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/booking_repository.dart' as data_repo;
+import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/app_theme.dart';
@@ -14,119 +16,218 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  int _unreadCount = 0;
+
+  Future<void> _refreshUnreadCount() async {
+    final userId = MockStore.currentUser?.id ?? '';
+    if (userId.isEmpty) {
+      if (mounted) setState(() => _unreadCount = 0);
+      return;
+    }
+    final notifications =
+        await data_repo.BookingRepository.getNotificationsForUser(userId);
+    if (!mounted) return;
+    setState(() {
+      _unreadCount = notifications.where((n) => !n.isRead).length;
+    });
+  }
+
+  void _onNotificationsChanged() => _refreshUnreadCount();
+
   String? _sport;
+  List<Venue> _databaseVenues = const [];
+  List<String> _databaseSports = const [];
+  bool _hasDatabaseSnapshot = false;
+
+  @override
+  void initState() {
+    super.initState();
+    MockStore.notificationRevision.addListener(_onNotificationsChanged);
+    _refreshUnreadCount();
+    WidgetsBinding.instance.addObserver(this);
+    _reloadVenues();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    MockStore.notificationRevision.removeListener(_onNotificationsChanged);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reloadVenues();
+  }
+
+  Future<void> _reloadVenues() async {
+    if (!VenueRepository.isInitialized) return;
+    try {
+      final venues = await VenueRepository.loadVenues(approvedOnly: true);
+      final sports = (await VenueRepository.loadSportTypes())
+          .map((row) => row['name'] as String)
+          .toList();
+      if (mounted) {
+        setState(() {
+          _databaseVenues = venues;
+          _databaseSports = sports;
+          _hasDatabaseSnapshot = true;
+        });
+      }
+    } catch (_) {
+      // Keep the startup snapshot visible if a refresh cannot complete.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final venues = MockStore.venues
+    final source = _hasDatabaseSnapshot ? _databaseVenues : MockStore.venues;
+    final venues = source
         .where(
           (v) =>
               v.status == 'approved' &&
               (_sport == null || v.sportType == _sport),
         )
         .toList();
-    final allApproved = MockStore.venues
+    final allApproved = source
         .where((v) => v.status == 'approved')
         .toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 245,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  if (allApproved.isNotEmpty)
-                    _buildBanner(context, allApproved.first)
-                  else
-                    _buildEmptyBanner(),
-                  Positioned(
-                    left: 20,
-                    right: 20,
-                    bottom: 0,
-                    child: _SearchBar(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 24),
-              child: _SportFilterRow(
-                onSelected: (sport) => setState(() => _sport = sport),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Sân nổi bật',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.pushNamed(context, AppRoutes.search),
-                    child: const Text('Xem tất cả'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (venues.isEmpty)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(28),
-                child: Center(
-                  child: Text(
-                    'Hiện chưa có sân nào được duyệt.',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
-                ),
-              ),
-            )
-          else
+      body: RefreshIndicator(
+        onRefresh: _reloadVenues,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 230,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: venues.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 14),
-                  itemBuilder: (context, i) =>
-                      _buildFeaturedCard(context, venues[i]),
+                height: 245,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    if (allApproved.isNotEmpty)
+                      _buildBanner(context, allApproved.first)
+                    else
+                      _buildEmptyBanner(),
+                    Positioned(
+                      top: 8,
+                      right: 18,
+                      child: SafeArea(
+                        bottom: false,
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: MockStore.notificationRevision,
+                          builder: (context, _, _) {
+                            final unread = _unreadCount;
+                            return Material(
+                              color: Colors.black.withValues(alpha: 0.24),
+                              shape: const CircleBorder(),
+                              child: IconButton(
+                                tooltip: 'Thông báo',
+                                onPressed: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.notifications,
+                                ),
+                                icon: Badge(
+                                  isLabelVisible: unread > 0,
+                                  label: Text(unread > 99 ? '99+' : '$unread'),
+                                  child: const Icon(
+                                    Icons.notifications_none_rounded,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 20,
+                      right: 20,
+                      bottom: 0,
+                      child: _SearchBar(),
+                    ),
+                  ],
                 ),
               ),
             ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
-              child: OutlinedButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoutes.venueList),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.primary,
-                  side: const BorderSide(color: AppTheme.primary),
-                  shape: const StadiumBorder(),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: _SportFilterRow(
+                  sports: _hasDatabaseSnapshot ? _databaseSports : null,
+                  onSelected: (sport) => setState(() => _sport = sport),
                 ),
-                child: const Text('Xem tất cả sân'),
               ),
             ),
-          ),
-        ],
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Sân nổi bật',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, AppRoutes.search),
+                      child: const Text('Xem tất cả'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (venues.isEmpty)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(28),
+                  child: Center(
+                    child: Text(
+                      'Hiện chưa có sân nào được duyệt.',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 230,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: venues.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 14),
+                    itemBuilder: (context, i) =>
+                        _buildFeaturedCard(context, venues[i]),
+                  ),
+                ),
+              ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+                child: OutlinedButton(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, AppRoutes.venueList),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    side: const BorderSide(color: AppTheme.primary),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: const Text('Xem tất cả sân'),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -257,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeaturedCard(BuildContext context, Venue venue) {
-    final images = MockStore.imageUrlsOf(venue.id);
+    final images = venue.imageUrls;
     return SizedBox(
       width: 218,
       child: Material(
@@ -399,8 +500,9 @@ class _SearchBar extends StatelessWidget {
 
 /// Row chip lọc môn thể thao nhanh
 class _SportFilterRow extends StatefulWidget {
-  const _SportFilterRow({required this.onSelected});
+  const _SportFilterRow({required this.onSelected, this.sports});
   final ValueChanged<String?> onSelected;
+  final List<String>? sports;
   @override
   State<_SportFilterRow> createState() => _SportFilterRowState();
 }
@@ -408,13 +510,29 @@ class _SportFilterRow extends StatefulWidget {
 class _SportFilterRowState extends State<_SportFilterRow> {
   int _selected = 0;
 
-  static const _sports = [
+  static const _defaultSports = [
     ('Tất cả', Icons.grid_view_rounded),
     ('Bóng đá', Icons.sports_soccer),
     ('Cầu lông', Icons.sports_tennis),
     ('Tennis', Icons.sports_tennis),
     ('Bóng rổ', Icons.sports_basketball),
   ];
+
+  List<(String, IconData)> get _sports => widget.sports == null
+      ? _defaultSports
+      : [
+          ('Tất cả', Icons.grid_view_rounded),
+          for (final sport in widget.sports!)
+            (sport, _sportIcon(sport)),
+        ];
+
+  IconData _sportIcon(String sport) => switch (sport) {
+    'Bóng đá' => Icons.sports_soccer,
+    'Cầu lông' => Icons.sports_tennis,
+    'Tennis' => Icons.sports_tennis,
+    'Bóng rổ' => Icons.sports_basketball,
+    _ => Icons.sports,
+  };
 
   @override
   Widget build(BuildContext context) {

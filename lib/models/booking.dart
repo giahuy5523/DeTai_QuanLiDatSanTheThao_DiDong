@@ -1,12 +1,14 @@
 /// Model Dịch vụ đi kèm trong đơn đặt sân - tương ứng bảng BookingServices trong ERD.
 class BookingServiceItem {
   final String serviceId;
+  final String? serviceName;
   final int quantity;
   final double unitPrice;
   final double subtotal;
 
   BookingServiceItem({
     required this.serviceId,
+    this.serviceName,
     required this.quantity,
     required this.unitPrice,
   }) : subtotal = unitPrice * quantity;
@@ -28,6 +30,8 @@ class Booking {
   final double originalAmount;
   final double serviceAmount;
   final double discountAmount;
+  final bool hasPriceBreakdown;
+  final bool hasServiceSnapshot;
 
   String status;
   String paymentStatus;
@@ -68,6 +72,11 @@ class Booking {
        originalAmount = originalAmount ?? totalPrice,
        serviceAmount = serviceAmount ?? 0.0,
        discountAmount = discountAmount ?? 0.0,
+       hasPriceBreakdown =
+           originalAmount != null &&
+           serviceAmount != null &&
+           discountAmount != null,
+       hasServiceSnapshot = serviceItems != null,
        createdAt = createdAt ?? DateTime.now(),
        serviceItems = serviceItems ?? const [],
        selectedServiceIds =

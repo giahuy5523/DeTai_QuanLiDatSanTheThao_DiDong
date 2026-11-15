@@ -3,7 +3,7 @@
 Bật emulator hoặc kết nối điện thoại USB debugging, rồi lấy ID bằng `flutter devices`.
 
 ```powershell
-flutter test integration_test/android_auth_test.dart -d emulator-5554
+flutter test integration_test/android_auth_test.dart -d emulator-5554 --exclude-tags viewport
 flutter test integration_test/android_flows_test.dart -d emulator-5554 --exclude-tags viewport
 ```
 

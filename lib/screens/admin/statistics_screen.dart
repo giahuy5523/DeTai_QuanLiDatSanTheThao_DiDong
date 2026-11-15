@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
+import '../../models/system_statistics.dart';
+import '../../utils/app_theme.dart';
 import 'admin_drawer.dart';
 
 class StatisticsScreen extends StatefulWidget {
@@ -10,15 +12,44 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  static const Color _green = Color(0xFF118C5F);
-  static const Color _mint = Color(0xFFA7F3D0);
-  static const Color _background = Color(0xFFF5F7FA);
-  static const Color _ink = Color(0xFF12261F);
-  static const Color _muted = Color(0xFF64748B);
-  static const Color _red = Color(0xFFEF4444);
-  static const Color _amber = Color(0xFFF59E0B);
+  // Số liệu tổng hợp từ SQLite.
+  SystemStatistics? _stats;
+  bool _isLoading = true;
+  String? _error;
 
-  /// Định dạng tiền kiểu Việt Nam: 120000 -> "120.000 đ"
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final stats = await VenueRepository.loadSystemStatistics();
+      if (!mounted) return;
+      setState(() {
+        _stats = stats;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải số liệu thống kê. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _loadStats();
+  }
+
+  // Định dạng tiền: 120000 -> "120.000 đ"
   String _formatVnd(double value) {
     final digits = value.toStringAsFixed(0);
     final formatted = digits.replaceAllMapped(
@@ -30,21 +61,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bookings = MockStore.bookings;
-    final approvedVenues = MockStore.venues
-        .where((v) => v.status == 'approved')
-        .length;
-    final pendingVenues = MockStore.venues
-        .where((v) => v.status == 'pending')
-        .length;
-    final totalRevenue = bookings
-        .where((b) => b.status == 'confirmed' || b.status == 'completed')
-        .fold<double>(0, (sum, b) => sum + b.totalPrice);
+    final stats = _stats;
 
     return Scaffold(
-      backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: _green,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -55,73 +76,109 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       ),
       drawer: AdminDrawer(
         selectedIndex: 0,
-        pendingVenueCount: MockStore.venues
-            .where((v) => v.status == 'pending')
-            .length,
-        onReturn: () {
-          if (mounted) setState(() {});
-        },
+        pendingVenueCount: stats?.venues('pending') ?? 0,
+        // Quay lại từ màn khác (vd. duyệt sân) thì tính lại số liệu.
+        onReturn: _loadStats,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              'Tổng quan',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _ink,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null || stats == null
+          ? _buildError(_error ?? 'Không có dữ liệu thống kê.')
+          : RefreshIndicator(
+              onRefresh: _loadStats,
+              child: _buildContent(stats),
+            ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(SystemStatistics stats) {
+    final totalBookings = stats.totalBookings;
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            'Tổng quan',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _revenueCard('Doanh thu', _formatVnd(stats.revenue)),
+        const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _metric('Lượt đặt sân', '$totalBookings')),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _metric('Sân đã duyệt', '${stats.venues('approved')}'),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _metric('Sân chờ duyệt', '${stats.venues('pending')}'),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _revenueCard('Doanh thu mô phỏng', _formatVnd(totalRevenue)),
-          const SizedBox(height: 12),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _metric('Lượt đặt sân', '${bookings.length}')),
-                const SizedBox(width: 8),
-                Expanded(child: _metric('Sân đã duyệt', '$approvedVenues')),
-                const SizedBox(width: 8),
-                Expanded(child: _metric('Sân chờ duyệt', '$pendingVenues')),
-              ],
-            ),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+          decoration: BoxDecoration(
+            color: AppTheme.cardColor,
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Trạng thái đặt sân',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: _ink,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Trạng thái đặt sân',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
                 ),
-                const SizedBox(height: 14),
-                ...['pending', 'confirmed', 'completed', 'cancelled'].map(
-                  (status) => _statusBar(
-                    status,
-                    bookings.where((b) => b.status == status).length,
-                    bookings.length,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 14),
+              ...['pending', 'confirmed', 'completed', 'cancelled'].map(
+                (status) =>
+                    _statusBar(status, stats.bookings(status), totalBookings),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -130,7 +187,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
       decoration: BoxDecoration(
-        color: _green,
+        color: AppTheme.primary,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -138,7 +195,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(color: Color(0xFFB7F0D8), fontSize: 13),
+            style: const TextStyle(color: AppTheme.primaryLight, fontSize: 13),
           ),
           const SizedBox(height: 14),
           FittedBox(
@@ -162,7 +219,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       key: ValueKey('metric-$title'),
       padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -173,7 +230,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             child: Text(
               value,
               style: const TextStyle(
-                color: _green,
+                color: AppTheme.primary,
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
               ),
@@ -182,7 +239,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(color: _muted, fontSize: 14, height: 1.25),
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 14,
+              height: 1.25,
+            ),
           ),
         ],
       ),
@@ -197,10 +258,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       'cancelled': 'Đã hủy',
     };
     final colors = <String, Color>{
-      'pending': _amber,
-      'confirmed': _green,
-      'completed': _green,
-      'cancelled': _red,
+      'pending': AppTheme.warning,
+      'confirmed': AppTheme.primary,
+      'completed': AppTheme.primary,
+      'cancelled': AppTheme.error,
     };
     final progress = total == 0 ? 0.0 : count / total;
 
@@ -214,13 +275,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               Expanded(
                 child: Text(
                   labels[status] ?? status,
-                  style: const TextStyle(color: _ink, fontSize: 14),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                  ),
                 ),
               ),
               Text(
                 '$count',
                 style: const TextStyle(
-                  color: _ink,
+                  color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -232,9 +296,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 8,
-              backgroundColor: _mint,
+              backgroundColor: AppTheme.primaryLight,
               valueColor: AlwaysStoppedAnimation<Color>(
-                colors[status] ?? _green,
+                colors[status] ?? AppTheme.primary,
               ),
             ),
           ),

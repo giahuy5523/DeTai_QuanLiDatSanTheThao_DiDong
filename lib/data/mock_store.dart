@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
+import '../models/app_notification.dart';
 import '../models/booking.dart';
 import '../models/promotion.dart';
 import '../models/service.dart';
@@ -28,6 +30,68 @@ class BookingPaymentResult {
 class MockStore {
   MockStore._();
   static AppUser? currentUser;
+  static String? lastCancellationError;
+  static final List<AppNotification> notifications = [];
+  static final ValueNotifier<int> notificationRevision = ValueNotifier(0);
+  static int _notificationSequence = 0;
+
+  static List<AppNotification> notificationsFor(String userId) =>
+      notifications.where((item) => item.userId == userId).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  static int unreadNotificationCount(String userId) => notifications
+      .where((item) => item.userId == userId && !item.isRead)
+      .length;
+
+  static bool markNotificationRead(String notificationId) {
+    final notification = notifications
+        .where((item) => item.id == notificationId)
+        .firstOrNull;
+    if (notification == null || notification.isRead) return false;
+    notification.isRead = true;
+    notificationRevision.value++;
+    return true;
+  }
+
+  static void markAllNotificationsRead(String userId) {
+    var changed = false;
+    for (final notification in notifications) {
+      if (notification.userId == userId && !notification.isRead) {
+        notification.isRead = true;
+        changed = true;
+      }
+    }
+    if (changed) notificationRevision.value++;
+  }
+
+  static void _addNotification({
+    required String userId,
+    required String bookingId,
+    required String title,
+    required String content,
+    required AppNotificationType type,
+    double? refundAmount,
+    String? refundMethod,
+    DateTime? refundExpectedAt,
+    String? refundStatus,
+  }) {
+    notifications.add(
+      AppNotification(
+        id: 'ntf_${DateTime.now().microsecondsSinceEpoch}_${_notificationSequence++}',
+        userId: userId,
+        bookingId: bookingId,
+        title: title,
+        content: content,
+        createdAt: DateTime.now(),
+        type: type,
+        refundAmount: refundAmount,
+        refundMethod: refundMethod,
+        refundExpectedAt: refundExpectedAt,
+        refundStatus: refundStatus,
+      ),
+    );
+    notificationRevision.value++;
+  }
 
   static AppUser? login(String email, String password) {
     final user = findUserByEmail(email);
@@ -391,9 +455,27 @@ class MockStore {
     final matches = paymentsOfBooking(bookingId);
     if (matches.isEmpty) return null;
     for (final payment in matches.reversed) {
-      if (payment['status'] == 'success') return payment;
+      if (payment['status'] == 'success' || payment['status'] == 'refunded') {
+        return payment;
+      }
     }
     return matches.last;
+  }
+
+  static Map<String, dynamic>? paymentRecordForBooking(String bookingId) {
+    final booking = bookings.where((item) => item.id == bookingId).firstOrNull;
+    if (booking == null) return null;
+    if (booking.paymentId != null) {
+      final linked = payments
+          .where(
+            (payment) =>
+                payment['id'] == booking.paymentId &&
+                payment['bookingId'] == bookingId,
+          )
+          .firstOrNull;
+      return linked;
+    }
+    return paymentOfBooking(bookingId);
   }
 
   static List<Map<String, dynamic>> timeSlotsFor(
@@ -556,6 +638,32 @@ class MockStore {
       );
     }
 
+    final venue = venueById(booking.venueId);
+    final from = _toMinutes(booking.startTime.trim());
+    final to = _toMinutes(booking.endTime.trim());
+    final paymentId = booking.paymentId;
+    if (venue == null ||
+        venue.status != 'approved' ||
+        !venue.pricePerHour.isFinite ||
+        venue.pricePerHour < 0 ||
+        !users.any(
+          (user) => user.id == booking.userId && user.role == 'customer',
+        ) ||
+        from < 0 ||
+        to <= from ||
+        (booking.originalAmount - venue.pricePerHour * ((to - from) / 60))
+                .abs() >
+            0.01 ||
+        (paymentId != null &&
+            payments.any((payment) => payment['id'] == paymentId))) {
+      return const BookingPaymentResult(
+        isSuccess: false,
+        isSlotAvailable: false,
+        failureReason:
+            'Thông tin sân, khung giờ hoặc mã thanh toán không hợp lệ.',
+      );
+    }
+
     // 2. Kiểm tra mã khuyến mãi trước khi ghi nhận booking/payment.
     final normalizedPromoCode = booking.promotionCode?.trim().toUpperCase();
     final hasPromoCode =
@@ -582,11 +690,40 @@ class MockStore {
       );
     }
 
+    final selectedServiceIds = booking.selectedServiceIds;
+    final availableServices = servicesFor(booking.venueId);
+    final serviceItems = booking.serviceItems;
+    final itemIds = serviceItems.map((item) => item.serviceId).toList();
+    final calculatedServiceAmount = serviceItems.fold<double>(0, (sum, item) {
+      final service = availableServices
+          .where((candidate) => candidate.id == item.serviceId)
+          .firstOrNull;
+      if (service == null ||
+          item.quantity <= 0 ||
+          !item.unitPrice.isFinite ||
+          item.unitPrice < 0 ||
+          (item.unitPrice - service.price).abs() > 0.01 ||
+          !item.subtotal.isFinite) {
+        return double.nan;
+      }
+      return sum + item.subtotal;
+    });
+    if (selectedServiceIds.toSet().length != selectedServiceIds.length ||
+        itemIds.toSet().length != itemIds.length ||
+        selectedServiceIds.toSet().difference(itemIds.toSet()).isNotEmpty ||
+        itemIds.toSet().difference(selectedServiceIds.toSet()).isNotEmpty ||
+        !calculatedServiceAmount.isFinite ||
+        (booking.serviceAmount - calculatedServiceAmount).abs() > 0.01) {
+      return const BookingPaymentResult(
+        isSuccess: false,
+        isSlotAvailable: true,
+        failureReason: 'Thông tin dịch vụ hoặc số tiền dịch vụ không hợp lệ.',
+      );
+    }
+
     if (hasPromoCode) {
       final promotion = promotions
-          .where(
-            (p) => p.code.trim().toUpperCase() == normalizedPromoCode,
-          )
+          .where((p) => p.code.trim().toUpperCase() == normalizedPromoCode)
           .firstOrNull;
 
       if (promotion == null || !promotion.isValidAt(DateTime.now())) {
@@ -597,8 +734,7 @@ class MockStore {
         );
       }
 
-      final expectedDiscount =
-          subtotal * promotion.discountPercent / 100;
+      final expectedDiscount = subtotal * promotion.discountPercent / 100;
       final expectedTotal = subtotal - expectedDiscount;
 
       if (!expectedDiscount.isFinite ||
@@ -612,6 +748,22 @@ class MockStore {
           isSuccess: false,
           isSlotAvailable: true,
           failureReason: 'Thông tin giảm giá không khớp với mã khuyến mãi.',
+        );
+      }
+
+      final activeUses = promotion.usageHistory.where(
+        (usage) => !usage.isReversed,
+      );
+      if (promotion.usedCount >= promotion.usageLimit ||
+          activeUses.where((usage) => usage.userId == booking.userId).length >=
+              promotion.perUserLimit ||
+          promotion.usageHistory.any(
+            (usage) => usage.bookingId == booking.id,
+          )) {
+        return const BookingPaymentResult(
+          isSuccess: false,
+          isSlotAvailable: true,
+          failureReason: 'Mã khuyến mãi đã hết lượt sử dụng.',
         );
       }
     } else {
@@ -639,23 +791,24 @@ class MockStore {
       );
     }
 
-    final paymentId =
-        booking.paymentId ?? 'pay_${DateTime.now().microsecondsSinceEpoch}';
-    booking.paymentId = paymentId;
+    final resolvedPaymentId =
+        paymentId ?? 'pay_${DateTime.now().microsecondsSinceEpoch}';
+    booking.paymentId = resolvedPaymentId;
 
     final isOnlinePayment = method != 'cash';
 
     // 3. Phân nhánh: Mô phỏng thanh toán trực tuyến thất bại
     if (isOnlinePayment && simulateFailure) {
       final failedTxn =
-          transactionCode ?? 'TXN-FAILED-${DateTime.now().microsecondsSinceEpoch}';
+          transactionCode ??
+          'TXN-FAILED-${DateTime.now().microsecondsSinceEpoch}';
       booking.status = 'cancelled';
       booking.paymentStatus = 'unpaid';
       booking.cancelReason = 'Thanh toán trực tuyến thất bại';
       booking.cancelledAt = DateTime.now();
 
       final paymentRecord = <String, dynamic>{
-        'id': paymentId,
+        'id': resolvedPaymentId,
         'bookingId': booking.id,
         'method': method,
         'amount': booking.totalPrice,
@@ -666,6 +819,14 @@ class MockStore {
 
       bookings.add(booking);
       payments.add(paymentRecord);
+      _addNotification(
+        userId: booking.userId,
+        bookingId: booking.id,
+        title: 'Thanh toán thất bại',
+        content:
+            'Thanh toán trực tuyến cho booking ${booking.id} không thành công. Booking đã được đóng.',
+        type: AppNotificationType.paymentFailed,
+      );
 
       return BookingPaymentResult(
         isSuccess: false,
@@ -687,7 +848,7 @@ class MockStore {
       successTxn = null;
       booking.paymentStatus = 'unpaid';
       paymentRecord = <String, dynamic>{
-        'id': paymentId,
+        'id': resolvedPaymentId,
         'bookingId': booking.id,
         'method': method,
         'amount': booking.totalPrice,
@@ -700,7 +861,7 @@ class MockStore {
       successTxn = transactionCode ?? 'TXN${Random().nextInt(900000) + 100000}';
       booking.paymentStatus = 'paid';
       paymentRecord = <String, dynamic>{
-        'id': paymentId,
+        'id': resolvedPaymentId,
         'bookingId': booking.id,
         'method': method,
         'amount': booking.totalPrice,
@@ -714,12 +875,24 @@ class MockStore {
     bookings.add(booking);
     payments.add(paymentRecord);
 
-    // 5. Tăng lượt sử dụng mã khuyến mãi một lần duy nhất khi thành công
+    // 5. Ghi nhận lượt promotion một lần duy nhất sau booking/payment thành công.
     final promoId = booking.promoId;
     if (promoId != null && promoId.isNotEmpty) {
       final promoIndex = promotions.indexWhere((p) => p.id == promoId);
       if (promoIndex != -1) {
-        promotions[promoIndex].usedCount++;
+        final promotion = promotions[promoIndex];
+        if (!promotion.usageHistory.any(
+          (usage) => usage.bookingId == booking.id,
+        )) {
+          promotion.usageHistory.add(
+            PromotionUsage(
+              promotionId: promoId,
+              userId: booking.userId,
+              bookingId: booking.id,
+            ),
+          );
+          promotion.usedCount++;
+        }
       }
     }
 
@@ -750,7 +923,11 @@ class MockStore {
 
   /// Hủy đơn đặt sân và hoàn tiền mô phỏng tập trung tại MockStore.
   /// Điểm tích hợp để sau này chuyển đổi sang SQLite Repository transaction.
-  static bool cancelBooking(String bookingId) {
+  static bool cancelBooking(
+    String bookingId, {
+    String cancelReason = 'Khách hàng chủ động hủy',
+  }) {
+    lastCancellationError = null;
     final bookingIndex = bookings.indexWhere((b) => b.id == bookingId);
     if (bookingIndex == -1) return false;
 
@@ -759,38 +936,206 @@ class MockStore {
       return false;
     }
 
-    final payment = paymentOfBooking(bookingId);
+    final bookingPayments = paymentsOfBooking(bookingId);
+    final successfulPayments = bookingPayments
+        .where((payment) => payment['status'] == 'success')
+        .toList();
     final isMarkedPaid = booking.paymentStatus == 'paid';
 
-    // Không hủy đơn nếu trạng thái thanh toán không nhất quán.
-    if (isMarkedPaid &&
-        (payment == null || payment['status'] != 'success')) {
+    // Reject inconsistent data before changing any booking/payment/promo state.
+    if (!isMarkedPaid && successfulPayments.isNotEmpty) {
+      lastCancellationError = 'Dữ liệu thanh toán không nhất quán.';
       return false;
+    }
+
+    Map<String, dynamic>? payment;
+    if (isMarkedPaid) {
+      if (booking.paymentId != null) {
+        final linkedPayments = bookingPayments
+            .where((item) => item['id'] == booking.paymentId)
+            .toList();
+        if (linkedPayments.length != 1 ||
+            !_isValidSuccessfulPayment(booking, linkedPayments.single) ||
+            linkedPayments.single['refundStatus'] != null) {
+          lastCancellationError =
+              'Payment được liên kết không hợp lệ cho booking.';
+          return false;
+        }
+        payment = linkedPayments.single;
+      } else {
+        final validPayments = bookingPayments
+            .where(
+              (item) =>
+                  _isValidSuccessfulPayment(booking, item) &&
+                  item['refundStatus'] == null,
+            )
+            .toList();
+        if (validPayments.isEmpty) {
+          lastCancellationError =
+              'Không tìm thấy payment thành công hợp lệ cho booking.';
+          return false;
+        }
+        if (validPayments.length > 1) {
+          lastCancellationError =
+              'Có nhiều payment thành công hợp lệ cho booking.';
+          return false;
+        }
+        payment = validPayments.single;
+      }
+    } else if (successfulPayments.isNotEmpty) {
+      lastCancellationError = 'Dữ liệu thanh toán không nhất quán.';
+      return false;
+    } else if (booking.paymentId != null) {
+      payment = bookingPayments
+          .where((item) => item['id'] == booking.paymentId)
+          .firstOrNull;
     }
 
     final shouldRefund = isMarkedPaid;
 
     if (shouldRefund) {
-      payment!['status'] = 'refunded';
-      booking.paymentStatus = 'refunded';
+      final refundAmount = (payment!['amount'] as num).toDouble();
+      payment['refundAmount'] = refundAmount;
+      payment['refundStatus'] = 'processing';
+      payment['refundMethod'] = null;
+      payment['refundExpectedAt'] = null;
     }
 
     booking.status = 'cancelled';
-    booking.cancelReason = 'Khách hàng chủ động hủy';
+    booking.cancelReason = cancelReason;
     booking.cancelledAt = DateTime.now();
 
-    // Hoàn trả lượt sử dụng khuyến mãi nếu có
+    _addNotification(
+      userId: booking.userId,
+      bookingId: booking.id,
+      title: 'Booking đã bị hủy',
+      content: 'Booking ${booking.id} đã được hủy.',
+      type: AppNotificationType.bookingCancelled,
+    );
+    if (shouldRefund) {
+      final refundAmount = (payment!['refundAmount'] as num).toDouble();
+      _addNotification(
+        userId: booking.userId,
+        bookingId: booking.id,
+        title: 'Yêu cầu hoàn tiền đang xử lý',
+        content:
+            'Booking ${booking.id}: yêu cầu hoàn ${refundAmount.toStringAsFixed(0)} đ đang được xử lý. Phương thức nhận tiền và thời gian dự kiến chưa được xác định.',
+        type: AppNotificationType.refundProcessing,
+        refundAmount: refundAmount,
+        refundMethod: null,
+        refundExpectedAt: null,
+        refundStatus: 'processing',
+      );
+    }
+
+    // Hoàn đúng usage record đã ghi nhận; giữ lịch sử và đánh dấu đã hoàn.
     final promoId = booking.promoId;
     if (promoId != null && promoId.isNotEmpty) {
       final promoIndex = promotions.indexWhere((p) => p.id == promoId);
-      if (promoIndex != -1 && promotions[promoIndex].usedCount > 0) {
-        promotions[promoIndex].usedCount--;
+      if (promoIndex != -1) {
+        final promotion = promotions[promoIndex];
+        final usage = promotion.usageHistory
+            .where(
+              (item) =>
+                  item.promotionId == promoId &&
+                  item.userId == booking.userId &&
+                  item.bookingId == booking.id &&
+                  !item.isReversed,
+            )
+            .firstOrNull;
+        if (usage != null) {
+          usage.isReversed = true;
+          if (promotion.usedCount > 0) promotion.usedCount--;
+        }
       }
     }
 
     return true;
   }
 
+  static bool completeRefund(String bookingId) =>
+      _resolveRefund(bookingId, succeeded: true);
+
+  static bool failRefund(String bookingId) =>
+      _resolveRefund(bookingId, succeeded: false);
+
+  static bool _isValidSuccessfulPayment(
+    Booking booking,
+    Map<String, dynamic> payment,
+  ) {
+    final paymentId = payment['id'];
+    final amount = payment['amount'];
+    return paymentId is String &&
+        paymentId.isNotEmpty &&
+        payment['bookingId'] == booking.id &&
+        payment['status'] == 'success' &&
+        amount is num &&
+        amount.toDouble().isFinite &&
+        amount.toDouble() >= 0 &&
+        amount.toDouble() == booking.totalPrice;
+  }
+
+  static bool _resolveRefund(String bookingId, {required bool succeeded}) {
+    final booking = bookings.where((item) => item.id == bookingId).firstOrNull;
+    if (booking == null ||
+        booking.status != 'cancelled' ||
+        booking.paymentStatus != 'paid') {
+      return false;
+    }
+
+    final refundCandidates = payments
+        .where(
+          (item) =>
+              item['bookingId'] == bookingId &&
+              item['refundStatus'] == 'processing' &&
+              (booking.paymentId == null || item['id'] == booking.paymentId),
+        )
+        .toList();
+    if (refundCandidates.length != 1) {
+      lastCancellationError = booking.paymentId == null
+          ? 'Không xác định được duy nhất payment đang hoàn cho booking.'
+          : 'Không tìm thấy duy nhất payment được liên kết đang hoàn.';
+      return false;
+    }
+
+    final payment = refundCandidates.single;
+    if (!_isValidSuccessfulPayment(booking, payment) ||
+        payment['status'] != 'success' ||
+        payment['refundStatus'] != 'processing' ||
+        payment['refundAmount'] is! num ||
+        !(payment['refundAmount'] as num).toDouble().isFinite ||
+        (payment['refundAmount'] as num).toDouble() !=
+            (payment['amount'] as num).toDouble()) {
+      lastCancellationError = 'Payment đang hoàn không hợp lệ cho booking.';
+      return false;
+    }
+
+    final refundAmount = (payment['refundAmount'] as num).toDouble();
+    if (refundAmount < 0) return false;
+
+    if (succeeded) {
+      payment['status'] = 'refunded';
+      payment['refundStatus'] = 'succeeded';
+      booking.paymentStatus = 'refunded';
+    } else {
+      payment['refundStatus'] = 'failed';
+    }
+
+    final status = succeeded ? 'succeeded' : 'failed';
+    _addNotification(
+      userId: booking.userId,
+      bookingId: booking.id,
+      title: succeeded ? 'Hoàn tiền thành công' : 'Hoàn tiền thất bại',
+      content:
+          'Booking ${booking.id}: hoàn ${refundAmount.toStringAsFixed(0)} đ ${succeeded ? 'đã hoàn tất' : 'không thành công'}.',
+      type: succeeded
+          ? AppNotificationType.refundSucceeded
+          : AppNotificationType.refundFailed,
+      refundAmount: refundAmount,
+      refundStatus: status,
+    );
+    return true;
+  }
 
   static AppUser? findUserByEmail(String email) {
     final normalizedEmail = email.trim().toLowerCase();

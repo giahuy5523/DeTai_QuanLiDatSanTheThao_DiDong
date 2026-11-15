@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/mock_store.dart';
+import '../../data/venue_repository.dart';
+import '../../models/service.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/venue_image.dart';
@@ -28,9 +30,9 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
-  static const double _priceMin = 100000;
-  static const double _priceMax = 500000;
+class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver {
+  static const double _priceStep = 50000;
+  static const double _minimumSliderMax = 1000000;
   static const int _firstHour = 6;
   static const int _lastHour = 21;
 
@@ -50,23 +52,83 @@ class _SearchScreenState extends State<SearchScreen> {
 
   String _keyword = '';
   int? _sportTypeId; // SportTypes.sport_type_id
-  RangeValues _priceRange = const RangeValues(_priceMin, _priceMax);
+  RangeValues? _priceRange;
   String? _district; // Venues.district
   bool _onlyWithServices = false; // Có bản ghi trong Services của sân
   DateTime? _date; // Lọc theo lịch trống (TimeSlots)
   int? _hour; // Giờ bắt đầu mong muốn
   _SortOption _sort = _SortOption.none;
+  List<Venue> _databaseVenues = const [];
+  List<Map<String, Object?>> _databaseSports = const [];
+  final Map<String, List<VenueService>> _databaseServices = {};
+  final Map<String, List<Map<String, Object?>>> _databaseSlots = {};
+  bool _hasDatabaseSnapshot = false;
+  int _catalogRequest = 0;
+
+  List<Venue> get _catalog =>
+      _hasDatabaseSnapshot ? _databaseVenues : MockStore.approvedVenues;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _reloadVenues();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reloadVenues();
+  }
+
+  Future<void> _reloadVenues() async {
+    if (!VenueRepository.isInitialized) return;
+    final request = ++_catalogRequest;
+    final availabilityDate = _date ?? DateTime.now();
+    try {
+      final venues = await VenueRepository.loadVenues(approvedOnly: true);
+      final sports = (await VenueRepository.loadSportTypes())
+          .map((row) => <String, Object?>{
+            'id': row['sportTypeId'],
+            'name': row['name'],
+            'description': row['description'],
+          })
+          .toList();
+      final services = <String, List<VenueService>>{};
+      final serviceResults = await Future.wait(venues.map((venue) async =>
+          MapEntry(venue.id, await VenueRepository.loadServicesFor(venue.id))));
+      final slotResults = await Future.wait(venues.map((venue) async =>
+          MapEntry(venue.id, await VenueRepository.loadAvailableSlots(
+            venue.id,
+            availabilityDate,
+          ))));
+      services.addEntries(serviceResults);
+      if (!mounted || request != _catalogRequest) return;
+      setState(() {
+        _databaseVenues = venues;
+        _databaseSports = sports;
+        _databaseServices
+          ..clear()
+          ..addAll(services);
+        _databaseSlots
+          ..clear()
+          ..addEntries(slotResults);
+        _hasDatabaseSnapshot = true;
+      });
+    } catch (_) {
+      // Keep the startup snapshot available if refreshing from SQLite fails.
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
   }
 
   // ---------------------------------------------------------------- Logic
 
-  bool get _priceChanged =>
-      _priceRange.start > _priceMin || _priceRange.end < _priceMax;
+  bool get _priceChanged => _priceRange != null;
 
   /// Số bộ lọc nâng cao đang bật (hiển thị trên nút "Bộ lọc").
   int get _advancedCount =>
@@ -83,13 +145,14 @@ class _SearchScreenState extends State<SearchScreen> {
   void _resetFilters() {
     setState(() {
       _sportTypeId = null;
-      _priceRange = const RangeValues(_priceMin, _priceMax);
+      _priceRange = null;
       _district = null;
       _onlyWithServices = false;
       _date = null;
       _hour = null;
       _sort = _SortOption.none;
     });
+    _reloadVenues();
   }
 
   List<Venue> _filterVenues() {
@@ -97,16 +160,20 @@ class _SearchScreenState extends State<SearchScreen> {
     final checkAvailability = _date != null || _hour != null;
     final date = _date ?? DateTime.now();
 
-    final list = MockStore.approvedVenues.where((v) {
-      final services = MockStore.servicesFor(v.id);
+    final priceRange = _priceRange;
+    final list = _catalog.where((v) {
+      final services = _hasDatabaseSnapshot
+          ? (_databaseServices[v.id] ?? const <VenueService>[])
+          : MockStore.servicesFor(v.id);
 
-      // Từ khóa: tên sân, địa chỉ, quận/huyện, thành phố, tên dịch vụ
+      // Từ khóa: tên sân, môn thể thao, địa điểm, tên dịch vụ
       if (query.isNotEmpty) {
         final inVenue =
             _normalizeSearchText(v.name).contains(query) ||
             _normalizeSearchText(v.address).contains(query) ||
             _normalizeSearchText(v.district ?? '').contains(query) ||
-            _normalizeSearchText(v.city ?? '').contains(query);
+            _normalizeSearchText(v.city ?? '').contains(query) ||
+            _normalizeSearchText(v.sportType).contains(query);
 
         final inService = services.any(
           (s) => _normalizeSearchText(s.name).contains(query),
@@ -116,15 +183,20 @@ class _SearchScreenState extends State<SearchScreen> {
 
       if (_sportTypeId != null && v.sportTypeId != _sportTypeId) return false;
 
-      final price = v.pricePerHour.toDouble();
-      if (price < _priceRange.start || price > _priceRange.end) return false;
+      if (priceRange != null &&
+          (v.pricePerHour < priceRange.start ||
+              v.pricePerHour > priceRange.end)) {
+        return false;
+      }
 
       if (_district != null && v.district != _district) return false;
       if (_onlyWithServices && services.isEmpty) return false;
 
       // Lịch trống: dựa trên TimeSlots (sinh từ bookings chưa huỷ)
       if (checkAvailability) {
-        final slots = MockStore.timeSlotsFor(v.id, date);
+        final slots = _hasDatabaseSnapshot
+            ? (_databaseSlots[v.id] ?? const <Map<String, Object?>>[])
+            : MockStore.timeSlotsFor(v.id, date);
         final ok = slots.any(
           (s) =>
               s['status'] == 'available' &&
@@ -208,7 +280,10 @@ class _SearchScreenState extends State<SearchScreen> {
       lastDate: today.add(const Duration(days: 60)),
       helpText: 'Chọn ngày muốn đặt sân',
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null && mounted) {
+      setState(() => _date = picked);
+      await _reloadVenues();
+    }
   }
 
   Future<void> _pickHour() async {
@@ -261,10 +336,24 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _openAdvancedFilters() async {
-    var range = _priceRange;
+    var maxPrice = _minimumSliderMax;
+    for (final venue in _catalog) {
+      if (venue.pricePerHour > maxPrice) maxPrice = venue.pricePerHour;
+    }
+    final previousMax = _priceRange?.end ?? 0;
+    if (previousMax > maxPrice) maxPrice = previousMax;
+    final divisions = (maxPrice / _priceStep).ceil();
+    final fullRange = RangeValues(0, divisions * _priceStep);
+    var range = _priceRange ?? fullRange;
     var district = _district;
     var onlyServices = _onlyWithServices;
-    final districts = MockStore.districts;
+    final districts = _catalog
+        .map((venue) => venue.district)
+        .whereType<String>()
+        .where((district) => district.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
 
     final applied = await showModalBottomSheet<bool>(
       context: context,
@@ -296,7 +385,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     TextButton(
                       onPressed: () => setSheet(() {
-                        range = const RangeValues(_priceMin, _priceMax);
+                        range = fullRange;
                         district = null;
                         onlyServices = false;
                       }),
@@ -319,9 +408,8 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 RangeSlider(
                   values: range,
-                  min: _priceMin,
-                  max: _priceMax,
-                  divisions: 8,
+                  max: fullRange.end,
+                  divisions: divisions,
                   labels: RangeLabels(
                     _formatPrice(range.start),
                     _formatPrice(range.end),
@@ -374,9 +462,9 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
     );
 
-    if (applied == true) {
+    if (applied == true && mounted) {
       setState(() {
-        _priceRange = range;
+        _priceRange = range == fullRange ? null : range;
         _district = district;
         _onlyWithServices = onlyServices;
       });
@@ -399,14 +487,26 @@ class _SearchScreenState extends State<SearchScreen> {
           if (_advancedCount > 0) _buildActiveFilters(),
           _buildResultHeader(results.length),
           Expanded(
-            child: results.isEmpty
-                ? _buildEmptyState()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: results.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 20),
-                    itemBuilder: (context, i) => _buildResultItem(results[i]),
-                  ),
+            child: RefreshIndicator(
+              onRefresh: _reloadVenues,
+              child: results.isEmpty
+                  ? CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _buildEmptyState(),
+                        ),
+                      ],
+                    )
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: results.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 20),
+                      itemBuilder: (context, i) => _buildResultItem(results[i]),
+                    ),
+            ),
           ),
         ],
       ),
@@ -421,7 +521,7 @@ class _SearchScreenState extends State<SearchScreen> {
         controller: _searchController,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Tìm tên sân, địa chỉ, quận, dịch vụ...',
+          hintText: 'Tìm sân, môn thể thao, địa chỉ, dịch vụ...',
           prefixIcon: const Icon(Icons.search),
           suffixIcon: _keyword.isEmpty
               ? null
@@ -447,7 +547,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSportChips() {
-    final sportTypes = MockStore.sportTypes;
+    final sportTypes = _hasDatabaseSnapshot
+        ? _databaseSports
+        : MockStore.sportTypes;
     return SizedBox(
       height: 52,
       child: ListView(
@@ -470,8 +572,13 @@ class _SearchScreenState extends State<SearchScreen> {
                 avatar: Icon(_sportIcon(st['id'] as int), size: 18),
                 label: Text(st['name'] as String),
                 selected: _sportTypeId == st['id'],
-                onSelected: (_) =>
-                    setState(() => _sportTypeId = st['id'] as int),
+                onSelected: (_) {
+                  // Selecting a sport filter should close the search IME.
+                  // Otherwise the reduced Scaffold height can leave too little
+                  // room for the fixed filter/header rows on a real device.
+                  FocusScope.of(context).unfocus();
+                  setState(() => _sportTypeId = st['id'] as int);
+                },
               ),
             ),
         ],
@@ -494,9 +601,7 @@ class _SearchScreenState extends State<SearchScreen> {
               selected: _date != null,
               showCheckmark: false,
               onPressed: _pickDate,
-              onDeleted: _date == null
-                  ? null
-                  : () => setState(() => _date = null),
+              onDeleted: _date == null ? null : () => _clearDate(),
             ),
           ),
           Padding(
@@ -529,6 +634,11 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  void _clearDate() {
+    setState(() => _date = null);
+    _reloadVenues();
+  }
+
   Widget _buildActiveFilters() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -540,10 +650,10 @@ class _SearchScreenState extends State<SearchScreen> {
           if (_priceChanged)
             InputChip(
               label: Text(
-                '${_formatPrice(_priceRange.start)} – ${_formatPrice(_priceRange.end)}',
+                '${_formatPrice(_priceRange!.start)} – ${_formatPrice(_priceRange!.end)}',
               ),
               onDeleted: () => setState(
-                () => _priceRange = const RangeValues(_priceMin, _priceMax),
+                () => _priceRange = null,
               ),
             ),
           if (_district != null)
@@ -610,12 +720,17 @@ class _SearchScreenState extends State<SearchScreen> {
         : _isSameDay(_date!, now.add(const Duration(days: 1)))
         ? 'ngày mai'
         : 'ngày ${_dateShort(_date!)}';
-    final free = MockStore.timeSlotsFor(v.id, date)
+    final slots = _hasDatabaseSnapshot
+        ? (_databaseSlots[v.id] ?? const <Map<String, Object?>>[])
+        : MockStore.timeSlotsFor(v.id, date);
+    final free = slots
         .where((s) => s['status'] == 'available')
         .map((s) => s['startTime'] as String)
         .toList();
-    final services = MockStore.servicesFor(v.id);
-    final images = MockStore.imageUrlsOf(v.id);
+    final services = _hasDatabaseSnapshot
+        ? (_databaseServices[v.id] ?? const <VenueService>[])
+        : MockStore.servicesFor(v.id);
+    final images = _hasDatabaseSnapshot ? v.imageUrls : MockStore.imageUrlsOf(v.id);
 
     return Container(
       padding: const EdgeInsets.all(10),

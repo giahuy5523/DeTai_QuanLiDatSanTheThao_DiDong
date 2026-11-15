@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'utils/app_routes.dart';
 import 'data/account_service.dart';
@@ -58,9 +60,52 @@ class _AccountBootstrapState extends State<_AccountBootstrap> {
   );
 }
 
-class SportFieldBookingApp extends StatelessWidget {
+class SportFieldBookingApp extends StatefulWidget {
   const SportFieldBookingApp({super.key, this.restoreSession = false});
   final bool restoreSession;
+
+  @override
+  State<SportFieldBookingApp> createState() => _SportFieldBookingAppState();
+}
+
+class _SportFieldBookingAppState extends State<SportFieldBookingApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final AppLifecycleListener _lifecycle;
+  Timer? _sessionTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onResume: _checkSession);
+    AccountService.sessionRevision.addListener(_scheduleSessionCheck);
+    _scheduleSessionCheck();
+  }
+
+  void _scheduleSessionCheck() {
+    _sessionTimer?.cancel();
+    if (MockStore.currentUser == null) return;
+    final remaining = AccountService.repository?.sessionTimeRemaining;
+    if (remaining != null) _sessionTimer = Timer(remaining, _checkSession);
+  }
+
+  void _checkSession() {
+    if (AccountService.expireSessionIfNeeded()) {
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.login,
+        (_) => false,
+      );
+    } else {
+      _scheduleSessionCheck();
+    }
+  }
+
+  @override
+  void dispose() {
+    AccountService.sessionRevision.removeListener(_scheduleSessionCheck);
+    _sessionTimer?.cancel();
+    _lifecycle.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +113,8 @@ class SportFieldBookingApp extends StatelessWidget {
       title: 'Nhom1_DatSanTheThao',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: restoreSession && MockStore.currentUser != null
+      navigatorKey: _navigatorKey,
+      initialRoute: widget.restoreSession && MockStore.currentUser != null
           ? switch (MockStore.currentUser!.role) {
               'owner' => AppRoutes.manageVenue,
               'admin' => AppRoutes.statistics,

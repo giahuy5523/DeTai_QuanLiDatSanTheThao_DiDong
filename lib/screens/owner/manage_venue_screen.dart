@@ -6,10 +6,12 @@ import '../../screens/owner/venue_bookings_screen.dart';
 import '../../screens/owner/venue_update_screen.dart';
 import '../../data/mock_store.dart';
 import '../../data/account_service.dart';
+import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
+import '../../utils/app_theme.dart';
 import '../../utils/app_routes.dart';
 
-/// Hiển thị ảnh sân từ asset, URL hoặc file chọn từ máy.
+// Hiển thị ảnh sân từ asset, URL hoặc file chọn từ máy.
 class VenueImageView extends StatelessWidget {
   const VenueImageView(
     this.source, {
@@ -71,38 +73,124 @@ class ManageVenueScreen extends StatefulWidget {
 class _ManageVenueScreenState extends State<ManageVenueScreen> {
   String _selectedFilter = 'all'; // 'all', 'approved', 'pending'
 
+  // Toàn bộ dữ liệu hiển thị đều đến từ SQLite.
+  List<Venue> _venues = const [];
+  int _todayBookingsCount = 0;
+  bool _isLoading = true;
+  String? _error;
+  Map<String, int> _pendingByVenue = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadFromDatabase();
+  }
+
+  /// Đọc danh sách sân của chủ sân và số lịch đặt hôm nay từ SQLite.
+  Future<void> _reloadFromDatabase() async {
+    // Phiên đăng nhập do AccountService khôi phục từ bảng Session.
+    final ownerId = MockStore.currentUser?.id;
+    if (ownerId == null) {
+      if (!mounted) return;
+      setState(() {
+        _venues = const [];
+        _todayBookingsCount = 0;
+        _pendingByVenue = const {};
+        _isLoading = false;
+        _error = 'Chưa đăng nhập. Vui lòng đăng nhập lại.';
+      });
+      return;
+    }
+
+    try {
+      final results = await Future.wait([
+        VenueRepository.loadVenues(ownerId: ownerId),
+        VenueRepository.todayBookingCountForOwner(ownerId),
+        VenueRepository.pendingBookingCountsByVenue(ownerId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _venues = results[0] as List<Venue>;
+        _todayBookingsCount = results[1] as int;
+        _pendingByVenue = results[2] as Map<String, int>;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Không thể tải dữ liệu sân. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      await AccountService.logout();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể đăng xuất. Vui lòng thử lại.')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.login,
+      (route) => false,
+    );
+  }
+
+  Future<void> _openUploadVenue() async {
+    final result = await Navigator.pushNamed(context, AppRoutes.uploadVenue);
+    if (!mounted) return;
+    if (result == true) await _reloadFromDatabase();
+  }
+
+  Future<void> _openUpdateVenue(Venue venue) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => VenueUpdateScreen(venue: venue)),
+    );
+    if (!mounted) return;
+    if (result == true) await _reloadFromDatabase();
+  }
+
+  Future<void> _openBookings(Venue venue) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => VenueBookingsScreen(venueId: venue.id)),
+    );
+    if (!mounted) return;
+    // Chủ sân có thể đã hủy/xác nhận lịch nên số lịch hôm nay có thể đổi.
+    await _reloadFromDatabase();
+  }
+
+  Future<void> _openServices(Venue venue) async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.manageService,
+      arguments: venue.id,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final allOwnVenues = MockStore.venues
-        .where((v) => v.ownerId == MockStore.currentUser?.id)
-        .toList();
+    final totalVenues = _venues.length;
+    final pendingVenues = _venues.where((v) => v.status == 'pending').length;
 
-    final totalVenues = allOwnVenues.length;
-    final pendingVenues = allOwnVenues
-        .where((v) => v.status == 'pending')
-        .length;
-
-    // Tính số lịch hôm nay
-    final today = DateTime.now();
-    final todayBookingsCount = MockStore.bookings.where((b) {
-      if (!allOwnVenues.any((v) => v.id == b.venueId)) return false;
-      return b.date.year == today.year &&
-          b.date.month == today.month &&
-          b.date.day == today.day;
-    }).length;
-
-    final filteredVenues = allOwnVenues.where((venue) {
+    final filteredVenues = _venues.where((venue) {
       if (_selectedFilter == 'approved') return venue.status == 'approved';
       if (_selectedFilter == 'pending') return venue.status == 'pending';
       return true;
     }).toList();
 
-    const primaryGreen = Color(0xFF0F8B5F);
-
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        backgroundColor: primaryGreen,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         title: const Text(
           'Quản lý sân và lịch đặt',
@@ -112,51 +200,37 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () async {
-              try {
-                await AccountService.logout();
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Không thể đăng xuất. Vui lòng thử lại.'),
-                    ),
-                  );
-                }
-                return;
-              }
-              if (!context.mounted) return;
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                AppRoutes.login,
-                (route) => false,
-              );
-            },
+            onPressed: _logout,
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: primaryGreen,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
-        onPressed: () async {
-          final result = await Navigator.pushNamed(
-            context,
-            AppRoutes.uploadVenue,
-          );
-
-          if (!mounted) return;
-
-          if (result == true) {
-            setState(() {});
-          }
-        },
+        onPressed: _openUploadVenue,
         icon: const Icon(Icons.add),
         label: const Text(
           'Đăng ký sân',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-      body: ListView(
+      body: _buildBody(totalVenues, pendingVenues, filteredVenues),
+    );
+  }
+
+  Widget _buildBody(
+    int totalVenues,
+    int pendingVenues,
+    List<Venue> filteredVenues,
+  ) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _reloadFromDatabase,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           // Thống kê 3 ô trên cùng
@@ -165,7 +239,7 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
               Expanded(child: _buildStatCard('$totalVenues', 'Sân')),
               const SizedBox(width: 10),
               Expanded(
-                child: _buildStatCard('$todayBookingsCount', 'Lịch hôm nay'),
+                child: _buildStatCard('$_todayBookingsCount', 'Lịch hôm nay'),
               ),
               const SizedBox(width: 10),
               Expanded(child: _buildStatCard('$pendingVenues', 'Chờ duyệt')),
@@ -183,13 +257,35 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (filteredVenues.isEmpty)
+          if (_error != null)
+            _buildErrorState(_error!)
+          else if (filteredVenues.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 40),
               child: Center(child: Text('Bạn chưa có sân nào được đăng ký.')),
             )
           else
-            ...filteredVenues.map((venue) => _buildVenueCard(context, venue)),
+            ...filteredVenues.map(_buildVenueCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 40),
+      child: Column(
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() => _isLoading = true);
+              _reloadFromDatabase();
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Thử lại'),
+          ),
         ],
       ),
     );
@@ -231,12 +327,11 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
 
   Widget _buildFilterChip(String label, String value) {
     final isSelected = _selectedFilter == value;
-    const primaryGreen = Color(0xFF0F8B5F);
 
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: primaryGreen,
+      selectedColor: AppTheme.primary,
       showCheckmark: false,
       labelStyle: TextStyle(
         color: isSelected ? Colors.white : Colors.grey.shade800,
@@ -246,20 +341,91 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: isSelected ? primaryGreen : Colors.grey.shade300,
+          color: isSelected ? AppTheme.primary : Colors.grey.shade300,
         ),
       ),
-      onSelected: (selected) {
-        setState(() {
-          _selectedFilter = value;
-        });
-      },
+      onSelected: (_) => setState(() => _selectedFilter = value),
     );
   }
 
-  Widget _buildVenueCard(BuildContext context, Venue venue) {
+  Widget _buildActionButton(
+    String label,
+    VoidCallback onPressed, {
+    int badgeCount = 0,
+  }) {
+    return Expanded(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onPressed,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (badgeCount > 0)
+            Positioned(
+              top: -7,
+              right: -5,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  badgeCount > 9 ? '9+' : '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVenueCard(Venue venue) {
     final isApproved = venue.status == 'approved';
-    const primaryGreen = Color(0xFF0F8B5F);
+    final images = venue.imageUrls;
 
     return Card(
       key: ValueKey(venue.id),
@@ -271,82 +437,84 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Phần ảnh sân, huy hiệu trạng thái và số ảnh
-          Builder(
-            builder: (context) {
-              final images = MockStore.imageUrlsOf(venue.id);
-              return SizedBox(
-                height: 130,
-                width: double.infinity,
-                child: Stack(
-                  children: [
-                    PageView.builder(
-                      itemCount: images.length,
-                      itemBuilder: (_, i) => VenueImageView(
-                        images[i],
-                        width: double.infinity,
-                        height: 130,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          color: Colors.blue.shade500,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.broken_image,
-                            color: Colors.white,
-                          ),
+          SizedBox(
+            height: 130,
+            width: double.infinity,
+            child: Stack(
+              children: [
+                if (images.isEmpty)
+                  Container(
+                    color: Colors.grey.shade300,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.image_not_supported,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  PageView.builder(
+                    itemCount: images.length,
+                    itemBuilder: (_, i) => VenueImageView(
+                      images[i],
+                      width: double.infinity,
+                      height: 130,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: Colors.blue.shade500,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.white,
                         ),
                       ),
                     ),
-                    // Huy hiệu trạng thái (giữ nguyên code cũ)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isApproved
-                              ? primaryGreen
-                              : const Color(0xFFFFB547),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _statusLabel(venue.status),
-                          style: TextStyle(
-                            color: isApproved ? Colors.white : Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
+                  ),
+                // Huy hiệu trạng thái
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isApproved
+                          ? AppTheme.primary
+                          : const Color(0xFFFFB547),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _statusLabel(venue.status),
+                      style: TextStyle(
+                        color: isApproved ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
-                    // Số ảnh
-                    Positioned(
-                      right: 12,
-                      bottom: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${images.length} ảnh',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              );
-            },
+                // Số ảnh
+                Positioned(
+                  right: 12,
+                  bottom: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${images.length} ảnh',
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(14),
@@ -368,8 +536,8 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                 const SizedBox(height: 6),
                 Text(
                   '${venue.sportType} • ${venue.pricePerHour.toStringAsFixed(0)} đ/giờ',
-                  style: TextStyle(
-                    color: primaryGreen,
+                  style: const TextStyle(
+                    color: AppTheme.primary,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
@@ -378,75 +546,18 @@ class _ManageVenueScreenState extends State<ManageVenueScreen> {
                 // Các nút chức năng
                 Row(
                   children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryGreen,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        // Điều hướng sang màn hình Cập nhật thông tin sân riêng
-                        onPressed: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  VenueUpdateScreen(venue: venue),
-                            ),
-                          );
-                          if (mounted && result == true) {
-                            setState(() {});
-                          }
-                        },
-                        child: const Text('Cập nhật'),
-                      ),
+                    _buildActionButton(
+                      'Cập nhật',
+                      () => _openUpdateVenue(venue),
                     ),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryGreen,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        // Điều hướng sang màn hình Quản lý lịch đặt riêng
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  VenueBookingsScreen(venueId: venue.id),
-                            ),
-                          );
-                        },
-                        child: const Text('Lịch đặt'),
-                      ),
+                    _buildActionButton(
+                      'Lịch đặt',
+                      () => _openBookings(venue),
+                      badgeCount: _pendingByVenue[venue.id] ?? 0,
                     ),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryGreen,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pushNamed(
-                          context,
-                          AppRoutes.manageService,
-                          arguments: venue.id,
-                        ),
-                        child: const Text('Dịch vụ'),
-                      ),
-                    ),
+                    _buildActionButton('Dịch vụ', () => _openServices(venue)),
                   ],
                 ),
               ],

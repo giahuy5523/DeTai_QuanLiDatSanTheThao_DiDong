@@ -200,13 +200,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) _message('Phiên đăng nhập không còn hợp lệ.');
         return;
       }
-      if (!mounted) return;
-      setState(() {
-        _avatarPath = updated.avatarPath;
-        _preview = null;
-        _avatarChanged = false;
-      });
-      _message('Đã cập nhật thông tin cá nhân');
       if (user.avatarPath != path) {
         try {
           await _storage.remove(user.avatarPath);
@@ -214,6 +207,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           /* Cleanup is best effort after a successful save. */
         }
       }
+      if (!mounted) return;
+      setState(() {
+        _avatarPath = updated.avatarPath;
+        _preview = null;
+        _avatarChanged = false;
+      });
+      _message('Đã cập nhật thông tin cá nhân');
     } catch (error) {
       if (newFile != null) {
         try {

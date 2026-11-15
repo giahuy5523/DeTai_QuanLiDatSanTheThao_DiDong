@@ -5,6 +5,8 @@ import 'package:sportfield_booking/data/mock_store.dart';
 import 'package:sportfield_booking/main.dart';
 import 'package:sportfield_booking/screens/owner/manage_venue_screen.dart';
 
+import '../test/mock_accounts.dart';
+
 // This test uses the real Android photo picker. An operator must cancel the
 // first picker, then select three different gallery images in the second.
 void main() {
@@ -13,6 +15,7 @@ void main() {
   testWidgets('native picker cancel, three previews and pending venue', (
     tester,
   ) async {
+    useMockAccounts();
     final originalVenues = List.of(MockStore.venues);
     addTearDown(() {
       MockStore.venues
