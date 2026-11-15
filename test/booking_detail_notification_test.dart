@@ -522,7 +522,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.lightTheme,
-        home: BookingDetailScreen(bookingId: booking.id),
+        home: BookingDetailScreen(
+          bookingId: booking.id,
+          customerId: booking.userId,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -580,7 +583,12 @@ void main() {
     );
     MockStore.bookings.add(booking);
     await tester.pumpWidget(
-      MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
+      MaterialApp(
+        home: BookingDetailScreen(
+          bookingId: booking.id,
+          customerId: booking.userId,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -623,7 +631,12 @@ void main() {
     );
     MockStore.bookings.add(booking);
     await tester.pumpWidget(
-      MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
+      MaterialApp(
+        home: BookingDetailScreen(
+          bookingId: booking.id,
+          customerId: booking.userId,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -657,7 +670,12 @@ void main() {
     );
     MockStore.bookings.add(booking);
     await tester.pumpWidget(
-      MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
+      MaterialApp(
+        home: BookingDetailScreen(
+          bookingId: booking.id,
+          customerId: booking.userId,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -686,7 +704,12 @@ void main() {
       'amount': 'wrong-type',
     });
     await tester.pumpWidget(
-      MaterialApp(home: BookingDetailScreen(bookingId: booking.id)),
+      MaterialApp(
+        home: BookingDetailScreen(
+          bookingId: booking.id,
+          customerId: booking.userId,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Chi tiết booking'), findsOneWidget);

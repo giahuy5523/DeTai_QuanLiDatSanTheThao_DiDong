@@ -8,13 +8,19 @@ import '../../utils/app_theme.dart';
 import '../../widgets/venue_image.dart';
 
 class BookingDetailScreen extends StatelessWidget {
-  const BookingDetailScreen({super.key, required this.bookingId});
+  const BookingDetailScreen({
+    super.key,
+    required this.bookingId,
+    required this.customerId,
+  });
+
+  final String customerId;
 
   final String bookingId;
 
   Future<_BookingDetailData?> _load() async {
     final booking = await data_repo.BookingRepository.getBookingById(bookingId);
-    if (booking == null) return null;
+    if (booking == null || booking.userId != customerId) return null;
     final payment = await data_repo.BookingRepository.getPaymentForBooking(
       booking.id,
     );
@@ -305,7 +311,6 @@ class _BookingDetailView extends StatelessWidget {
       ),
     );
   }
-
 
   Widget _venuePhoto(Venue? venue) {
     if (venue == null) return _photoPlaceholder('Không có dữ liệu sân.');

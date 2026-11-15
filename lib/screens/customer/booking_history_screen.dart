@@ -126,7 +126,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               final booking = bookings[index];
               final venue = _venues[booking.venueId];
               final canCancel =
-                  booking.status == 'pending' || booking.status == 'confirmed';
+                  (booking.status == 'pending' ||
+                      booking.status == 'confirmed') &&
+                  data_repo.BookingRepository.canCancelAt(
+                    booking.date,
+                    booking.startTime,
+                  );
 
               return Card(
                 elevation: 2,
@@ -292,11 +297,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            success
-                ? 'Đã hủy đơn đặt sân thành công.'
-                : (failure ?? 'Không thể hủy đơn này.'),
-          ),
+          content: Text(failure ?? 'Đã hủy đơn đặt sân thành công.'),
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
         ),

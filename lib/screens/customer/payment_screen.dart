@@ -25,7 +25,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final rawArgs = ModalRoute.of(context)?.settings.arguments;
-    final args = rawArgs is Map<String, dynamic> ? rawArgs : <String, dynamic>{};
+    final args = rawArgs is Map<String, dynamic>
+        ? rawArgs
+        : <String, dynamic>{};
     final venue =
         args['venue'] as Venue? ??
         (MockStore.venues.isNotEmpty
@@ -936,6 +938,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
+    final quotedServiceTotal = (args['serviceTotal'] as num?)?.toDouble();
+    final hasMissingService = serviceIds.any(
+      (id) =>
+          (serviceQuantities[id] ?? 0) > 0 &&
+          !serviceItems.any((item) => item.serviceId == id),
+    );
+    if (hasMissingService ||
+        (quotedServiceTotal != null &&
+            (quotedServiceTotal - serviceTotal).abs() > 0.01) ||
+        (total - (courtPrice + serviceTotal - discountAmount)).abs() > 0.01) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Giá hoặc dịch vụ đã thay đổi. Vui lòng quay lại chọn sân và xác nhận lại.',
+          ),
+        ),
+      );
+      return;
+    }
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final bookingId = 'b$timestamp';
     final paymentId = 'pay$timestamp';

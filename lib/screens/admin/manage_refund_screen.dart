@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../data/booking_repository.dart';
+import '../../data/account_service.dart';
+import '../../data/mock_store.dart';
 import 'admin_drawer.dart';
 
 /// Admin xác nhận kết quả hoàn tiền mô phỏng cho các đơn đã hủy.
@@ -28,6 +30,11 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
   }
 
   Future<void> _resolve(PendingRefund refund, {required bool success}) async {
+    if (MockStore.currentUser?.role != 'admin' ||
+        AccountService.expireSessionIfNeeded()) {
+      return;
+    }
+
     // Chặn bấm nhiều lần trên cùng một khoản hoàn tiền.
     if (_busy.contains(refund.bookingId)) return;
     setState(() => _busy.add(refund.bookingId));
@@ -133,7 +140,9 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
                             onPressed: busy
                                 ? null
                                 : () => _resolve(refund, success: false),
-                            style: OutlinedButton.styleFrom(minimumSize: const Size(96, 44)),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(96, 44),
+                            ),
                             child: const Text('Thất bại'),
                           ),
                           const SizedBox(width: 8),
@@ -141,7 +150,9 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
                             onPressed: busy
                                 ? null
                                 : () => _resolve(refund, success: true),
-                            style: FilledButton.styleFrom(minimumSize: const Size(96, 44)),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(96, 44),
+                            ),
                             child: const Text('Hoàn tất'),
                           ),
                         ],
