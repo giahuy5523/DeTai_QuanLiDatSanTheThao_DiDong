@@ -20,7 +20,8 @@ class VenueRepository {
     _useMockStoreForTesting = value;
   }
 
-  static bool get isInitialized => _database != null;
+  /// Trong test (chế độ cache) coi như đã sẵn sàng: dữ liệu đọc từ MockStore.
+  static bool get isInitialized => _useMockStoreForTesting || _database != null;
 
   static Future<void> initialize(Database database) async {
     _database = database;
