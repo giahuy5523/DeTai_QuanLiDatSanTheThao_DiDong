@@ -572,28 +572,43 @@ class BookingRepository {
   /// Quy tắc hủy (đề xuất, chờ nhóm xác nhận): chỉ hủy khi còn ít nhất 2 giờ.
   static const Duration cancelLeadTime = Duration(hours: 2);
 
+  /// true nếu hủy thành công; dùng khi chỉ cần biết có/không.
   static Future<bool> cancelBooking(
+    String bookingId, {
+    String cancelReason = 'Khách hàng chủ động hủy',
+  }) async {
+    final failure = await cancelBookingFailure(
+      bookingId,
+      cancelReason: cancelReason,
+    );
+    return failure == null;
+  }
+
+  /// Hủy đơn. Trả về null nếu thành công, hoặc lý do không hủy được (hiển thị cho người dùng).
+  static Future<String?> cancelBookingFailure(
     String bookingId, {
     String cancelReason = 'Khách hàng chủ động hủy',
   }) async {
     final db = await _db;
     if (db == null) {
-      return MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
+      return MockStore.cancelBooking(bookingId, cancelReason: cancelReason)
+          ? null
+          : 'Không thể hủy đơn này.';
     }
 
-    return _txn<bool>(db, (txn, afterCommit) async {
+    return _txn<String?>(db, (txn, afterCommit) async {
       final bookingRows = await txn.query(
         'bookings',
         where: 'id = ?',
         whereArgs: [bookingId],
         limit: 1,
       );
-      if (bookingRows.isEmpty) return false;
+      if (bookingRows.isEmpty) return 'Không tìm thấy đơn đặt sân này.';
 
       final bookingMap = bookingRows.single;
       final currentStatus = bookingMap['status'] as String;
       if (currentStatus != 'pending' && currentStatus != 'confirmed') {
-        return false;
+        return 'Không thể hủy đơn ở trạng thái "$currentStatus".';
       }
 
       final startAt = _bookingStartAt(
@@ -602,7 +617,7 @@ class BookingRepository {
       );
       if (startAt == null ||
           !startAt.isAfter(DateTime.now().add(cancelLeadTime))) {
-        return false;
+        return 'Chỉ được hủy trước giờ bắt đầu ít nhất ${cancelLeadTime.inHours} giờ.';
       }
 
       final isMarkedPaid = bookingMap['paymentStatus'] == 'paid';
@@ -617,7 +632,7 @@ class BookingRepository {
           .toList();
 
       if (!isMarkedPaid && successfulPayments.isNotEmpty) {
-        return false;
+        return 'Dữ liệu thanh toán của đơn chưa khớp. Vui lòng liên hệ hỗ trợ.';
       }
 
       Map<String, Object?>? targetPayment;
@@ -630,7 +645,7 @@ class BookingRepository {
           if (linked.length != 1 ||
               linked.single['status'] != 'success' ||
               linked.single['refundStatus'] != null) {
-            return false;
+            return 'Khoản thanh toán của đơn không còn hợp lệ để hoàn tiền.';
           }
           targetPayment = linked.single;
         } else {
@@ -639,7 +654,9 @@ class BookingRepository {
                 (p) => p['status'] == 'success' && p['refundStatus'] == null,
               )
               .toList();
-          if (valid.length != 1) return false;
+          if (valid.length != 1) {
+            return 'Khoản thanh toán của đơn không còn hợp lệ để hoàn tiền.';
+          }
           targetPayment = valid.single;
         }
       }
@@ -736,7 +753,7 @@ class BookingRepository {
       afterCommit.add(() {
         MockStore.cancelBooking(bookingId, cancelReason: cancelReason);
       });
-      return true;
+      return null;
     });
   }
 

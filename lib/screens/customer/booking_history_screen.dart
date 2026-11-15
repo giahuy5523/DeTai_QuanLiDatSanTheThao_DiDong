@@ -264,9 +264,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   }
 
   Future<void> _confirmAndCancel(String bookingId) async {
-    final bool success;
+    final String? failure;
     try {
-      success = await BookingController.cancelBookingAsync(bookingId);
+      failure = await data_repo.BookingRepository.cancelBookingFailure(bookingId);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -280,6 +280,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
     if (!mounted) return;
 
+    final success = failure == null;
     if (success) {
       setState(() {
         _loadBookings();
@@ -294,7 +295,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           content: Text(
             success
                 ? 'Đã hủy đơn đặt sân thành công.'
-                : 'Không thể hủy đơn này. Vui lòng kiểm tra trạng thái đơn.',
+                : (failure ?? 'Không thể hủy đơn này.'),
           ),
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
