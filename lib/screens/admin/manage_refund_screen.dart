@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/booking_repository.dart';
 import '../../utils/app_theme.dart';
+import '../../data/account_service.dart';
+import '../../data/mock_store.dart';
 import 'admin_drawer.dart';
 
 /// Admin xác nhận kết quả hoàn tiền mô phỏng cho các đơn đã hủy.
@@ -36,6 +38,11 @@ class _ManageRefundScreenState extends State<ManageRefundScreen> {
   }
 
   Future<void> _resolve(PendingRefund refund, {required bool success}) async {
+    if (MockStore.currentUser?.role != 'admin' ||
+        AccountService.expireSessionIfNeeded()) {
+      return;
+    }
+
     // Chặn bấm nhiều lần trên cùng một khoản hoàn tiền.
     if (_busy.contains(refund.bookingId)) return;
     setState(() => _busy.add(refund.bookingId));

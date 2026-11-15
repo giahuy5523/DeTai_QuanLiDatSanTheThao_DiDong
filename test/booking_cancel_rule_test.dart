@@ -13,17 +13,31 @@ void main() {
   setUp(() async {
     env = await SqliteTestEnv.open('cancel_rule');
     await env.db.insert('Users', {
-      'user_id': 'owner_1', 'full_name': 'Chủ sân', 'email': 'owner@test.local',
-      'phone': '0900000001', 'password_hash': 'x', 'role': 'owner',
+      'user_id': 'owner_1',
+      'full_name': 'Chủ sân',
+      'email': 'owner@test.local',
+      'phone': '0900000001',
+      'password_hash': 'x',
+      'role': 'owner',
     });
     await env.db.insert('Users', {
-      'user_id': 'customer_1', 'full_name': 'Khách', 'email': 'customer@test.local',
-      'phone': '0900000002', 'password_hash': 'x', 'role': 'customer',
+      'user_id': 'customer_1',
+      'full_name': 'Khách',
+      'email': 'customer@test.local',
+      'phone': '0900000002',
+      'password_hash': 'x',
+      'role': 'customer',
     });
     await env.db.insert('venues', {
-      'id': 'venue_1', 'ownerId': 'owner_1', 'sportType': 'football', 'name': 'Sân 1',
-      'address': 'Quận 1', 'pricePerHour': 150000, 'latitude': 10.0,
-      'longitude': 106.0, 'status': 'approved',
+      'id': 'venue_1',
+      'ownerId': 'owner_1',
+      'sportType': 'football',
+      'name': 'Sân 1',
+      'address': 'Quận 1',
+      'pricePerHour': 150000,
+      'latitude': 10.0,
+      'longitude': 106.0,
+      'status': 'approved',
     });
   });
 
@@ -46,12 +60,22 @@ void main() {
     );
   }
 
+  test('moc huy: truoc, dung va sau hai gio', () {
+    final day = DateTime(2030, 1, 1);
+    bool allowed(DateTime now) =>
+        BookingRepository.canCancelAt(day, '18:00', now: now);
+    expect(allowed(DateTime(2030, 1, 1, 15, 59, 59)), isTrue);
+    expect(allowed(DateTime(2030, 1, 1, 16)), isTrue);
+    expect(allowed(DateTime(2030, 1, 1, 16, 0, 1)), isFalse);
+  });
   test('hủy đơn còn hơn 2 giờ trước giờ bắt đầu: được hủy', () async {
     await bookTomorrow();
 
     expect(await BookingRepository.cancelBooking(_bookingId), isTrue);
     final row = (await env.db.query(
-      'bookings', where: 'id = ?', whereArgs: [_bookingId],
+      'bookings',
+      where: 'id = ?',
+      whereArgs: [_bookingId],
     )).single;
     expect(row['status'], 'cancelled');
   });
@@ -68,7 +92,9 @@ void main() {
 
     expect(await BookingRepository.cancelBooking(_bookingId), isFalse);
     final row = (await env.db.query(
-      'bookings', where: 'id = ?', whereArgs: [_bookingId],
+      'bookings',
+      where: 'id = ?',
+      whereArgs: [_bookingId],
     )).single;
     expect(row['status'], 'confirmed');
   });

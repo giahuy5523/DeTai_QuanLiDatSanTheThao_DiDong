@@ -578,20 +578,25 @@ void main() {
       ); // Vẫn là 0, không bị âm
     });
 
-    test('9. Hủy đơn đã thanh toán online và quy trình hoàn tiền (Refund)', () async {
-      final b = Booking(
-        id: 'b_refund_flow',
-        venueId: 'v1',
-        userId: 'customer1',
-        date: DateTime.now().add(const Duration(days: 1)),
-        startTime: '13:00',
-        endTime: '14:00',
-        originalAmount: 100000.0,
-        serviceAmount: 0.0,
-        discountAmount: 0.0,
-        totalPrice: 100000.0,
-      );
-      await BookingRepository.processBookingPayment(booking: b, method: 'momo');
+    test(
+      '9. Hủy đơn đã thanh toán online và quy trình hoàn tiền (Refund)',
+      () async {
+        final b = Booking(
+          id: 'b_refund_flow',
+          venueId: 'v1',
+          userId: 'customer1',
+          date: DateTime.now().add(const Duration(days: 1)),
+          startTime: '13:00',
+          endTime: '14:00',
+          originalAmount: 100000.0,
+          serviceAmount: 0.0,
+          discountAmount: 0.0,
+          totalPrice: 100000.0,
+        );
+        await BookingRepository.processBookingPayment(
+          booking: b,
+          method: 'momo',
+        );
 
         // 1. Hủy booking -> Chuyển payment sang refundStatus = 'processing'
         final cancelRes = await BookingRepository.cancelBooking(
@@ -912,7 +917,7 @@ void main() {
     test(
       'Test B – failRefund: Thất bại hoàn tiền không đổi paymentStatus thành refunded',
       () async {
-        final date = DateTime.now();
+        final date = DateTime.now().add(const Duration(days: 2));
         final b = Booking(
           id: 'b_fail_refund_test',
           venueId: 'v1',

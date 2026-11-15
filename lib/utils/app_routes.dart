@@ -70,6 +70,7 @@ class AppRoutes {
       bookingHistory: (_) => const BookingHistoryScreen(),
       bookingDetail: (context) => BookingDetailScreen(
         bookingId: ModalRoute.of(context)!.settings.arguments as String,
+        customerId: MockStore.currentUser!.id,
       ),
       notifications: (_) => const NotificationScreen(),
       profile: (_) => const ProfileScreen(),
@@ -128,15 +129,8 @@ class AppRoutes {
           return const _RouteError('Thông tin sân không hợp lệ.');
         }
 
-        if (name == bookingDetail) {
-          if (args is! String ||
-              !MockStore.bookings.any(
-                (booking) =>
-                    booking.id == args &&
-                    booking.userId == MockStore.currentUser?.id,
-              )) {
-            return const _RouteError('Không tìm thấy booking trong lịch sử.');
-          }
+        if (name == bookingDetail && (args is! String || args.isEmpty)) {
+          return const _RouteError('Không tìm thấy booking trong lịch sử.');
         }
 
         // Kiểm tra tham số truyền vào Màn hình Xác nhận & Thanh toán
