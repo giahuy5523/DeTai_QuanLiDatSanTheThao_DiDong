@@ -739,6 +739,7 @@ void main() {
     tester,
   ) async {
     await openRoute(tester, AppRoutes.customerShell);
+    await settleSqlite(tester);
     await tapVisible(
       tester,
       find

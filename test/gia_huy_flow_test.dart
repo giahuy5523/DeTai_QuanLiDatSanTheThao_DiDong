@@ -403,6 +403,7 @@ void main() {
     'Customer navigates detail to booking to payment to history and cancels',
     (tester) async {
       await login(tester, 'customer');
+      await settleSqlite(tester);
       final card = find.text('Sân bóng đá Thành Công');
       await tester.scrollUntilVisible(
         card,
