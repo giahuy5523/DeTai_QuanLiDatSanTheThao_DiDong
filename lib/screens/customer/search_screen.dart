@@ -158,7 +158,6 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
   List<Venue> _filterVenues() {
     final query = _normalizeSearchText(_keyword).trim();
     final checkAvailability = _date != null || _hour != null;
-    final date = _date ?? DateTime.now();
 
     final priceRange = _priceRange;
     final list = _catalog.where((v) {
@@ -549,7 +548,7 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
   Widget _buildSportChips() {
     final sportTypes = _hasDatabaseSnapshot
         ? _databaseSports
-        : const <String>[];
+        : const <Map<String, Object?>>[];
     return SizedBox(
       height: 52,
       child: ListView(
@@ -713,7 +712,6 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
   }
 
   Widget _buildResultItem(Venue v) {
-    final date = _date ?? DateTime.now();
     final now = DateTime.now();
     final dayLabel = (_date == null || _isSameDay(_date!, now))
         ? 'hôm nay'

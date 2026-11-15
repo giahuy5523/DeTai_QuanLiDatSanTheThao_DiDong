@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../data/mock_store.dart';
 import '../../data/venue_repository.dart';
 import '../../models/venue.dart';
 import '../../utils/app_routes.dart';
