@@ -57,7 +57,7 @@ class _VenueListScreenState extends State<VenueListScreen> with WidgetsBindingOb
   Widget build(BuildContext context) {
     final approved = (_hasDatabaseSnapshot
             ? _databaseVenues
-            : MockStore.venues)
+            : const <Venue>[])
         .where((venue) => venue.status == 'approved')
         .toList();
     final sports = [

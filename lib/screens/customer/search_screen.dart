@@ -66,7 +66,7 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
   int _catalogRequest = 0;
 
   List<Venue> get _catalog =>
-      _hasDatabaseSnapshot ? _databaseVenues : MockStore.approvedVenues;
+      _hasDatabaseSnapshot ? _databaseVenues : const <Venue>[];
 
   @override
   void initState() {
@@ -164,7 +164,7 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
     final list = _catalog.where((v) {
       final services = _hasDatabaseSnapshot
           ? (_databaseServices[v.id] ?? const <VenueService>[])
-          : MockStore.servicesFor(v.id);
+          : const <VenueService>[];
 
       // Từ khóa: tên sân, môn thể thao, địa điểm, tên dịch vụ
       if (query.isNotEmpty) {
@@ -196,7 +196,7 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
       if (checkAvailability) {
         final slots = _hasDatabaseSnapshot
             ? (_databaseSlots[v.id] ?? const <Map<String, Object?>>[])
-            : MockStore.timeSlotsFor(v.id, date);
+            : const <Map<String, Object?>>[];
         final ok = slots.any(
           (s) =>
               s['status'] == 'available' &&
@@ -549,7 +549,7 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
   Widget _buildSportChips() {
     final sportTypes = _hasDatabaseSnapshot
         ? _databaseSports
-        : MockStore.sportTypes;
+        : const <String>[];
     return SizedBox(
       height: 52,
       child: ListView(
@@ -722,15 +722,15 @@ class _SearchScreenState extends State<SearchScreen> with WidgetsBindingObserver
         : 'ngày ${_dateShort(_date!)}';
     final slots = _hasDatabaseSnapshot
         ? (_databaseSlots[v.id] ?? const <Map<String, Object?>>[])
-        : MockStore.timeSlotsFor(v.id, date);
+        : const <Map<String, Object?>>[];
     final free = slots
         .where((s) => s['status'] == 'available')
         .map((s) => s['startTime'] as String)
         .toList();
     final services = _hasDatabaseSnapshot
         ? (_databaseServices[v.id] ?? const <VenueService>[])
-        : MockStore.servicesFor(v.id);
-    final images = _hasDatabaseSnapshot ? v.imageUrls : MockStore.imageUrlsOf(v.id);
+        : const <VenueService>[];
+    final images = _hasDatabaseSnapshot ? v.imageUrls : const <String>[];
 
     return Container(
       padding: const EdgeInsets.all(10),
