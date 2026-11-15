@@ -82,7 +82,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final source = _hasDatabaseSnapshot ? _databaseVenues : MockStore.venues;
+    // Chỉ lấy sân từ SQLite; trước khi tải xong danh sách rỗng, không dùng cache.
+    final source = _hasDatabaseSnapshot ? _databaseVenues : const <Venue>[];
     final venues = source
         .where(
           (v) =>
