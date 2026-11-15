@@ -608,6 +608,11 @@ class VenueRepository {
     String venueId,
     DateTime date,
   ) async {
+    if (_useMockStoreForTesting) {
+      return MockStore.timeSlotsFor(venueId, date)
+          .map((s) => Map<String, Object?>.from(s))
+          .toList();
+    }
     final db = await _db;
     final venues = await db.query(
       'venues',
