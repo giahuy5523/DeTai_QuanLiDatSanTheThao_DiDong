@@ -1,55 +1,35 @@
-# Bàn giao phần Gia Huy — bản tích hợp
+# Bàn giao SportField 1.0.0 — Gia Huy
 
-Mốc 12/11 hoàn thiện tài liệu, 13/11 tổng duyệt, 14/11 chốt nội bộ, 20/11 nộp APK release và báo cáo. Phần dưới dùng để cập nhật bản Google Docs của nhóm sau khi chốt commit nghiệm thu.
+SportField là ứng dụng Android đặt và quản lý sân thể thao. Bản nghiệm thu dùng Flutter 3.47.4, Dart 3.13.3 và SQLite schema v3. Tài khoản, phiên, sân, dịch vụ, booking, thanh toán, khuyến mãi và thông báo dùng chung database cục bộ `sport_venue_database.db`. Thanh toán MoMo và hoàn tiền đều là mô phỏng.
 
-## Nội dung báo cáo
+## Phạm vi nghiệm thu
 
-**Phân công.** Gia Huy phụ trách theme, Đăng nhập/Đăng ký/Hồ sơ, phân quyền, avatar, phiên SQLite, review và tích hợp. Quốc Đạt phụ trách Trang chủ/Tìm kiếm/Danh sách sân và nền dữ liệu chung. Bảo Huy phụ trách chi tiết sân, đặt sân, dịch vụ, thanh toán mô phỏng và lịch sử. Thanh Sơn phụ trách quản lý sân, lịch đặt và dịch vụ của Owner, duyệt sân, khuyến mãi và thống kê của Admin.
+| Vai trò | Kết quả trên Pixel 8 với APK release |
+| --- | --- |
+| Customer | Đăng ký, đăng nhập, lưu thay đổi hồ sơ, xem sân, đặt hai khung giờ, thanh toán MoMo mô phỏng, hủy hai booking và xem yêu cầu hoàn tiền. |
+| Owner | Xem cả hai booking đã hủy trong lịch sân. Thêm, sửa giá rồi xóa dịch vụ thử nghiệm. |
+| Admin | Xác nhận hoàn tiền cho một booking và đánh dấu hoàn tiền thất bại cho booking còn lại. Customer nhận cả hai thông báo và xem đúng trạng thái trong chi tiết. Booking hoàn tiền thất bại vẫn hiển thị đã thanh toán. |
+| Khôi phục dữ liệu | Sau `adb shell am force-stop`, Android báo khởi động lạnh với PID mới. Phiên Customer, thông báo và trạng thái thanh toán của cả hai booking vẫn đọc được từ dữ liệu cục bộ. |
 
-**3.3.1. Đăng nhập.** LoginScreen kiểm tra email và mật khẩu rồi gọi AccountService. AccountRepository đọc Users và kiểm tra hash PBKDF2-HMAC-SHA256. Khi hợp lệ, repository lưu phiên 30 ngày vào Session. Ứng dụng điều hướng theo vai trò Customer, Owner hoặc Admin. Lần mở kế tiếp chỉ khôi phục phiên còn hạn của tài khoản còn hoạt động. Đăng xuất xóa phiên.
+Customer và Owner được hủy booking hợp lệ khi còn **ít nhất 2 giờ**. Test dùng đồng hồ cố định xác nhận còn `2:00:01` và đúng `2:00:00` thì được hủy, còn `1:59:59` thì bị chặn. Trên APK release đã thao tác hủy khi đủ thời gian. Mốc đúng 2 giờ được xác minh bằng test tự động.
 
-**5.1. Lưu trữ.** Bản tích hợp dùng SQLite sport_venue_database.db, schema v3. Tài khoản dùng ID chuỗi. Hồ sơ lưu đường dẫn avatar trong Users, còn file ảnh nằm trong vùng dữ liệu ứng dụng. Repository tài khoản, sân và booking dùng chung database. Dữ liệu nghiệp vụ và trạng thái thanh toán mô phỏng được ghi bằng repository. Một số màn hình đọc bản sao dữ liệu trong bộ nhớ được nạp lại từ SQLite khi khởi động. Mã nhập dữ liệu cũ đọc accounts.db, bảo toàn hồ sơ đã có ở database đích và đánh dấu hoàn tất trong cùng giao dịch.
+`flutter pub get`, `flutter analyze`, `flutter test`, `git diff --check` và build APK release đều đạt trong lượt nghiệm thu. Flutter Test đạt **163/163**. Flutter CI trên integration cuối cũng đạt Analyze, Migration Test v3 và toàn bộ Flutter Test. [Lượt CI integration](https://github.com/giahuy5523/DeTai_QuanLiDatSanTheThao_DiDong/actions/runs/43711408202)
 
-**5.3. Thư viện.** sqflite mở SQLite trên Android, cryptography và cryptography_flutter băm mật khẩu, image_picker chọn ảnh, path_provider xác định thư mục ứng dụng. flutter_test và integration_test kiểm tra ứng dụng. sqflite_common_ffi kiểm tra SQLite trên máy phát triển. Các cổng thanh toán trong đồ án chạy mô phỏng.
+## APK và nguồn build
 
-## Tổng duyệt Android
+| Mục | Giá trị |
+| --- | --- |
+| Tên ứng dụng | SportField |
+| Package ID | `com.sportfield.booking` |
+| Version | `1.0.0+1` — versionName `1.0.0`, versionCode `1` |
+| Chữ ký | `apksigner` xác minh APK Signature Scheme v2, chứng chỉ release `CN=SportField` |
+| SHA-256 của file APK | `3DCC888332B5F391D3CA8969C5DC0ED75C03B262E29D6567CD47664C8FAC7D3C` |
+| Commit mã nguồn dùng để build | `69a210b8b3f17d063100b05b991c7355e2a4bb5a`, build cùng cấu hình release khi đó còn ở local |
+| Commit ghi cấu hình release và README | `0f14096dd6c2fc320e48a0dbed6776e95302ff45` |
+| Snapshot integration cuối của 1.0.0 | `d242ebf1b3550cf95c2004052a519734b8291d36`, merge PR #13 |
 
-| Ca | Thao tác | Kết quả mong đợi |
-|---|---|---|
-| Tài khoản | Đăng nhập từng vai trò, thử mở route sai quyền | Vào đúng trang, chặn route sai quyền |
-| Hồ sơ | Sửa tên, số điện thoại, avatar rồi buộc dừng và mở lại | Hồ sơ và avatar mới còn |
-| Nâng cấp | Mở từ accounts.db cũ, sửa hồ sơ, đăng xuất rồi mở lại | Không ghi đè hồ sơ mới, không phục hồi phiên đã xóa |
-| Liên vai trò | Owner đăng sân, Admin duyệt, Customer tìm và đặt, Owner xem lịch | Cùng mã sân và mã đơn ở các màn |
-| Thanh toán | So sánh đơn online đã trả và đơn tiền mặt chưa thu | Doanh thu chỉ tính đơn đủ điều kiện đã thanh toán |
-| Dữ liệu bền vững | Tắt hẳn app, mở lại và kiểm tra sân, lịch, trạng thái thanh toán | Dữ liệu vẫn có, khuyến mãi hoặc dịch vụ đã xóa không tự xuất hiện lại |
-| Giao diện | Thử Login/Register/Profile trên màn Android nhỏ khi mở bàn phím | Các nút vẫn thao tác được, có ảnh đối chiếu Figma |
+Xem [README](README.md) để cài môi trường, cấu hình ký trên máy build và xác minh APK. Keystore và thông tin ký được lưu riêng.
 
-Khi ghi biên bản, thêm commit, thiết bị/API Android, kết quả thực tế và ảnh hoặc video cho từng ca. Minh chứng Figma cần link frame Login, Register, Profile đã duyệt. Log chạy thật dùng để điền mục 5.4. Kết quả QA cũ ở PR #6 chỉ dùng làm mốc tham chiếu.
+## Mốc lịch sử và giới hạn xác minh
 
-## Kết quả kiểm thử ghi nhận
-
-Bộ kiểm thử Flutter trên bản sao sạch của phần tích hợp đạt 140/140. Nhật ký kiểm thử nằm trong qa-verified.log của thư mục bàn giao cục bộ. Kiểm thử Android qua ứng dụng và minh chứng Figma được ghi riêng sau khi có kết quả.
-
-## Chạy và đóng gói
-
-Mở thư mục dự án bằng Flutter 3.47.4 và Dart 3.13.3 hoặc phiên bản tương thích với pubspec.lock. Kết nối Pixel 8 rồi chạy:
-
-```powershell
-flutter doctor -v
-flutter devices
-flutter pub get
-flutter analyze
-flutter test
-flutter test integration_test/account_sqlite_test.dart integration_test/shared_database_test.dart -d emulator-5554
-flutter build apk --release
-```
-
-APK nằm tại build/app/outputs/flutter-apk/app-release.apk. Bản build của đồ án dùng cấu hình ký Android hiện tại. Tài khoản mẫu theo vai trò là customer@gmail.com, owner@gmail.com và admin@gmail.com.
-
-## Phạm vi bản tích hợp cuối
-
-- PR #7 giới hạn đăng nhập vào email và mật khẩu, và yêu cầu repository SQLite sẵn sàng trước khi xử lý tài khoản.
-- PR #8 là nền tích hợp của SQLite v3. Bảng tài khoản, phiên, sân, dịch vụ, đặt sân và thanh toán nằm trong cùng sport_venue_database.db. Foreign keys được bật khi mở database.
-- Dữ liệu từ accounts.db cũ được nhập một lần theo giao dịch. Phiên đã đăng xuất và hồ sơ mới không bị ghi đè khi khởi động lại.
-- Màn Owner/Admin giữ thanh toán và hoàn tiền mô phỏng theo nghiệp vụ hiện có. Nhánh Quốc Đạt dùng cấu trúc cột và kiểu ID khác, nên phần tích hợp giữ schema dùng chung của PR #8.
-- Hai PR liên quan là https://github.com/giahuy5523/DeTai_QuanLiDatSanTheThao_DiDong/pull/7 và https://github.com/giahuy5523/DeTai_QuanLiDatSanTheThao_DiDong/pull/8. Kết quả của 457b331 là mốc tham chiếu, cần đọc log của phiên bản cuối khi nghiệm thu.
+Kết quả **140/140** ở giai đoạn tích hợp `457b331` và QA các PR #6–#8 là mốc lịch sử. Kết quả bàn giao của 1.0.0 là **163/163** cùng nghiệm thu APK trên Pixel 8 như trên. Tài liệu này chưa ghi nhận bằng chứng xác minh giao diện theo Figma.
