@@ -572,6 +572,13 @@ class BookingRepository {
   /// Quy tắc hủy (đề xuất, chờ nhóm xác nhận): chỉ hủy khi còn ít nhất 2 giờ.
   static const Duration cancelLeadTime = Duration(hours: 2);
 
+  /// Customer và Owner cùng áp dụng mốc bao gồm đúng hai giờ.
+  static bool canCancelAt(DateTime day, String startTime, {DateTime? now}) {
+    final start = _bookingStartAt(day.toIso8601String(), startTime);
+    return start != null &&
+        !start.isBefore((now ?? DateTime.now()).add(cancelLeadTime));
+  }
+
   static Future<bool> cancelBooking(
     String bookingId, {
     String cancelReason = 'Khách hàng chủ động hủy',
@@ -596,12 +603,8 @@ class BookingRepository {
         return false;
       }
 
-      final startAt = _bookingStartAt(
-        bookingMap['date'] as String,
-        bookingMap['startTime'] as String,
-      );
-      if (startAt == null ||
-          !startAt.isAfter(DateTime.now().add(cancelLeadTime))) {
+      final day = DateTime.tryParse(bookingMap['date'] as String);
+      if (day == null || !canCancelAt(day, bookingMap['startTime'] as String)) {
         return false;
       }
 

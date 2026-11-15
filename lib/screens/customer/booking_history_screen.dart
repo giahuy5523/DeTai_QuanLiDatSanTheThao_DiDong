@@ -126,7 +126,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               final booking = bookings[index];
               final venue = _venues[booking.venueId];
               final canCancel =
-                  booking.status == 'pending' || booking.status == 'confirmed';
+                  (booking.status == 'pending' ||
+                      booking.status == 'confirmed') &&
+                  data_repo.BookingRepository.canCancelAt(
+                    booking.date,
+                    booking.startTime,
+                  );
 
               return Card(
                 elevation: 2,

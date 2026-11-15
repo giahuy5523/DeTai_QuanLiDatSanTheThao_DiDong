@@ -581,24 +581,30 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
   }
 
   List<Widget> _buildActions(VenueBookingEntry booking) {
+    final canCancel = BookingRepository.canCancelAt(
+      booking.date,
+      booking.startTime,
+    );
     if (booking.status == 'pending') {
       return [
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(
-              child: _actionButton(
-                label: 'Từ chối',
-                color: AppTheme.error,
-                onPressed: () => _confirmAndUpdate(
-                  booking,
-                  'cancelled',
-                  title: 'Từ chối lịch đặt?',
-                  message: 'Khách sẽ nhận được thông báo lịch đặt bị từ chối.',
+            if (canCancel)
+              Expanded(
+                child: _actionButton(
+                  label: 'Từ chối',
+                  color: AppTheme.error,
+                  onPressed: () => _confirmAndUpdate(
+                    booking,
+                    'cancelled',
+                    title: 'Từ chối lịch đặt?',
+                    message:
+                        'Khách sẽ nhận được thông báo lịch đặt bị từ chối.',
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
+            if (canCancel) const SizedBox(width: 12),
             Expanded(
               child: _actionButton(
                 label: 'Xác nhận',
@@ -616,19 +622,20 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(
-              child: _actionButton(
-                label: 'Hủy đặt',
-                color: AppTheme.error,
-                onPressed: () => _confirmAndUpdate(
-                  booking,
-                  'cancelled',
-                  title: 'Hủy lịch đặt?',
-                  message: 'Bạn có chắc muốn hủy lịch đặt sân này không?',
+            if (canCancel)
+              Expanded(
+                child: _actionButton(
+                  label: 'Hủy đặt',
+                  color: AppTheme.error,
+                  onPressed: () => _confirmAndUpdate(
+                    booking,
+                    'cancelled',
+                    title: 'Hủy lịch đặt?',
+                    message: 'Bạn có chắc muốn hủy lịch đặt sân này không?',
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
+            if (canCancel) const SizedBox(width: 12),
             Expanded(
               child: _actionButton(
                 label: 'Hoàn thành',
