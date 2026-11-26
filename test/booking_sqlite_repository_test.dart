@@ -1056,13 +1056,20 @@ void main() {
     // GIAI ĐOẠN 3C: TÍCH HỢP TOÀN DIỆN & KIỂM THỬ KHÁCH HÀNG / THANH TOÁN
     // ------------------------------------------------------------------------
     group('Giai đoạn 3C – Customer Booking & Payment Integration', () {
+      late DateTime bookingDate;
+
+      setUp(() {
+        final now = DateTime.now();
+        bookingDate = DateTime(now.year, now.month, now.day + 2);
+      });
+
       test('1. Customer đặt sân bằng tiền mặt (cash) thành công', () async {
         final initialMockCount = MockStore.bookings.length;
         final booking = Booking(
           id: 'b_cash_e2e_3c',
           venueId: 'v1',
           userId: 'customer1',
-          date: DateTime.parse('2026-11-20T00:00:00.000'),
+          date: bookingDate,
           startTime: '14:00',
           endTime: '16:00',
           originalAmount: 200000.0,
@@ -1099,7 +1106,7 @@ void main() {
           id: 'b_online_succ_3c',
           venueId: 'v1',
           userId: 'customer1',
-          date: DateTime.parse('2026-11-20T00:00:00.000'),
+          date: bookingDate,
           startTime: '16:00',
           endTime: '18:00',
           originalAmount: 200000.0,
@@ -1135,7 +1142,7 @@ void main() {
             id: 'b_online_fail_3c',
             venueId: 'v1',
             userId: 'customer1',
-            date: DateTime.parse('2026-11-20T00:00:00.000'),
+            date: bookingDate,
             startTime: '18:00',
             endTime: '20:00',
             originalAmount: 200000.0,
@@ -1157,7 +1164,7 @@ void main() {
           // Slot phải được giải phóng vì status = cancelled
           final slotFree = await BookingRepository.isRangeAvailable(
             venueId: 'v1',
-            date: DateTime.parse('2026-11-20T00:00:00.000'),
+            date: bookingDate,
             startTime: '18:00',
             endTime: '20:00',
           );
@@ -1172,7 +1179,7 @@ void main() {
             id: 'b_slot_race_1',
             venueId: 'v1',
             userId: 'customer1',
-            date: DateTime.parse('2026-11-21T00:00:00.000'),
+            date: bookingDate,
             startTime: '08:00',
             endTime: '10:00',
             originalAmount: 200000.0,
@@ -1185,7 +1192,7 @@ void main() {
             id: 'b_slot_race_2',
             venueId: 'v1',
             userId: 'customer1',
-            date: DateTime.parse('2026-11-21T00:00:00.000'),
+            date: bookingDate,
             startTime: '09:00', // Trùng chồng lấn với 08:00-10:00
             endTime: '11:00',
             originalAmount: 200000.0,
