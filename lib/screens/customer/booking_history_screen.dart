@@ -271,7 +271,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   Future<void> _confirmAndCancel(String bookingId) async {
     final String? failure;
     try {
-      failure = await data_repo.BookingRepository.cancelBookingFailure(bookingId);
+      failure = await data_repo.BookingRepository.cancelBookingFailure(
+        bookingId,
+        userId: MockStore.currentUser?.id,
+      );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -725,6 +725,7 @@ class _VenueBookingsScreenState extends State<VenueBookingsScreen> {
               ? await BookingRepository.cancelBooking(
                   booking.id,
                   cancelReason: 'Chủ sân hủy lịch đặt',
+                  ownerId: user.id,
                 )
               : await BookingRepository.updateBookingStatusByOwner(
                   bookingId: booking.id,

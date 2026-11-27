@@ -583,18 +583,27 @@ class BookingRepository {
   static Future<bool> cancelBooking(
     String bookingId, {
     String cancelReason = 'Khách hàng chủ động hủy',
+    String? userId,
+    String? ownerId,
   }) async {
     final failure = await cancelBookingFailure(
       bookingId,
       cancelReason: cancelReason,
+      userId: userId,
+      ownerId: ownerId,
     );
     return failure == null;
   }
 
   /// Hủy đơn. Trả về null nếu thành công, hoặc lý do không hủy được (hiển thị cho người dùng).
+  /// userId: khách đang đăng nhập (chỉ hủy đơn của chính mình).
+  /// ownerId: chủ sân đang đăng nhập (chỉ hủy đơn thuộc sân của mình).
+  /// Truyền một trong hai; kiểm tra thực hiện trong cùng transaction.
   static Future<String?> cancelBookingFailure(
     String bookingId, {
     String cancelReason = 'Khách hàng chủ động hủy',
+    String? userId,
+    String? ownerId,
   }) async {
     final db = await _db;
     if (db == null) {
@@ -613,6 +622,21 @@ class BookingRepository {
       if (bookingRows.isEmpty) return 'Không tìm thấy đơn đặt sân này.';
 
       final bookingMap = bookingRows.single;
+      if (userId != null && bookingMap['userId'] != userId) {
+        return 'Bạn không có quyền hủy đơn này.';
+      }
+      if (ownerId != null) {
+        final venueRows = await txn.query(
+          'venues',
+          columns: ['ownerId'],
+          where: 'id = ?',
+          whereArgs: [bookingMap['venueId']],
+          limit: 1,
+        );
+        if (venueRows.isEmpty || venueRows.single['ownerId'] != ownerId) {
+          return 'Bạn không có quyền hủy đơn này.';
+        }
+      }
       final currentStatus = bookingMap['status'] as String;
       if (currentStatus != 'pending' && currentStatus != 'confirmed') {
         return 'Không thể hủy đơn ở trạng thái "$currentStatus".';
@@ -697,12 +721,12 @@ class BookingRepository {
       }
 
       // Tạo thông báo hủy booking
-      final userId = bookingMap['userId'] as String;
+      final bookingUserId = bookingMap['userId'] as String;
       final notifCancelId =
           'notif_cancel_${DateTime.now().microsecondsSinceEpoch}';
       await txn.insert('app_notifications', {
         'id': notifCancelId,
-        'userId': userId,
+        'userId': bookingUserId,
         'bookingId': bookingId,
         'title': 'Booking đã bị hủy',
         'content': 'Booking $bookingId đã được hủy.',
@@ -717,7 +741,7 @@ class BookingRepository {
             'notif_refund_${DateTime.now().microsecondsSinceEpoch}';
         await txn.insert('app_notifications', {
           'id': notifRefundId,
-          'userId': userId,
+          'userId': bookingUserId,
           'bookingId': bookingId,
           'title': 'Yêu cầu hoàn tiền đang xử lý',
           'content':
@@ -737,7 +761,7 @@ class BookingRepository {
           'promotion_usages',
           where:
               'promotionId = ? AND userId = ? AND bookingId = ? AND isReversed = 0',
-          whereArgs: [promoId, userId, bookingId],
+          whereArgs: [promoId, bookingUserId, bookingId],
         );
         if (usageRows.isNotEmpty) {
           await txn.update(
