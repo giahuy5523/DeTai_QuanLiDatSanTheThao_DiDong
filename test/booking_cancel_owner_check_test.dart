@@ -12,15 +12,17 @@ void main() {
 
   setUp(() async {
     env = await SqliteTestEnv.open('cancel_owner_check');
-    for (final u in [
+    final users = [
       ['owner_1', 'Chủ sân 1', 'owner1@test.local', 'owner'],
       ['owner_2', 'Chủ sân 2', 'owner2@test.local', 'owner'],
       ['customer_1', 'Khách 1', 'c1@test.local', 'customer'],
       ['customer_2', 'Khách 2', 'c2@test.local', 'customer'],
-    ]) {
+    ];
+    for (var i = 0; i < users.length; i++) {
+      final u = users[i];
       await env.db.insert('Users', {
         'user_id': u[0], 'full_name': u[1], 'email': u[2],
-        'phone': '0900000000', 'password_hash': 'x', 'role': u[3],
+        'phone': '090000000$i', 'password_hash': 'x', 'role': u[3],
       });
     }
     await env.db.insert('venues', {

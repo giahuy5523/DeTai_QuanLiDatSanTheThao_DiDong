@@ -1062,7 +1062,7 @@ void main() {
           id: 'b_cash_e2e_3c',
           venueId: 'v1',
           userId: 'customer1',
-          date: DateTime.parse('2026-11-20T00:00:00.000'),
+          date: _futureDay(),
           startTime: '14:00',
           endTime: '16:00',
           originalAmount: 200000.0,
@@ -1099,7 +1099,7 @@ void main() {
           id: 'b_online_succ_3c',
           venueId: 'v1',
           userId: 'customer1',
-          date: DateTime.parse('2026-11-20T00:00:00.000'),
+          date: _futureDay(),
           startTime: '16:00',
           endTime: '18:00',
           originalAmount: 200000.0,
@@ -1135,7 +1135,7 @@ void main() {
             id: 'b_online_fail_3c',
             venueId: 'v1',
             userId: 'customer1',
-            date: DateTime.parse('2026-11-20T00:00:00.000'),
+            date: _futureDay(),
             startTime: '18:00',
             endTime: '20:00',
             originalAmount: 200000.0,
@@ -1157,7 +1157,7 @@ void main() {
           // Slot phải được giải phóng vì status = cancelled
           final slotFree = await BookingRepository.isRangeAvailable(
             venueId: 'v1',
-            date: DateTime.parse('2026-11-20T00:00:00.000'),
+            date: _futureDay(),
             startTime: '18:00',
             endTime: '20:00',
           );
@@ -1172,7 +1172,7 @@ void main() {
             id: 'b_slot_race_1',
             venueId: 'v1',
             userId: 'customer1',
-            date: DateTime.parse('2026-11-21T00:00:00.000'),
+            date: _futureDay(),
             startTime: '08:00',
             endTime: '10:00',
             originalAmount: 200000.0,
@@ -1185,7 +1185,7 @@ void main() {
             id: 'b_slot_race_2',
             venueId: 'v1',
             userId: 'customer1',
-            date: DateTime.parse('2026-11-21T00:00:00.000'),
+            date: _futureDay(),
             startTime: '09:00', // Trùng chồng lấn với 08:00-10:00
             endTime: '11:00',
             originalAmount: 200000.0,
@@ -1217,7 +1217,7 @@ void main() {
             'id': 'b_bootstrap_test',
             'venueId': 'v1',
             'userId': 'customer1',
-            'date': '2026-11-22T00:00:00.000',
+            'date': _futureDay().toIso8601String(),
             'startTime': '08:00',
             'endTime': '10:00',
             'totalPrice': 200000.0,
@@ -1423,4 +1423,9 @@ void main() {
       );
     });
   });
+}
+
+DateTime _futureDay() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day).add(const Duration(days: 7));
 }
